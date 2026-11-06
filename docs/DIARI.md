@@ -1,0 +1,3 @@
+# Diari del projecte — UAB THE HACK! 2026
+
+Equip: … · Repte: … · Persona: …

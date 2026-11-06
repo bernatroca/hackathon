@@ -1,3 +1,0 @@
-# Bitàcola — UAB THE HACK! 2026
-
-Equip: … · Repte: … · Persona: …

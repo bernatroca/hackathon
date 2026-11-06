@@ -151,8 +151,15 @@ def enganxa_titols(historia):
     while i < len(historia):
         f = historia[i]
         if isinstance(f, Paragraph) and f.style.name == "h2" and i + 1 < len(historia):
-            sortida.append(KeepTogether([f, historia[i + 1]]))
-            i += 2
+            bloc, j = [f], i + 1
+            while j < len(historia) and isinstance(historia[j], Paragraph) and historia[j].style.name == "p":
+                bloc.append(historia[j])
+                j += 1
+            if j < len(historia):
+                bloc.append(historia[j])
+                j += 1
+            sortida.append(KeepTogether(bloc))
+            i = j
         else:
             sortida.append(f)
             i += 1
@@ -176,8 +183,8 @@ def pdf_abans():
         p("UAB THE HACK! 2026 · Llegeix-ho abans de dissabte. Són 10 minuts.", "subtitol"),
         Spacer(1, 10),
         caixa("En una frase", [
-            "No guanya l'equip que programa més. Guanya l'equip que resol un problema concret "
-            "d'una persona concreta i ho ensenya amb una demo que funciona.",
+            "No guanya l'equip que programa més. Guanya l'equip que resol el problema d'una persona concreta "
+            "i ho ensenya amb una demo que funciona.",
         ], fons=BLAU_CLAR, vora=BLAU),
 
         h2("1. Quan i on"),
@@ -194,52 +201,80 @@ def pdf_abans():
 
         h2("2. Les 5 regles d'or"),
         numerada([
-            "<b>Una persona, un problema.</b> Escriviu «per a la Marta, tècnica de recursos humans, que perd 3 hores "
-            "cada setmana fent X». No escriviu «per a empreses».",
-            "<b>Poques funcionalitats.</b> Amb 3 funcionalitats que funcionen n'hi ha prou. Només afegiu un extra "
+            "<b>Tot gira al voltant d'una persona.</b> Triem una sola persona, amb nom, feina i un dia normal: "
+            "«la Marta, tècnica de recursos humans, que perd 3 hores cada dilluns fent X». Cada decisió la prenem "
+            "pensant en ella. Si una cosa no ajuda la Marta, no la fem.",
+            "<b>Poques funcionalitats.</b> Amb 3 funcionalitats que funcionen n'hi ha prou. Només afegim un extra "
             "si la demo ja funciona.",
-            "<b>Primer el pla, després el codi.</b> No programeu fins que l'especificació (el document que diu què "
-            "farem) estigui escrita.",
-            "<b>La demo mana.</b> Cada 4 hores, comproveu si podríeu ensenyar la demo ara mateix. Diumenge a les "
-            "2:00 congelem: a partir d'aquí no afegim res nou.",
-            "<b>Apunteu-ho tot a la bitàcola.</b> Els problemes que trobeu i com els resoleu són la meitat de la "
+            "<b>Primer el pla, després el codi.</b> No es programa res fins que l'especificació (el document que diu "
+            "què farem) estigui escrita i afinada.",
+            "<b>Parada cada hora.</b> Cada hora en punt parem 5 minuts, mirem on som i decidim junts el pas següent. "
+            "Diumenge a les 2:00 congelem: a partir d'aquí no afegim res nou.",
+            "<b>Apuntem-ho tot al diari.</b> Els problemes que trobem i com els resolem són la meitat de la "
             "presentació.",
         ]),
-
+    ]
+    h += [
         PageBreak(),
-        h2("3. Els 6 passos del cap de setmana"),
+        h2("3. Com treballem"),
+        p("<b>Les persones decidim juntes, pas a pas.</b> No ens repartim l'ordinador: pensem la idea, responem "
+          "les preguntes i revisem el resultat tots junts."),
+        p("<b>Un sol ordinador.</b> Hi ha una sessió de Claude Code que fa d'<b>orquestrador</b>: ens pregunta, "
+          "reparteix la feina, revisa i ho uneix tot."),
+        p("<b>Programen subagents de Codex (ChatGPT).</b> Un subagent és un agent d'IA que fa una sola feina. "
+          "En tenim un per rol. No fem servir subagents de Claude per programar."),
+        taula(["Rol", "Qui el fa", "Què fa"], [
+            ["Orquestrador i integració", "Claude (sessió principal)",
+             "Ens fa preguntes, reparteix les tasques, uneix la feina, fa els commits, prova la web i la publica a Cloudflare."],
+            ["Frontend", "Subagent de Codex", "Fa les pantalles, els botons i el disseny que veu la persona."],
+            ["Backend", "Subagent de Codex", "Fa el servidor: la lògica, l'API i on es guarden les dades."],
+            ["Dades", "Subagent de Codex", "Neteja i analitza les dades, fa càlculs i prepara les dades de la demo."],
+        ], [0.24, 0.22, 0.54]),
+        Spacer(1, 6),
+        caixa("Pregunten en lloc de suposar", [
+            "Tant Claude com els subagents ens fan preguntes quan una cosa no està prou detallada. "
+            "Cada pregunta porta 2 o 3 opcions i la recomanada. Les responem junts. "
+            "Així el producte surt com volem i no com l'agent s'imagina.",
+        ], fons=BLAU_CLAR, vora=BLAU),
+
+        h2("4. Els 6 passos del cap de setmana"),
         taula(["Pas", "Quan", "Què fem", "Resultat"], [
-            ["0. Preparació", "Avui i ds 8:00", "Motxilla, eines i preguntes a l'organització.", "Equip a punt."],
+            ["0. Preparació", "Avui i ds 8:00", "Motxilla i preguntes a l'organització.", "Equip a punt."],
             ["1. La idea", "Ds fins a 10:30", "Triem repte, persona i problema.", "Fitxa de la idea omplerta."],
             ["2. Prompt", "Ds 10:30-11:30", "Claude ens entrevista fins que la idea queda clara.", "Especificació escrita."],
-            ["3. Construir", "Ds 11:30 - dg 2:00", "Programem en paral·lel i publiquem la web aviat.", "Demo que funciona."],
-            ["4. Bitàcola", "Tot el cap de setmana", "Apuntem idees, problemes i solucions.", "docs/BITACOLA.md"],
+            ["3. Construir", "Ds 11:30 - dg 2:00", "Els subagents de Codex programen. Parada cada hora.", "Demo que funciona."],
+            ["4. Diari", "Tot el cap de setmana", "Apuntem idees, problemes i solucions.", "docs/DIARI.md"],
             ["5. Presentació", "Dg 8:00 - entrega", "Diapositives, demo, vídeo de reserva i assajos.", "Presentació de 3-5 min."],
         ], [0.18, 0.2, 0.37, 0.25]),
         p("Són hores orientatives. Quan sapiguem l'hora d'entrega, les ajustarem.", "petit"),
+
+        h2("5. Les skills que farem servir"),
+        p("Una <b>skill</b> és un conjunt d'instruccions que l'agent llegeix per fer bé una feina concreta. "
+          "Ja les tenim instal·lades a l'ordinador."),
+        taula(["Skill", "Per a què", "Quan"], [
+            ["/jmo-workflow:interview", "Crear i afinar el prompt: Claude ens entrevista fins que no queda res per detallar.",
+             "Pas 2"],
+            ["subagents-codex", "Reparteix les tasques als 3 subagents de Codex i ens porta les seves preguntes.", "Pas 3"],
+            ["recap", "La parada de cada hora: què s'ha fet, què falla i què fem ara.", "Cada hora"],
+            ["diari", "Apunta idees, decisions, problemes i solucions al Diari del projecte.", "Sempre"],
+            ["frontend-design, better-ui", "Que la web tingui un disseny propi i polit.", "Pas 3"],
+            ["pptx", "Fer les diapositives.", "Pas 5"],
+        ], [0.27, 0.58, 0.15]),
     ]
     h += [
-        h2("4. Què heu de fer avui"),
+        CondPageBreak(90 * mm),
+        h2("6. Què heu de fer avui"),
         checklist([
             "Entreu a <b>uabthehack.cat/participants/acces</b> amb el correu de la inscripció. "
-            "Comproveu el vostre equip i baixeu el <b>QR d'accés</b>.",
+            "Comproveu l'equip i baixeu el <b>QR d'accés</b>.",
             "Entreu al <b>Discord</b> de l'event. L'enllaç és a l'àrea de participants o al correu de confirmació.",
-            "Instal·leu <b>Claude Code</b> al vostre portàtil i proveu que funciona.",
-            "Instal·leu els plugins de l'equip (ordres de sota).",
-            "Demaneu al Bernat accés al repositori <b>github.com/bernatroca/hackathon</b> i cloneu-lo.",
             "Llegiu el codi de conducta: no hi ha alcohol i no es pot fer fotos a ningú sense permís.",
+            "Penseu en persones que conegueu que tinguin problemes amb els temes dels reptes "
+            "(recursos humans, salut, esport, ciberseguretat). Us poden donar la persona del pas 1.",
             "Dormiu bé aquesta nit.",
         ]),
-        Spacer(1, 4),
-        p("Ordres per instal·lar els plugins (una per una, al terminal):"),
-        codi("""
-claude plugin marketplace add 23jmo/jmo-skills
-claude plugin install jmo-workflow@jmo-skills
-claude plugin marketplace add anthropics/skills
-claude plugin install example-skills@anthropic-agent-skills
-"""),
 
-        h2("5. Motxilla"),
+        h2("7. Motxilla"),
         checklist([
             "DNI i QR d'accés",
             "Portàtil i <b>carregador</b> (els endolls són de tipus F, els normals d'aquí)",
@@ -249,16 +284,7 @@ claude plugin install example-skills@anthropic-agent-skills
             "Allargador i auriculars",
         ]),
 
-        h2("6. Rols de l'equip"),
-        taula(["Rol", "Què fa", "Qui"], [
-            ["Producte i presentació", "Escriu la fitxa de la idea, busca dades del problema, fa les diapositives i presenta.", ""],
-            ["Frontend", "Fa les pantalles i la demo amb Claude.", ""],
-            ["Backend i dades", "Fa la part del servidor i les dades. Passa feina a Codex.", ""],
-            ["Integració", "Fa els commits, publica la web i revisa la bitàcola cada 4 hores.", ""],
-        ], [0.25, 0.55, 0.2]),
-        p("Si l'equip és de 3, la persona de Backend també fa Integració.", "petit"),
-
-        h2("7. Preguntes per a l'organització (dissabte al matí)"),
+        h2("8. Preguntes per a l'organització (dissabte al matí)"),
         checklist([
             "A quina hora s'entrega el projecte i a quina hora es presenta?",
             "On s'entrega (per exemple, Devpost) i què cal entregar: codi, diapositives, vídeo?",
@@ -267,34 +293,30 @@ claude plugin install example-skills@anthropic-agent-skills
             "Podem fer servir IA (Claude, Codex)? L'hem de declarar?",
             "Els reptes donen dades o una API? Tenen límits?",
         ]),
-    ]
-    h += [
-        CondPageBreak(110 * mm),
-        h2("8. Paraules que sortiran"),
+
+        h2("9. Paraules que sortiran"),
         taula(["Paraula", "Què vol dir"], [
-            ["Agent", "Un programa d'IA que escriu codi i fa tasques per nosaltres. Claude i Codex són agents."],
-            ["Claude", "L'agent principal. Fa la planificació, les pantalles i la integració."],
-            ["Codex", "Un altre agent (d'OpenAI). Li passem tasques tancades de backend que tenen una prova per "
-                      "comprovar-les."],
-            ["Skill", "Unes instruccions que l'agent llegeix per fer bé una tasca concreta. Per exemple, "
-                      "/jmo-workflow:interview fa que Claude ens entrevisti."],
-            ["Especificació (spec)", "El document que diu què farem, per a qui i com sabrem que funciona. "
-                                     "Es desa a la carpeta .plans/ del repositori."],
-            ["Worktree", "Una còpia del repositori on un agent treballa sol. Així dos agents no toquen els mateixos "
-                         "fitxers alhora."],
-            ["Desplegar", "Publicar la web perquè s'obri amb un enllaç. Ho fem a Cloudflare."],
-            ["Congelació", "El moment (dg 2:00) a partir del qual no afegim funcionalitats noves. Només corregim i polim."],
-            ["Bitàcola", "El fitxer docs/BITACOLA.md on apuntem idees, decisions, problemes i solucions. "
-                         "Claude l'omple quan li diem «apunta-ho a la bitàcola»."],
+            ["Agent", "Un programa d'IA que escriu codi i fa tasques per nosaltres."],
+            ["Orquestrador", "L'agent que dirigeix els altres. És la sessió principal de Claude."],
+            ["Subagent", "Un agent que fa una sola feina dins d'un rol. Els nostres són de Codex."],
+            ["Codex", "L'agent d'OpenAI (ChatGPT) que fa servir el model gpt-6.1-sol. Programa les tasques."],
+            ["Skill", "Unes instruccions que l'agent llegeix per fer bé una feina concreta."],
+            ["Especificació", "El document que diu què farem, per a qui i com sabrem que funciona. És a la carpeta .plans/."],
+            ["Tasca", "Un tros de feina que un subagent pot fer sol, sense tocar els fitxers dels altres."],
+            ["Worktree", "Una còpia del projecte on treballa un sol subagent. Així no es trepitgen."],
+            ["Publicar (desplegar)", "Posar la web a internet perquè s'obri amb un enllaç. Ho fem a Cloudflare."],
+            ["Congelació", "El moment (dg 2:00) a partir del qual no afegim res nou. Només corregim i polim."],
+            ["Recap", "La parada de 5 minuts de cada hora per veure on som i decidir el pas següent."],
+            ["Diari del projecte", "El fitxer docs/DIARI.md on apuntem idees, decisions, problemes i solucions."],
             ["Demo", "La part de la presentació on ensenyem el producte funcionant, en directe."],
         ], [0.24, 0.76]),
 
-        h2("9. El que diuen els guanyadors"),
+        h2("10. El que diuen els guanyadors"),
         llista([
             "<b>Johnathan Mo</b> (5 de 5 hackatons): «Imagineu que ja heu guanyat. Quina demo va veure el jurat?» "
             "Comenceu per la idea més espectacular i retalleu-la fins que sigui possible fer-la a temps.",
-            "<b>Johnathan Mo</b>: van planificar 2-3 hores amb Claude, van repartir el pla en tasques i van "
-            "guanyar un hackató de 24 hores treballant-ne 8 o 9.",
+            "<b>Johnathan Mo</b>: van planificar 2-3 hores amb Claude, van repartir el pla en tasques, van posar un "
+            "subagent a cada tasca i van guanyar un hackató de 24 hores treballant-ne 8 o 9.",
             "<b>Zahur</b> (11 de 15 hackatons): «No demaneu idees a la IA. Feu que investigui el problema.»",
             "<b>Zahur</b>: «Sou enginyers per resoldre un problema, no per programar.»",
         ]),
@@ -314,14 +336,14 @@ def pdf_idea():
         p("UAB THE HACK! 2026 · Què fem des que triem la idea fins a la presentació.", "subtitol"),
         Spacer(1, 10),
         caixa("Ordre de treball", [
-            "1. Comproveu la idea.  2. Ompliu la fitxa.  3. Claude us entrevista.  "
-            "4. Dividiu la feina en tasques.  5. Construïu.  6. Apunteu-ho tot.  7. Prepareu la presentació.",
+            "1. Comproveu la idea.  2. Ompliu la fitxa.  3. Claude us entrevista.  4. Dividiu la feina en tasques.  "
+            "5. Els subagents programen.  6. Parada cada hora.  7. Apunteu-ho al diari.  8. Prepareu la presentació.",
         ], fons=BLAU_CLAR, vora=BLAU),
 
         h2("1. La idea és bona si..."),
         checklist([
+            "Tot gira al voltant d'una persona concreta, amb nom, i sabem com és el seu dia.",
             "Es pot explicar en una frase a algú que no sap programar.",
-            "Té una persona concreta, i sabem com treballa avui.",
             "Podem demostrar el problema amb una xifra o una notícia.",
             "La demo ensenya el canvi en menys de 2 minuts: abans X, ara Y.",
             "La podem fer amb les dades que tenim avui, sense esperar ningú.",
@@ -333,29 +355,30 @@ def pdf_idea():
         p("Ompliu-la entre tot l'equip. Després l'enganxareu sencera a l'entrevista amb Claude."),
         taula(["Camp", "Resposta"], [
             ["Repte i empresa", ""],
-            ["Persona (nom, feina, context)", ""],
+            ["Persona: nom, feina, edat", ""],
+            ["Un dia normal de la persona", ""],
             ["Problema en una frase", ""],
-            ["Prova que existeix (xifra o notícia + enllaç)", ""],
+            ["Prova: xifra o notícia, amb enllaç", ""],
             ["Què fa avui i per què no funciona", ""],
             ["La nostra solució en una frase", ""],
             ["Funcionalitat 1 (la clau de la demo)", ""],
             ["Funcionalitat 2", ""],
             ["Funcionalitat 3", ""],
             ["Moment «uau» de la demo", ""],
-            ["Abans → després (hores, diners, errors)", ""],
+            ["Abans → després (amb números)", ""],
             ["Dades o API que farem servir", ""],
-        ], [0.38, 0.62], alt_fila=10.5 * mm),
+        ], [0.38, 0.62], alt_fila=8.6 * mm),
     ]
     h += [
         PageBreak(),
-        h2("3. Claude us entrevista (1 hora)"),
-        p("L'entrevista converteix la idea en una <b>especificació</b>: el document que diu què farem, per a qui "
-          "i com sabrem que funciona. Tots els agents treballaran a partir d'aquest document."),
+        h2("3. Afinar el prompt: Claude ens entrevista (1 hora)"),
+        p("Fem servir la skill <b>/jmo-workflow:interview</b>. Claude ens fa preguntes, una darrere l'altra, fins que "
+          "no queda res sense detallar. Al final escriu l'<b>especificació</b>: el document que diu què farem, per a qui "
+          "i com sabrem que funciona. Els subagents treballaran a partir d'aquest document."),
         numerada([
-            "Obriu una sessió nova de Claude Code a la carpeta del repositori.",
-            "Escriviu el prompt de sota amb la fitxa de la idea enganxada.",
-            "Responeu les preguntes entre tot l'equip. Si dubteu, trieu l'opció més simple.",
-            "Claude desa l'especificació a <b>.plans/</b>. Llegiu-la tots i corregiu el que no quadri.",
+            "Escrivim a Claude el prompt de sota, amb la fitxa de la idea enganxada.",
+            "Responem les preguntes tots junts. Si dubtem, triem l'opció més simple per a la persona.",
+            "Claude desa l'especificació a <b>.plans/</b>. La llegim tots i corregim el que no quadri.",
         ]),
         codi("""
 /jmo-workflow:interview
@@ -363,88 +386,96 @@ Estem a UAB THE HACK! (31 h, equip de [3/4], entrega diumenge a les [hora]).
 Repte: [empresa i enunciat literal].
 Aquí tens la fitxa de la idea:
 [enganxa la fitxa]
-Entrevista'ns fins que tinguem clar: l'usuari i el seu recorregut pantalla per
-pantalla; les 3 funcionalitats imprescindibles i què en queda fora; les dades i
-d'on surten; l'stack més simple que podem publicar avui; el moment «uau» de la
-demo; i els riscos que ens poden deixar sense demo, amb un pla B per a cadascun.
-Fes preguntes que no siguin òbvies. Quan acabis, escriu l'especificació en
-català, amb criteris per comprovar cada funcionalitat.
+Tot gira al voltant de [persona]. Entrevista'ns fins que tinguem clar: el seu
+recorregut pantalla per pantalla; les 3 funcionalitats imprescindibles i què
+en queda fora; les dades i d'on surten; l'stack més simple que podem publicar
+a Cloudflare; el moment «uau» de la demo; i els riscos que ens poden deixar
+sense demo, amb un pla B per a cadascun. Fes preguntes que no siguin òbvies,
+amb opcions. Quan acabis, escriu l'especificació en català, amb criteris per
+comprovar cada funcionalitat.
 """),
 
-        h2("4. Dividiu la feina en tasques"),
-        p("Una <b>tasca</b> és un tros de feina que una sola persona (amb el seu agent) pot fer sense tocar els "
-          "fitxers dels altres."),
+        h2("4. Dividir la feina en tasques i subagents"),
+        p("Una <b>tasca</b> és un tros de feina que un sol subagent pot fer sense tocar els fitxers dels altres. "
+          "Cada tasca va a un dels 3 rols. <b>Els subagents són de Codex (ChatGPT), no de Claude Code.</b>"),
+        taula(["Rol", "Subagent", "Exemples de tasques"], [
+            ["Frontend", "Codex", "Pantalla principal, formulari, mapa o gràfic, estats de càrrega i d'error."],
+            ["Backend", "Codex", "API que dona les dades, lògica de càlcul, connexió amb l'API del repte."],
+            ["Dades", "Codex", "Netejar el fitxer del repte, calcular indicadors, preparar dades de demo."],
+            ["Integració", "Claude", "Unir-ho tot, commits, provar la web i publicar-la a Cloudflare."],
+        ], [0.17, 0.15, 0.68]),
+        Spacer(1, 4),
+        p("Primer, Claude fa la llista de tasques:"),
         codi("""
-Llegeix l'especificació de .plans/ i divideix-la en tasques independents que
-es puguin fer en paral·lel sense tocar els mateixos fitxers. Per a cada tasca:
-objectiu, fitxers, com es comprova que està feta, i si és millor per a Claude
-(pantalles) o per a Codex (lògica amb proves). Ordena-les perquè en 6 hores
-tinguem la demo bàsica. Desa-ho a .plans/tasques.md.
+Llegeix l'especificació de .plans/ i divideix-la en tasques per a 3 subagents
+de Codex: frontend, backend i dades. Cada tasca: rol, objectiu, fitxers que
+pot tocar (cap fitxer compartit entre rols), i una ordre que demostri que està
+feta. Ordena-les perquè en 6 hores tinguem la demo bàsica. Desa-ho a
+.plans/tasques.md i ensenya-me-la abans de llançar res.
 """),
+        p("Quan l'equip l'aprova, Claude llança els subagents:"),
+        codi("""
+Fes servir la skill subagents-codex i llança en paral·lel la primera tasca
+de cada rol. Porta'ns totes les preguntes que facin.
+"""),
+    ]
+    h += [
+        PageBreak(),
+        h2("5. Quan un subagent pregunta"),
+        numerada([
+            "El subagent s'atura i torna preguntes concretes, amb opcions.",
+            "Claude ajunta les preguntes de tots els subagents i ens les fa, dient de quin rol ve cada una.",
+            "Les responem junts, pensant en la persona.",
+            "Claude passa les respostes al subagent, que continua, i les apunta al diari com a DECISIÓ.",
+        ]),
 
-        h2("5. Horari de construcció"),
+        h2("6. Horari de construcció i parada cada hora"),
         taula(["Hora", "Què", "Control"], [
             ["Ds 11:30", "Esquelet del projecte i primera publicació a Cloudflare", "La web s'obre amb un enllaç"],
             ["Ds 11:30-15:00", "Funcionalitat 1, la de la demo (amb dades de prova si cal)", "15:00: podem fer la demo bàsica?"],
             ["Ds 15:00-19:00", "Funcionalitats 2 i 3 i dades reals", "19:00: la demo funciona de principi a fi?"],
-            ["Ds 19:00-23:00", "Ho connectem tot i fem el primer polit", "23:00: la podríem ensenyar ja?"],
+            ["Ds 19:00-23:00", "Ho unim tot i fem el primer polit", "23:00: la podríem ensenyar ja?"],
             ["Dg 23:00-2:00", "Corregim errors i estats de càrrega o d'error", "<b>2:00: congelació</b>"],
             ["Dg 2:00-8:00", "Polim i dormim per torns (3-4 h cadascú)", "Gravem el vídeo de reserva"],
         ], [0.2, 0.47, 0.33]),
+        Spacer(1, 6),
+        caixa("Cada hora en punt: recap de 5 minuts", [
+            "Claude ens diu què s'ha fet, què està bloquejat, quines preguntes queden pendents i si la demo "
+            "funcionaria ara. Decidim junts les 3 tasques de la propera hora.",
+            "Per fer-ho automàtic, escriviu a Claude: <b>/loop 1h /recap</b>",
+        ], fons=BLAU_CLAR, vora=BLAU),
         p("A les 4 de la matinada és quan costa més: mengeu alguna cosa i feu torns.", "petit"),
-    ]
-    h += [
-        PageBreak(),
-        h2("6. Qui fa què"),
-        taula(["Feina", "Qui", "Com"], [
-            ["Pantalles, disseny i polit", "Claude", "Skills frontend-design, shadcn i /jmo-workflow:better-ui"],
-            ["Lògica, servidor i dades amb proves", "Codex", "Model gpt-6.1-sol, effort medium. Si es bloqueja, effort high."],
-            ["Revisar la feina d'un altre agent", "Codex", "Mode només lectura"],
-            ["Provar la web al navegador", "Claude", "Skill webapp-testing"],
-            ["Publicar la web", "Claude", "Cloudflare. Claude demana permís abans de publicar."],
-            ["Commits i unir la feina", "Una persona", "Codex no pot fer commits"],
-        ], [0.36, 0.17, 0.47]),
 
-        h2("7. Regles per treballar amb agents"),
+        h2("7. Regles per treballar amb subagents"),
         llista([
-            "<b>Una tasca, una sessió.</b> Dues sessions no toquen mai els mateixos fitxers. Si ho fan, perdreu hores "
-            "arreglant conflictes.",
-            "<b>Doneu sempre una prova.</b> Cada encàrrec diu com es comprova: una ordre, un enllaç o una captura.",
-            "<b>Si l'agent s'encalla</b> després de dues correccions, comenceu una conversa nova (/clear) o torneu a "
-            "l'últim commit que funcionava.",
-            "<b>Ensenyeu-li un model.</b> Els agents copien millor que no pas inventen: passeu-li una web que us agradi.",
+            "<b>Un rol, uns fitxers.</b> Dos subagents no toquen mai el mateix fitxer. Cada un treballa en la seva "
+            "còpia del projecte (worktree).",
+            "<b>Cada tasca té una prova.</b> Una ordre o un enllaç que demostra que està feta.",
+            "<b>Si un subagent s'encalla</b>, Claude el torna a provar amb més esforç (effort high). Si continua, "
+            "simplifiquem la tasca o fem servir dades de prova.",
+            "<b>Ensenyem un model.</b> Els agents copien millor que no pas inventen: passem una web que ens agradi.",
             "<b>Dades de prova primer.</b> Si l'API del repte falla, la demo no s'ha d'aturar.",
             "<b>Cap clau al codi.</b> Les claus van al fitxer .env, que no es puja a GitHub.",
         ]),
-        Spacer(1, 4),
-        p("Prompt per a cada tasca:"),
-        codi("""
-Llegeix l'especificació de .plans/ i fes la tasca [n] de .plans/tasques.md.
-Només pots tocar aquests fitxers: [llista].
-Està feta quan: [prova o ordre que ho demostra].
-Quan acabis, comprova-ho, explica què has canviat en 3 línies i apunta a la
-bitàcola qualsevol problema o decisió.
-"""),
 
-        h2("8. Bitàcola: apunteu-ho mentre passa"),
+        h2("8. Diari del projecte: apunteu-ho mentre passa"),
         p("Digueu-li a Claude, amb paraules normals:"),
         llista([
-            "«Apunta a la bitàcola que hem descartat la idea X perquè no tenim dades.»",
+            "«Apunta al diari que hem descartat la idea X perquè no tenim dades.»",
             "«Hem tingut un problema: [què passa]. Apunta-ho.» I quan el resolgueu: «Apunta la solució.»",
             "«Apunta aquesta dada per a la presentació: [xifra + enllaç].»",
-            "Diumenge al matí: «Fes el resum de la bitàcola per a la presentació.»",
+            "Diumenge al matí: «Fes el resum del diari per a la presentació.»",
         ]),
     ]
     h += [
-        PageBreak(),
+        CondPageBreak(120 * mm),
         h2("9. La presentació comença dissabte"),
-        p("Una persona de l'equip pensa des del primer dia com s'ensenyarà cada funcionalitat. "
-          "Dissabte a la tarda, aquesta persona busca dades del problema amb aquest prompt:"),
+        p("Mentre els subagents programen, l'equip busca dades del problema. Demaneu-ho a Claude:"),
         codi("""
 Busca notícies, informes i estadístiques recents (2024-2026, millor d'Espanya
 o Catalunya) sobre [problema] per a [persona]. Vull 3-5 xifres o titulars amb
 la font i la data, i el cost del problema en hores, diners o errors. Obre les
-pàgines. Apunta cada dada a la bitàcola com a DADA.
+pàgines. Apunta cada dada al diari com a DADA.
 """),
         h2("10. Les 3 preguntes que respon la presentació"),
         taula(["Pregunta", "Què hi posem"], [
@@ -455,13 +486,13 @@ pàgines. Apunta cada dada a la bitàcola com a DADA.
 
         h2("11. Ordre de la presentació (3-5 minuts)"),
         numerada([
-            "<b>Problema i persona</b> (20 s). Comenceu amb una pregunta al públic: «Qui ha hagut de...?»",
+            "<b>La persona i el seu problema</b> (20 s). Comenceu amb una pregunta al públic: «Qui ha hagut de...?»",
             "<b>Prova</b> (20 s): la xifra o la notícia, amb la font.",
             "<b>Cost</b> (15 s): quant es perd avui.",
             "<b>Solució</b> (15 s): una frase sense paraules tècniques.",
             "<b>Demo en directe</b> (90-120 s): el recorregut de la persona, començant per la funcionalitat clau.",
             "<b>Abans → després</b> (15 s): «de 3 hores a 10 minuts».",
-            "<b>Com ho hem fet</b> (20 s): el problema més difícil, com el vam resoldre i com vam fer servir la IA.",
+            "<b>Com ho hem fet</b> (20 s): Claude orquestrant 3 subagents de Codex, el problema més difícil i com el vam resoldre.",
             "<b>Següents passos i equip</b> (10 s).",
         ]),
         Spacer(1, 6),
