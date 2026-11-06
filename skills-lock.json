@@ -1,12 +1,6 @@
 {
   "version": 1,
   "skills": {
-    "deploy-to-vercel": {
-      "source": "vercel-labs/agent-skills",
-      "sourceType": "github",
-      "skillPath": "skills/deploy-to-vercel/SKILL.md",
-      "computedHash": "9b883827e904cd6c93a98457f1ea5aaae1dfdb30ae704bddf5e9e70c9d10de36"
-    },
     "shadcn": {
       "source": "shadcn/ui",
       "sourceType": "github",
