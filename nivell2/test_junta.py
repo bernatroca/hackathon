@@ -77,6 +77,7 @@ def test_compartida_suma_alumnes_i_no_duplica_classes():
     s = deepcopy(b.sessions['0'])
     s.id, s.cohorts, s.alumnes = 'extra', ('GEQ:1r',), 30
     s.compartida = b.sessions['0'].compartida = 'compartida'
+    s.aula = b.sessions['0'].aula = ''
     b.sessions[s.id] = s
     b.ordre.append(s.id)
     p = Proposta.de_base(b)
@@ -169,3 +170,55 @@ def test_pic_exclou_seminaris_i_externes_i_compta_aules_diferents():
     p = Proposta.de_base(b)
     r = pics_i_mides(b, b, colloca(b, p))['mati']['pitjor']
     assert r['classes'] == 2 and r['estimacio']
+
+
+def test_proposta_51_mides_coincideixen_amb_pic():
+    from pathlib import Path
+    path = Path('/Users/bernatroca/Bernat/Hackathon/resultats/nivell2/5.1/proposta.csv')
+    b, m, _, _ = reals()
+    _, col = carrega_proposta(path, b)
+    for torn in pics_i_mides(b, m, col).values():
+        assert torn['total_mides'] == torn['pitjor']['classes']
+        assert sum(r['ocupades_al_pic'] for r in torn['mides']) == torn['pitjor']['classes']
+        assert torn['mides'][0]['demanda_acumulada'] == torn['pitjor']['classes']
+        assert all(r['marge'] >= 0 and r['falten'] == 0 for r in torn['mides'])
+        assert all(r['pic_categoria'] <= r['aules_categoria'] for r in torn['mides'])
+
+
+def test_mides_aula_assignada_i_classes_successives():
+    b = petita()
+    b.aules['A'] = Aula('A', '', 'Aules docents', 90)
+    b.aules['S'] = Aula('S', '', 'Seminaris', 30)
+    for i, (aula, ini, durada) in enumerate((('A', 540, 30), ('S', 510, 60))):
+        sessio = deepcopy(b.sessions['0'])
+        sessio.id, sessio.aula = f'extra{i}', aula
+        sessio.ini, sessio.durada = ini, durada
+        b.sessions[sessio.id] = sessio
+        b.ordre.append(sessio.id)
+    b.sessions['0'].durada = 30
+    p = Proposta.de_base(b)
+    r = pics_i_mides(b, b, colloca(b, p))['mati']
+    assert r['pitjor']['classes'] == r['total_mides'] == 1
+    assert not r['pitjor']['estimacio']
+    assert r['mides'][3]['pic_categoria'] == 1
+    assert r['mides'][1]['pic_categoria'] == 0
+    assert all(m['marge'] >= 0 for m in r['mides'])
+
+
+def test_estimacio_mides_mateix_filtre_que_pic():
+    b = petita()
+    b.sessions['0'].aula = ''
+    b.aules['S'] = Aula('S', '', 'Seminaris', 30)
+    for i, aula in enumerate(('S', 'B3/0021')):
+        sessio = deepcopy(b.sessions['0'])
+        sessio.id, sessio.aula = f'extra{i}', aula
+        b.sessions[sessio.id] = sessio
+        b.ordre.append(sessio.id)
+    p = Proposta.de_base(b)
+    d = calcula(p, b, b, colloca(b, p))
+    r = d['pics']['mati']
+    assert r['pitjor']['estimacio']
+    assert r['mides'][0]['demanda_acumulada'] == r['total_mides'] == 1
+    assert r['mides'][1]['pic_categoria'] == 1
+    md, html = documents(d)
+    assert 'Matí (estimació)' in md and 'Matí (estimació)' in html

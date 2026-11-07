@@ -19,7 +19,7 @@ def dades():
            'estimacio': False, 'hora': '10:30', 'setmana': '2027-W10'}
     torn = {'pitjor': pic, 'tipica': pic, 'mides': [
         {'minim_places': 0, 'marge': 4, 'aules_categoria': 19,
-         'pic_categoria': 15, 'demanda_acumulada': 15, 'oferta_acumulada': 19}] * 5}
+         'ocupades_al_pic': 3, 'pic_categoria': 15, 'demanda_acumulada': 15, 'oferta_acumulada': 19}] * 5}
     fila = {'cohort': 'GED:1r', 'nom': 'Enginyeria de Dades, 1r', 'sessions': 10,
             'mogudes': 0, 'mogudes_pct': 0, 'franja': 0, 'franja_pct': 0,
             'aules_assignades': 0, 'aula': 0, 'aula_pct': 0, 'torn': 0, 'torn_pct': 0}
@@ -119,3 +119,31 @@ def test_resum_antic_es_regenera(tmp_path):
         with patch.object(junta, 'genera', return_value=dades()) as genera:
             assert junta.carrega('Avui') == dades()
         genera.assert_called_once()
+
+
+def test_mides_actuals_i_explicacio():
+    d = dades()
+    app = obre(d, ['Avui', '5.1'])
+    taula = app.dataframe[0].value
+    assert taula['Matí: ocupades al pic'].sum() == d['pics']['mati']['pitjor']['classes']
+    assert taula['Tarda: ocupades al pic'].sum() == d['pics']['tarda']['pitjor']['classes']
+    assert any('diferents ocupades durant cada hora' in c.value for c in app.caption)
+    assert any('alumnes (estimació)' in c.value for c in app.caption)
+
+
+def test_mides_antigues_es_regeneren(tmp_path):
+    desti = tmp_path / 'junta'
+    desti.mkdir()
+    d = dades()
+    for torn in ('mati', 'tarda'):
+        for m in d['pics'][torn]['mides']:
+            m.pop('ocupades_al_pic', None)
+    (desti / 'junta.json').write_text(json.dumps(d))
+    with patch.object(junta, 'RESULTATS', tmp_path), patch.object(junta, 'SORTIDA', tmp_path):
+        with patch.object(junta, 'genera', return_value=dades()) as genera:
+            assert junta.carrega('Avui') == dades()
+        genera.assert_called_once()
+    app = obre(d, ['Avui'])
+    assert any('Resum antic' in i.value for i in app.info)
+    assert not app.get('download_button')
+    assert app.dataframe[0].value['Matí: marge acumulat'].isna().all()

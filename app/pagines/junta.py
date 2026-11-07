@@ -60,9 +60,11 @@ def carrega(nom):
     if path.is_file():
         dades = llegeix(str(path), path.stat().st_mtime_ns)
         if (all('estimacio' in dades['pics'][t]['pitjor'] for t in ('mati', 'tarda'))
+                and all('ocupades_al_pic' in m for t in ('mati', 'tarda')
+                        for m in dades['pics'][t]['mides'])
                 and all('aules_assignades' in r for r in dades['sessions_mogudes'])):
             return dades
-        # Les dades antigues comptaven assignacions com a moviments: recalcula-les.
+        # Recalcula els resums antics: moviments i mides han de seguir el criteri actual.
     proposta = RESULTATS / nom / 'proposta.csv'
     relax = proposta.with_name('relaxacions.csv')
     return genera(nom, proposta.stat().st_mtime_ns if proposta.is_file() else 0,
@@ -92,6 +94,7 @@ def mostra():
         d = carrega(triada)
         st.caption(f"Resum calculat: {d['data']} · {triada}")
         st.subheader('Pic d’aules ordinàries ocupades')
+        st.caption('Comptem les aules ordinàries diferents ocupades durant cada hora; sense aula assignada, estimem la demanda ordinària.')
         st.caption('21 aules ordinàries menys 2 de reserva: 19 disponibles. Pitjor moment de cada torn al llarg del semestre.')
         for columna, torn, nom in zip(st.columns(2), ('mati', 'tarda'), ('Matí', 'Tarda')):
             p = d['pics'][torn]['pitjor']
@@ -103,11 +106,20 @@ def mostra():
                            else 'Aules ordinàries diferents ocupades en una franja d’una hora')
                 st.caption(f"{p['data'] or 'Sense classes'} · {p['hora']}")
         st.subheader('Aules que falten o sobren per mida')
+        format_actual = all('ocupades_al_pic' in m for torn in ('mati', 'tarda')
+                            for m in d['pics'][torn]['mides'])
+        if not format_actual:
+            st.info('Resum antic: cal tornar-lo a generar per veure les mides amb el mateix criteri que el pic.')
         files = []
         for m, t in zip(d['pics']['mati']['mides'], d['pics']['tarda']['mides']):
-            files.append({'Places mínimes': max(1, m['minim_places']),
-                'Matí: sobren (+) o falten (−)': m['marge'], 'Tarda: sobren (+) o falten (−)': t['marge']})
+            files.append({'Places': m.get('mida', str(max(1, m['minim_places']))),
+                'Matí: ocupades al pic': m.get('ocupades_al_pic'),
+                'Tarda: ocupades al pic': t.get('ocupades_al_pic'),
+                'Aules de la mida': m['aules_categoria'],
+                'Matí: marge acumulat': m['marge'] if format_actual else None,
+                'Tarda: marge acumulat': t['marge'] if format_actual else None})
         mostra_taula(pd.DataFrame(files))
+        st.caption('Les ocupades per mida corresponen a la franja del pic de cada torn i sumen el mateix total. Mida: places de l’aula assignada; sense aula, alumnes (estimació).')
         st.caption('Llindars acumulats: les aules grans també poden acollir grups petits. No sumis els marges. La reserva de dues aules és flexible; aquest recompte no garanteix que l’horari encaixi.')
         st.subheader('Sessions mogudes per titulació i curs')
         st.write('Percentatge de les seves sessions que canvien de dia o d’hora (franja); cada sessió compta un sol cop.')
@@ -140,8 +152,9 @@ def mostra():
             st.caption(f"{d['torn_no_avaluable']} sessions sense torn definit: no es poden avaluar.")
         st.subheader('Com ho hem calculat')
         st.write(d['com_ho_hem_calculat'])
-        _, html = junta.documents(d)
-        st.download_button('Descarrega junta.html · A4 per imprimir', html, file_name='junta.html', mime='text/html')
-        st.caption('Obre el fitxer al navegador i imprimeix-lo en PDF, mida A4.')
+        if format_actual:
+            _, html = junta.documents(d)
+            st.download_button('Descarrega junta.html · A4 per imprimir', html, file_name='junta.html', mime='text/html')
+            st.caption('Obre el fitxer al navegador i imprimeix-lo en PDF, mida A4.')
     except Exception:
         mostra_error()
