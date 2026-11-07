@@ -243,6 +243,15 @@ def consulta_sql(sql):
         out['resultat']['total'] = total
         out['resultat']['truncat'] = total > LIMIT
         return out
+    except duckdb.Error as exc:
+        # Els errors de vinculació/sintaxi descriuen la consulta, no les files.
+        # Conversió i lectura poden incloure valors: n'ometem el detall sensible.
+        if isinstance(exc, (duckdb.ConversionException, duckdb.InvalidInputException)):
+            error = str(exc).splitlines()[0]
+            error = re.sub(r"(['\"])(.*?)\1", "'[valor omès]'", error)
+        else:
+            error = str(exc)
+        return {'ok': False, 'error': error[:300]}
     finally:
         if timer:
             timer.cancel()
@@ -380,13 +389,52 @@ _CANVI = {'oneOf': [
           'grups_creixen': {'type': 'array', 'items': _obj({'codi': _str('Codi assignatura'), 'grup': _str('Grup exacte, p. ex. TE/81'), 'alumnes': {'type': 'integer', 'minimum': 0}}, ['codi', 'grup', 'alumnes'])},
           'sessions_cancel_lades': {'type': 'array', 'items': _obj({'id_sessio': _str('Sessió cancel·lada'), 'recuperar_fins': _str('Data límit AAAA-MM-DD')}, ['id_sessio', 'recuperar_fins'])}}, ['tipus'])]}
 
+
+def _metadades_xifres():
+    from nivell1 import troballes
+    # Només importem mòduls i consultem metadades; mai calcula().
+    moduls = troballes.moduls()
+    preguntes = {
+        'ocupacio': 'ocupació física de les aules de l’horari actual',
+        'hores-aula': 'demanda d’hores-aula i cobertura de les aules de partida',
+        'fora-torn': 'quantes sessions són al torn equivocat avui amb el model nou',
+        'hi-cap-mati': 'hi cap el matí? Condicions necessàries als dos torns',
+        'aforament': 'sessions que superen l’aforament segons R3',
+        'marge-grau-nou': 'marge d’hores-aula per al grau nou',
+        'dobles-mati': 'dobles titulacions de cursos superiors al matí',
+        'docents-cavall': 'docents de cursos inicials i superiors el mateix dia',
+        'canvis-aula': 'dispersió i canvis d’aula de l’alumnat',
+        'hores-mortes': 'hores mortes de l’alumnat dins del mateix torn',
+        'problemes-millores': 'problemes observats i propostes de millora',
+    }
+    descripcio = "Primer opció per a xifres generals de l'horari d'avui (part 1)."
+    for m in moduls:
+        titol = preguntes.get(m.ID) or getattr(m, 'TITOL', None) or getattr(m, 'PREGUNTA', None) or (m.__doc__ or m.ID).strip().splitlines()[0]
+        descripcio += f'\n{m.ID}: {titol}'
+    return [m.ID for m in moduls], descripcio
+
+
+_IDS_XIFRES, _DESCRIPCIO_XIFRA = _metadades_xifres()
+# Esquema fix a partir de docs/esquema-dades.md, nivell1.dades.connexio
+# i _files: no obrim les dades per construir les definicions de tools.
+_COLUMNES_SQL = {
+    'sessions': 'id_sessio, activitat_id, id_compartida, codi, assignatura, tipus, grup, semestre, data, setmana, dia, h_ini, h_fi, durada_min, alumnes, capacitat_grup, aula_partida, aules_addicionals_partida, plans, titulacions_curs, dc, torn_requerit, fixada, docents, alumnes_origen, sense_espai, sem, ini_min, fi_min, torn_actual, unitat, demanda_aulari',
+    'aules': 'aula, edifici, tipus, descripcio, capacitat, ordinaria',
+    'activitats': 'activitat_id, codi, grup, semestre, dia, h_ini, h_fi, assignatura, tipus, n_sessions, setmana_primera, setmana_ultima, alumnes, aules_partida, sessions_sense_aula, titulacions_curs, torn_requerit, fixada, docents, sense_espai',
+    'proposta_5_1, proposta_5_2, proposta_5_3, proposta_5_4': 'id_sessio, activitat_id, data, setmana, dia, h_ini, h_fi, ini_min, fi_min, aula, assignatura, tipus, grup',
+}
+_DESCRIPCIO_SQL = ('Una SELECT o WITH…SELECT, màxim 50 files i 5 s. Fes servir xifra primer per a xifres generals. '
+                   'Sense fitxers ni xarxa. Columnes de les vistes:\n'
+                   + '\n'.join(f'{nom}: {cols}' for nom, cols in _COLUMNES_SQL.items())
+                   + "\nel torn d'una sessió es dedueix de h_ini (abans de 14.30 matí); torn_requerit és el que li toca")
+
 _DEFS = [
     ('horari_grup', 'Horari del grup i els seus subgrups en una setmana. Només cal grup: no preguntis titulació ni curs; si falten, retorna totes les coincidències agrupades per titulació i curs (màxim 50 files en total).', _obj({**_COMMON, 'titulacio': _str('Codi titulació'), 'curs': _str('1r, 2n, 3r, 4t…'), 'grup': _str('Grup: 81, TE/81, 811…; inclou la línia associada de teoria i subgrups')}, ['grup'])),
     ('aules_lliures', 'Aules lliures durant tota la franja en la proposta triada; ordinàries per defecte. Indica dia o data.', _obj({**_COMMON, 'data': _str('AAAA-MM-DD; exclou dia'), 'hora_ini': _str('Hora: 16, 16:00, 16.00 o 16h'), 'durada_min': {'type': 'integer', 'minimum': 1}, 'places_min': {'type': 'integer', 'minimum': 0}, 'tipus': _str('Tipus exacte de l’inventari; substitueix el filtre ordinària')}, ['hora_ini', 'durada_min', 'places_min'])),
     ('ocupacio_aula', 'Sessions que ocupen una aula durant una setmana de la proposta triada.', _obj({**_COMMON, 'aula': _str('Codi exacte d’aula')}, ['aula'])),
-    ('xifra', 'Troballa de la part 1: xifra, frase i mètode. Un ID incorrecte retorna els IDs disponibles.', _obj({'id': _str('ID de la troballa')}, ['id'])),
+    ('xifra', _DESCRIPCIO_XIFRA, _obj({'id': {**_str('ID de la troballa'), 'enum': _IDS_XIFRES}}, ['id'])),
     ('resultat_proposta', 'Veredicte oficial i recomptes per regla d’una proposta 5.1–5.4.', _obj({'apartat': _APARTAT}, ['apartat'])),
-    ('consulta_sql', 'Una SELECT o WITH…SELECT, màxim 50 files i 5 s. Vistes sessions, aules, activitats i proposta_5_1…proposta_5_4 (horari efectiu). Sense fitxers ni xarxa.', _obj({'sql': _str('Consulta SQL de lectura')}, ['sql'])),
+    ('consulta_sql', _DESCRIPCIO_SQL, _obj({'sql': _str('Consulta SQL de lectura')}, ['sql'])),
     ('prova_canvi', 'Simula sense desar. moure: id_sessio o activitat_id i almenys dia/hora_ini/aula; valida i compara conflictes nous sense reparar. imprevist: llistes de tancaments, creixements o cancel·lacions; repara (10 s) i valida.', _obj({'apartat': _APARTAT, 'canvi': _CANVI}, ['apartat', 'canvi'])),
 ]
 EINES: list[dict] = [{'type': 'function', 'function': {'name': n, 'description': d, 'parameters': p}} for n, d, p in _DEFS]
