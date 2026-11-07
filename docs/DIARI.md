@@ -237,3 +237,11 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - Junta: tres versions per triar (docs/disseny/junta-opcio-a, b i c), amb colors orientatius (verd suau amb marge, taronja si va just, vermell si falten aules) i textos curts.
 - A la part 1 (sessió Part 1): totes les pàgines amb l'estil de la primera, centrades; caixes més petites a la primera pàgina; filtres de «Totes les respostes» amb el color i la icona de cada estat; la capçalera que talla en fer scroll.
 - Neteja de dades unida: proves amb valors inventats i el 5.1 només imprimeix recomptes (n2-neteja-1). Textos de la Junta sense sigles (n2-dades-5).
+
+### [ds 20:15] DECISIÓ · Neteja de dades reals del repositori i de l'historial
+- Context: l'equip explica que hi va haver un malentès entre l'organització i la Junta. Primer es va comunicar que es podien fer servir les dades amb IA, i després va arribar la restricció. No esborrem que s'hi havia treballat: ho expliquem al README.
+- Documents, proves, maquetes i app: els identificadors i exemples reals (sessions, docents, codis i noms d'assignatura, grups, aules i enllaços a la SIQ) s'han canviat per inventats o genèrics. L'app ja no mostra identificadors de sessió.
+- Historial local reescrit amb git filter-branch (main, n2-backend-2 i n2-frontend-4): fora `dades/` i els identificadors reals de totes les versions antigues. També s'han esborrat el tag part1-v1, les branques ja unides i els punts de control de Codex (refs/codex/…), i s'han fet reflog expire i gc. Els hashes han canviat des de 09b2c23.
+- Es mantenen dos noms d'aula que el codi de la part 2 i una consulta necessiten com a constant: són espais, no persones.
+- GitHub no havia tingut mai dades; main s'hi ha pujat sense forçar.
+- Límit: la neteja és local i del repositori. No desfà el que es va enviar a Anthropic i a OpenAI abans de la restricció.
