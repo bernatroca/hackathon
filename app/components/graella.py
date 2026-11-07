@@ -188,8 +188,8 @@ def llegenda_html():
 
 # El prefix evita que l'HTML exportat alteri altres components de l'app.
 CSS = """
-.p2-horari{min-width:0;color:var(--tinta,#1a1a18);font:13px/1.35 system-ui}
-.p2-horari .horari-scroll{overflow:auto;max-width:100%;border:1px solid var(--linia,#e6e5e0);border-radius:14px;background:var(--targeta,#fff)}
+.p2-horari{width:100%;max-width:100%;min-width:0;color:var(--tinta,#1a1a18);font:13px/1.35 system-ui}
+.p2-horari .horari-scroll{overflow:auto;width:100%;max-width:100%;min-width:0;contain:inline-size;border:1px solid var(--linia,#e6e5e0);border-radius:14px;background:var(--targeta,#fff)}
 .p2-horari .horari{border-collapse:collapse;table-layout:fixed;width:100%;background:var(--targeta,#fff)}
 .p2-horari .horari th,.p2-horari .horari td{border:1px solid var(--linia,#e6e5e0);padding:4px;vertical-align:top}
 .p2-horari .horari th{background:var(--fons,#f4f3ef);font-weight:600}
@@ -217,7 +217,8 @@ CSS = """
 def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='totes', estils=True):
     """Una cel·la amb rowspan per sessió; carrils paral·lels si se solapen.
 
-    Arrodonim només l'espai visual a mitges hores. El text manté l'hora exacta.
+    Les files parcials respecten els minuts exactes: dues classes consecutives
+    no creen carrils perquè comparteixin una mitja hora visual.
     """
     from components.vistes import estat as pastilla_estat
 
@@ -227,13 +228,17 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
     torns = {c.ini < 870 for c in celles}
     inici_dia = max(510, min((c.ini for c in celles), default=510) // 30 * 30) if len(torns) == 1 else 510
     franges = tuple(range(inici_dia, 1260, 30))
+    # Afegim límits exactes a les mitges hores, sense alterar-ne els rètols.
+    limits = sorted({*franges, 1260} | {
+        max(inici_dia, min(1260, minut)) for c in celles for minut in (c.ini, c.fi)})
+    files = {minut: i for i, minut in enumerate(limits)}
     carrils = {}
     for dia in DIES:
         ocupats = []
         entrades = []
         for c in sorted((c for c in celles if c.dia == dia), key=lambda c: (c.ini, c.fi, c.id_sessio)):
-            inici = max(0, (c.ini - inici_dia) // 30)
-            final = min(len(franges), (c.fi - inici_dia + 29) // 30)
+            inici = files[max(inici_dia, min(1260, c.ini))]
+            final = files[max(inici_dia, min(1260, c.fi))]
             if final <= inici:
                 continue
             carril = next((i for i, fi in enumerate(ocupats) if fi <= inici), len(ocupats))
@@ -270,15 +275,26 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
     html = html.replace('<table class="horari">', f'<table class="horari" style="min-width:{amplada}px">')
     html += '</colgroup><thead><tr><th scope="col">Hora</th>'
     html += ''.join(f'<th scope="col" colspan="{carrils[d][0]}">{nom}</th>' for d, nom in zip(DIES, NOMS_DIES)) + '</tr></thead><tbody>'
-    for fila, inici in enumerate(franges):
-        html += f'<tr><th scope="row">{fmt(inici)}–{fmt(inici+30)}</th>'
+    for fila, inici in enumerate(limits[:-1]):
+        alt = (limits[fila + 1] - inici) / 30 * 32
+        html += f'<tr style="height:{alt:g}px">'
+        if inici in franges:
+            html += f'<th scope="row" rowspan="{files[min(inici+30, 1260)]-fila}">{fmt(inici)}–{fmt(inici+30)}</th>'
         for dia in DIES:
             n, entrades = carrils[dia]
-            for carril in range(n):
+            carril = 0
+            while carril < n:
                 entrada = inicis.get((dia, fila, carril))
                 if entrada is None:
-                    if (dia, fila, carril) not in cobertes:
-                        html += '<td></td>'
+                    if (dia, fila, carril) in cobertes:
+                        carril += 1
+                        continue
+                    ample_buit = 1
+                    while (carril + ample_buit < n
+                           and (dia, fila, carril + ample_buit) not in cobertes):
+                        ample_buit += 1
+                    html += f'<td colspan="{ample_buit}"></td>'
+                    carril += ample_buit
                     continue
                 final, ample, c = entrada
                 estat = estat_cella(c)
@@ -303,6 +319,7 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
                 classe = (f'<details class="classe{marques}" data-estat="{estat}" title="{escape(avis, quote=True)}">'
                     f'<summary>{contingut}</summary><small class="detall">{escape(avis or "Es manté la classe de les dades originals.")}</small></details>')
                 html += f'<td rowspan="{final-fila}" colspan="{ample}">{classe}</td>'
+                carril += ample
         html += '</tr>'
     return html + '</tbody></table></div></div>'
 

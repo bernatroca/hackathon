@@ -75,15 +75,11 @@ NOMS_PROPOSTES = {
 
 
 def tria_si_cal(label, opcions, *, key, format_func=str, index=0, contenidor=st, help=None):
-    """Una dada única s'explica; no es presenta com una decisió fictícia."""
-    if len(opcions) == 1:
-        contenidor.markdown(f'**{label}**')
-        contenidor.write(format_func(opcions[0]))
-        return opcions[0]
+    """Manté la mateixa etiqueta i alçada quan només hi ha una opció."""
     if key in st.session_state and st.session_state[key] not in opcions:
         del st.session_state[key]
     return contenidor.selectbox(label, opcions, index=index, key=key,
-        format_func=format_func, help=help)
+        format_func=format_func, help=help, disabled=len(opcions) == 1)
 
 
 def mostra():
@@ -110,6 +106,7 @@ CSS_PAGINA = """
 .st-key-p2-pagina .p2-xifres div{text-align:right;}
 .st-key-p2-pagina .p2-xifres b{display:block;font-size:28px;line-height:1.2;}
 .st-key-p2-pagina .p2-xifres span{font-size:12px;color:var(--tinta-2);}
+.st-key-p2-pagina .st-key-p2-graelles{margin-top:24px;min-width:0;max-width:100%;}
 .st-key-p2-pagina h3{font-size:20px!important;padding:4px 0;}
 .st-key-p2-pagina .st-key-p2-filtres [data-testid="stHorizontalBlock"]{gap:8px;flex-wrap:wrap;}
 .st-key-p2-pagina .st-key-p2-filtres [data-testid="stColumn"]{width:auto!important;flex:0 1 auto!important;min-width:0!important;}
@@ -232,7 +229,7 @@ def _mostra():
         with st.container(key='p2-context-dades'):
             st.markdown(resum_html(base, proposta, actuals, noves, comparar), unsafe_allow_html=True)
         with st.container(key='p2-graelles'):
-            st.subheader('3. Consulta la setmana dels estudiants')
+            st.subheader('La setmana del grup')
             with st.container(key='p2-clau-colors'):
                 filtre = mostra_filtres(noves)
             titol = f'{"Proposta" if comparar else "Avui"} · Grup {grup} · {setmana:%d/%m} – {setmana + timedelta(days=4):%d/%m}'

@@ -151,7 +151,7 @@ class TestMillores(unittest.TestCase):
         html = taula_html([a, b])
         assert html.count('<b>Assignatura Inventada I</b>') == 1
         assert html.count('<b>Assignatura Inventada II</b>') == 1
-        assert 'rowspan="4"' in html
+        assert 'rowspan="6"' in html  # Inclou els límits exactes 09:15 i 10:15.
         assert 'colspan="2">Dilluns' in html
         assert '08:30–10:30' in html
 
@@ -252,6 +252,84 @@ class TestAssignacions(unittest.TestCase):
 
 
 class TestRedisseny(unittest.TestCase):
+    def test_controls_unics_i_titol_amb_espai(self):
+        from pagines.part2 import CSS_PAGINA
+        with app_inventada() as at:
+            grup = at.selectbox(key='p2-grup')
+            assert grup.label == 'Grup' and grup.options == ['Grup 81', 'Grup 914']
+            assert not grup.disabled
+            assert at.selectbox(key='p2-titulacio').disabled
+            assert not at.selectbox(key='p2-curs').disabled
+            assert any(h.value == 'La setmana del grup' for h in at.subheader)
+            assert not any(h.value.startswith('3.') for h in at.subheader)
+            at.selectbox(key='p2-grup').select('914').run(timeout=30)
+            at.selectbox(key='p2-curs').select('3r').run(timeout=30)
+            grup = at.selectbox(key='p2-grup')
+            assert grup.label == 'Grup' and grup.options == ['Grup 81']
+            assert grup.disabled
+            assert not at.exception and not at.error
+        assert '.st-key-p2-graelles{margin-top:24px;' in CSS_PAGINA
+
+    def test_carrils_nomes_al_dia_i_franja_amb_solapament(self):
+        from dataclasses import replace
+        from html.parser import HTMLParser
+        from components.graella import Cella, CSS
+
+        class Taula(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.files = []
+            def handle_starttag(self, tag, attrs):
+                if tag == 'tr':
+                    self.files.append([])
+                elif tag in ('th', 'td'):
+                    self.files[-1].append(dict(attrs))
+
+        a = Cella('S90001', 'L', 510, 570, '', 'Inventada', 'Teoria', '81', False, False)
+        cs = [a, replace(a, id_sessio='S90002', ini=600, fi=660),
+              replace(a, id_sessio='S90003', ini=600, fi=660)]
+        cs += [replace(a, id_sessio=f'S9001{i}', dia=dia) for i, dia in enumerate('MXJV')]
+        html = taula_html(cs)
+        taula = Taula()
+        taula.feed(html)
+        assert [int(c.get('colspan', 1)) for c in taula.files[0]] == [1, 2, 1, 1, 1, 1]
+        assert 'min-width:990px' in html  # Dos carrils dilluns; un als altres dies.
+        # La primera classe de dilluns ocupa tot el dia, les simultànies un carril.
+        blocs = [c for fila in taula.files[1:] for c in fila if 'rowspan' in c and 'colspan' in c]
+        assert [int(c['colspan']) for c in blocs] == [2, 1, 1, 1, 1, 1, 1]
+        # Simulem els rowspans: cada fila ha de tenir exactament les mateixes
+        # set columnes, també després del final de les classes paral·leles.
+        pendents = [0] * 7
+        for fila in taula.files[1:]:
+            ocupades = [n > 0 for n in pendents]
+            seguent = [max(0, n - 1) for n in pendents]
+            for cella in fila:
+                col = ocupades.index(False)
+                ample = int(cella.get('colspan', 1))
+                assert col + ample <= 7 and not any(ocupades[col:col + ample])
+                for k in range(col, col + ample):
+                    ocupades[k] = True
+                    seguent[k] = int(cella.get('rowspan', 1)) - 1
+            assert all(ocupades)
+            pendents = seguent
+        assert not any(pendents)
+        assert 'min-width:140px' in CSS
+        assert '.horari-scroll{overflow:auto;width:100%;max-width:100%;min-width:0;contain:inline-size;' in CSS
+
+    def test_classes_consecutives_no_obren_carrils_per_arrodoniment(self):
+        from dataclasses import replace
+        from components.graella import Cella
+        a = Cella('S90001', 'L', 510, 555, '', 'Inventada I', 'Teoria', '81', False, False)
+        b = replace(a, id_sessio='S90002', ini=555, fi=615, assignatura='Inventada II')
+        html = taula_html([a, b])
+        assert 'min-width:840px' in html
+        assert 'colspan="1">Dilluns' in html
+        assert '09:15–10:15' in html
+        assert html.count('<details class="classe') == 2
+        # Un sol minut compartit sí que exigeix dos blocs de com a mínim 140 px.
+        html = taula_html([a, replace(b, ini=554)])
+        assert 'min-width:990px' in html and 'colspan="2">Dilluns' in html
+
     def test_colors_variables_i_prioritat(self):
         from dataclasses import replace
         from components.graella import Cella, CSS, ESTATS, estat_cella
@@ -357,7 +435,12 @@ class TestRedisseny(unittest.TestCase):
         assert 'prefers-reduced-motion' in CSS_PAGINA
         with app_inventada() as at:
             at.button(key='p2-inicia-guia').click().run(timeout=30)
-            scripts = '\n'.join(e.value for e in at.get('html'))
+            components = at.get('iframe')
+            assert len(components) == 1
+            scripts = components[0].proto.srcdoc
+            assert '<script>' in scripts and 'window.parent' in scripts
+            assert 'const document=window.document' in scripts
+            assert components[0].proto.tab_index == -1
             assert "e.key==='Escape'" in scripts
             assert "panell.focus({preventScroll:true})" in scripts
             assert "getBoundingClientRect" in scripts and "ResizeObserver" in scripts
@@ -370,13 +453,106 @@ class TestRedisseny(unittest.TestCase):
 console.log(JSON.stringify([
   posicioPanell({left:30,right:500,top:100,bottom:250},350,200,1280,800),
   posicioPanell({left:280,right:1100,top:100,bottom:250},350,200,1280,800),
-  posicioPanell({left:10,right:370,top:100,bottom:250},350,200,390,800)
+  posicioPanell({left:10,right:370,top:100,bottom:250},350,200,390,800),
+  posicioPanell({left:30,right:1100,top:650,bottom:750},350,200,1280,800),
+  posicioPanell({left:30,right:1100,top:650,bottom:750},350,200,390,800)
 ]));'''
         resultat = subprocess.run([node, '-e', script], check=True, capture_output=True, text=True)
-        dreta, sota, estret = json.loads(resultat.stdout)
+        dreta, sota, estret, damunt, estret_baix = json.loads(resultat.stdout)
         assert dreta == {'mode': 'dreta', 'left': 512, 'top': 100, 'width': 350}
         assert sota['mode'] == 'sota' and sota['top'] > 250
         assert estret['mode'] == 'estret' and estret['width'] == 366
+        assert damunt['mode'] == 'damunt' and damunt['top'] + 200 < 650
+        assert estret_baix['top'] + 200 <= 788
+
+    def test_javascript_del_component_enfoca_segueix_i_tanca(self):
+        import json
+        import shutil
+        import subprocess
+        from components.ajuda_part2 import PASSOS
+        node = shutil.which('node')
+        if not node:
+            self.skipTest('Node no disponible per executar el JavaScript de la guia')
+        scripts = []
+        with app_inventada() as at:
+            at.button(key='p2-inicia-guia').click().run(timeout=30)
+            for pas, (selector, _, _) in enumerate(PASSOS):
+                component, = at.get('iframe')
+                assert f'const selector={json.dumps(selector)}, pas={pas};' in component.proto.srcdoc
+                scripts.append(component.proto.srcdoc.removeprefix('<script>').removesuffix('</script>'))
+                at.button(key='p2-guia-seguent').click().run(timeout=30)
+                assert not at.exception and not at.error
+            scripts.append(at.get('iframe')[0].proto.srcdoc.removeprefix('<script>').removesuffix('</script>'))
+        # DOM sintètic: executem el codi que ha emès la pàgina, amb dos windows
+        # diferents, per detectar accessos accidentals al document de l'iframe.
+        harness = r'''
+const assert = require('node:assert/strict');
+const input = JSON.parse(require('node:fs').readFileSync(0, 'utf8'));
+function events(obj) {
+  obj.listeners = {};
+  obj.addEventListener = (name, f) => (obj.listeners[name] ??= new Set()).add(f);
+  obj.removeEventListener = (name, f) => obj.listeners[name]?.delete(f);
+  obj.dispatch = (name, event) => [...(obj.listeners[name] ?? [])].forEach(f => f(event));
+  return obj;
+}
+const parentRect = {left:20, top:30};
+const parent = {scrollLeft:0, scrollTop:0, getBoundingClientRect:()=>parentRect};
+function element(rect={left:30,right:500,top:100,bottom:250}) {
+  const classes = new Set();
+  return {isConnected:true, offsetParent:parent, offsetHeight:200,
+    style:{}, dataset:{}, attrs:{}, rect, focused:0,
+    classList:{add:c=>classes.add(c), remove:c=>classes.delete(c), contains:c=>classes.has(c)},
+    getBoundingClientRect(){return this.rect;},
+    setAttribute(k,v){this.attrs[k]=v;},
+    focus(){this.focused++;}, scrollIntoView(){}};
+}
+const targets = input.selectors.map(()=>element());
+const panel = element(), launcher = element(), start = element();
+let closed = 0;
+const close = {click:()=>closed++};
+const map = Object.fromEntries(input.selectors.map((s,i)=>[s,targets[i]]));
+Object.assign(map, {'.st-key-p2-guia':panel, '.st-key-p2-obre-guia':launcher,
+  '.st-key-p2-guia-tanca button':close, '.st-key-p2-inicia-guia button':start});
+const page = {querySelector:s=>map[s], querySelectorAll:()=>targets.filter(t=>t.classList.contains('p2-pas-actiu'))};
+const doc = events({querySelector:s=>s==='.st-key-p2-pagina'?page:undefined});
+class Observer {observe(){} disconnect(){}}
+const host = events({document:doc, innerWidth:1280, innerHeight:800,
+  ResizeObserver:Observer, MutationObserver:Observer, matchMedia:()=>({matches:true}),
+  requestAnimationFrame:f=>{f();return 1;}, cancelAnimationFrame:()=>{}});
+const window = {parent:host}; // El fill no té document ni mides ni observadors.
+globalThis.addEventListener = ()=>{};
+for (let i=0; i<input.selectors.length; i++) {
+  eval(input.scripts[i]);
+  assert.equal(targets.filter(t=>t.classList.contains('p2-pas-actiu')).length,1);
+  assert.ok(targets[i].classList.contains('p2-pas-actiu'));
+  assert.equal(panel.attrs.role,'dialog');
+  assert.equal(panel.focused,i+1);
+  assert.equal(Number.parseFloat(panel.style.left)+parentRect.left,512);
+  targets[i].rect.right=540;
+  doc.dispatch('scroll');
+  assert.equal(Number.parseFloat(panel.style.left)+parentRect.left,552);
+  assert.equal(doc.listeners.keydown.size,1);
+  assert.equal(host.listeners.resize.size,2);
+}
+host.innerWidth=390;
+host.dispatch('resize');
+assert.equal(panel.dataset.posicio,'estret');
+assert.equal(panel.style.width,'366px');
+assert.equal(Number.parseFloat(panel.style.left)+parentRect.left,12);
+let prevented=false;
+doc.dispatch('keydown',{key:'Escape',preventDefault:()=>prevented=true});
+assert.ok(prevented);
+assert.equal(closed,1);
+assert.equal(start.focused,1);
+eval(input.scripts.at(-1));
+assert.equal(targets.filter(t=>t.classList.contains('p2-pas-actiu')).length,0);
+assert.equal(doc.listeners.keydown.size,0);
+assert.equal(host.listeners.resize.size,1);
+'''
+        resultat = subprocess.run([node, '-e', harness], input=json.dumps({
+            'scripts': scripts, 'selectors': [p[0] for p in PASSOS]}),
+            check=False, capture_output=True, text=True)
+        assert resultat.returncode == 0, resultat.stderr
 
     def test_navegacio_seccions_i_paths(self):
         import ast

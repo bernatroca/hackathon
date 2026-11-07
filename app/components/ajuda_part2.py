@@ -2,6 +2,7 @@
 import json
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 
 PASSOS = (
@@ -29,10 +30,15 @@ PASSOS = (
 POSICIO_JS = """
 function posicioPanell(rect, ample, alt, vw, vh) {
   const marge = 12;
-  if (vw < 640) return {mode:'estret', left:marge, top:Math.max(marge,vh-alt-marge), width:vw-2*marge};
+  const limita = y => Math.max(marge, Math.min(y, vh-alt-marge));
+  if (vw < 640) return {mode:'estret', left:marge, top:limita(rect.bottom+marge), width:vw-2*marge};
   if (rect.right + ample + 2*marge <= vw)
     return {mode:'dreta', left:rect.right+marge, top:Math.max(marge,Math.min(rect.top,vh-alt-marge)), width:ample};
-  return {mode:'sota', left:Math.max(marge,Math.min(rect.left,vw-ample-marge)), top:rect.bottom+marge, width:ample};
+  if (rect.left >= ample + 2*marge)
+    return {mode:'esquerra', left:rect.left-ample-marge, top:limita(rect.top), width:ample};
+  const sota = rect.bottom + alt + 2*marge <= vh;
+  return {mode:sota?'sota':'damunt', left:Math.max(marge,Math.min(rect.left,vw-ample-marge)),
+    top:limita(sota?rect.bottom+marge:rect.top-alt-marge), width:ample};
 }
 """
 
@@ -61,9 +67,11 @@ def mostra_guia():
 def enfoca_pas():
     pas = st.session_state.get('p2-guia-pas')
     selector = PASSOS[pas][0] if pas is not None else None
-    # st.html executa el script al document de Streamlit (sense iframe).
+    # components.html admet alçada zero i executa scripts al mateix origen.
+    # Tots els selectors, events i coordenades pertanyen al document pare.
     # Es netegen listeners i observadors a cada renderitzat, també en filtrar.
-    script = """<script>(()=>{
+    script = """<script>((window)=>{
+      const document=window.document;
       if(window.__p2GuiaNeteja)window.__p2GuiaNeteja();
       const pagina=document.querySelector('.st-key-p2-pagina');
       if(!pagina)return;
@@ -81,41 +89,38 @@ def enfoca_pas():
         if(!obre?.isConnected){window.__p2GuiaLlançadorNeteja?.();return;}
         const r=origen(obre);
         obre.style.bottom='auto';obre.style.left=(18-r.left)+'px';
-        obre.style.top=(innerHeight-obre.offsetHeight-18-r.top)+'px';
+        obre.style.top=(window.innerHeight-obre.offsetHeight-18-r.top)+'px';
       };
-      const programaObre=()=>{cancelAnimationFrame(frameObre);frameObre=requestAnimationFrame(situaObre);};
-      addEventListener('resize',programaObre);document.addEventListener('scroll',programaObre,true);
-      window.__p2GuiaLlançadorNeteja=()=>{
-        cancelAnimationFrame(frameObre);removeEventListener('resize',programaObre);
+      const programaObre=()=>{window.cancelAnimationFrame(frameObre);frameObre=window.requestAnimationFrame(situaObre);};
+      window.addEventListener('resize',programaObre);document.addEventListener('scroll',programaObre,true);
+      const netejaObre=()=>{
+        window.cancelAnimationFrame(frameObre);window.removeEventListener('resize',programaObre);
         document.removeEventListener('scroll',programaObre,true);
       };
+      window.__p2GuiaLlançadorNeteja=netejaObre;
+      globalThis.addEventListener('pagehide',()=>{
+        if(window.__p2GuiaLlançadorNeteja===netejaObre)netejaObre();
+      },{once:true});
       situaObre();
       const selector=SELECTOR, pas=PAS;
       pagina.querySelectorAll('.p2-pas-actiu').forEach(e=>e.classList.remove('p2-pas-actiu'));
       if(!selector){window.__p2GuiaPas=null;return;}
       POSICIO
       let objectiu,panell,observer,resizeObserver,frame,acabat=false;
-      const redueix=matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const redueix=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       const situa=()=>{
         if(!objectiu?.isConnected||!panell?.isConnected)return;
         const rect=objectiu.getBoundingClientRect();
-        const ample=Math.min(350,innerWidth-24);
-        const pos=posicioPanell(rect,ample,panell.offsetHeight,innerWidth,innerHeight);
+        const ample=Math.min(350,window.innerWidth-24);
+        panell.style.width=ample+'px';
+        const pos=posicioPanell(rect,ample,panell.offsetHeight,window.innerWidth,window.innerHeight);
         panell.dataset.posicio=pos.mode;
         panell.style.width=pos.width+'px';
-        if(pos.mode==='sota'){
-          // Coordenades relatives al contenidor posicionat de Streamlit.
-          panell.style.position='absolute';
-          const r=origen(panell);
-          panell.style.left=(pos.left-r.left)+'px';
-          panell.style.top=(pos.top-r.top)+'px';
-        }else{
-          panell.style.position='fixed';
-          const r=origen(panell);
-          panell.style.left=(pos.left-r.left)+'px';panell.style.top=(pos.top-r.top)+'px';
-        }
+        panell.style.position='fixed';
+        const r=origen(panell);
+        panell.style.left=(pos.left-r.left)+'px';panell.style.top=(pos.top-r.top)+'px';
       };
-      const programa=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(situa);};
+      const programa=()=>{window.cancelAnimationFrame(frame);frame=window.requestAnimationFrame(situa);};
       const esc=e=>{
         if(e.key==='Escape'){
           e.preventDefault();
@@ -135,24 +140,29 @@ def enfoca_pas():
         situa();
         if(nou){
           panell.focus({preventScroll:true});
-          // En mode sota, el panell continua dins del flux desplaçable de la pàgina.
-          if(panell.dataset.posicio==='sota')panell.scrollIntoView({behavior:redueix?'instant':'smooth',block:'nearest'});
         }
         observer?.disconnect();
-        resizeObserver=new ResizeObserver(programa);resizeObserver.observe(objectiu);resizeObserver.observe(panell);
+        resizeObserver=new window.ResizeObserver(programa);resizeObserver.observe(objectiu);resizeObserver.observe(panell);
         acabat=true;return true;
       };
-      addEventListener('resize',programa);document.addEventListener('scroll',programa,true);
+      window.addEventListener('resize',programa);document.addEventListener('scroll',programa,true);
       document.addEventListener('keydown',esc);
       if(!inicia()){
-        observer=new MutationObserver(()=>{if(!acabat)inicia();});
+        observer=new window.MutationObserver(()=>{if(!acabat)inicia();});
         observer.observe(pagina,{childList:true,subtree:true});
       }
-      window.__p2GuiaNeteja=()=>{
+      const neteja=()=>{
         objectiu?.classList.remove('p2-pas-actiu');observer?.disconnect();resizeObserver?.disconnect();
-        cancelAnimationFrame(frame);removeEventListener('resize',programa);
+        window.cancelAnimationFrame(frame);window.removeEventListener('resize',programa);
         document.removeEventListener('scroll',programa,true);document.removeEventListener('keydown',esc);
       };
-    })()</script>"""
-    st.html(script.replace('SELECTOR', json.dumps(selector)).replace('PAS;', json.dumps(pas) + ';')
-        .replace('POSICIO', POSICIO_JS), unsafe_allow_javascript=True)
+      window.__p2GuiaNeteja=neteja;
+      // El document de l'iframe desapareix també en navegar a una altra pàgina.
+      globalThis.addEventListener('pagehide',()=>{
+        if(window.__p2GuiaNeteja===neteja){
+          neteja();
+        }
+      },{once:true});
+    })(window.parent)</script>"""
+    components.html(script.replace('SELECTOR', json.dumps(selector)).replace('PAS;', json.dumps(pas) + ';')
+        .replace('POSICIO', POSICIO_JS), height=0, scrolling=False, tab_index=-1)
