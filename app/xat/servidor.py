@@ -486,6 +486,24 @@ def _amb_reserva(missatges):
     raise ErrorIA(error)
 
 
+def _filtra_consultes(consultes):
+    """Mostra èxits únics o l'últim error de cada eina, en ordre de crida."""
+    correctes = {c["eina"] for c in consultes if c["ok"]}
+    ultims_errors = {c["eina"]: i for i, c in enumerate(consultes) if not c["ok"]}
+    resultat, vistos = [], set()
+    for i, consulta in enumerate(consultes):
+        nom = consulta["eina"]
+        if consulta["ok"]:
+            clau = (nom, json.dumps(consulta["args"], sort_keys=True, ensure_ascii=False))
+            if clau in vistos:
+                continue
+            vistos.add(clau)
+        elif nom in correctes or ultims_errors[nom] != i:
+            continue
+        resultat.append(consulta)
+    return resultat
+
+
 def _segueix(primer, trossos) -> Iterator[str]:
     escrit = False
     consultes = []
@@ -503,7 +521,7 @@ def _segueix(primer, trossos) -> Iterator[str]:
                     yield _sse({"error": "La IA no ha tornat cap resposta."})
                     return
                 if consultes:
-                    yield _sse({"consultes": consultes})
+                    yield _sse({"consultes": _filtra_consultes(consultes)})
                 yield _sse({"fi": True, **valor})
     except ErrorIA as e:
         yield _sse({"error": str(e)})
