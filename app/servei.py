@@ -12,19 +12,25 @@ def versio_registre():
                  for p in sorted((arrel / carpeta).glob(patro)))
 
 
-@st.cache_data(show_spinner=False)
-def totes(semestre, setmana, versio):
+@st.cache_data(ttl=None, show_spinner=False)
+def ids_registre(versio):
+    """Descobreix els IDs sense executar cap calcula()."""
     importlib.invalidate_caches()
-    return troballes.totes(semestre, setmana)
+    return [modul.ID for modul in troballes.moduls()]
 
 
-@st.cache_data(show_spinner=False)
+def totes(semestre, setmana, versio):
+    # Reutilitza també les troballes ja calculades des de la portada.
+    return [una(id_, semestre, setmana, versio) for id_ in ids_registre(versio)]
+
+
+@st.cache_data(ttl=None, show_spinner=False)
 def una(id_, semestre, setmana, versio):
     importlib.invalidate_caches()
     return troballes.una(id_, semestre, setmana)
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(ttl=None, show_spinner=False)
 def setmanes(semestre):
     return [str(fila[0]) for fila in connexio().execute(
         'SELECT DISTINCT setmana FROM sessions WHERE sem = $semestre ORDER BY setmana',
@@ -36,7 +42,7 @@ AULES_RESERVA = 2
 PLACES_GRAU_NOU = 40
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(ttl=None, show_spinner=False)
 def inventari():
     """Única lectura d'inventari autoritzada; no calcula ocupació."""
     return connexio().execute('SELECT aula, edifici, tipus, capacitat FROM aules').df()

@@ -23,6 +23,14 @@ def carrega(id_):
         return None
 
 
+def carrega_grup(ids):
+    """Carrega únicament les respostes necessàries per a la pàgina actual."""
+    for id_ in ids:
+        t = carrega(id_)
+        if t is not None:
+            st.session_state.resultats[id_] = t
+
+
 def contingut(t):
     return text(t, st.session_state.get('resultats', {}))
 
