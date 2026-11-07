@@ -3,7 +3,10 @@ import copy
 import json
 from pathlib import Path
 import sys
+from datetime import date
 from unittest.mock import patch
+
+import pytest
 
 ARREL = Path(__file__).resolve().parent
 sys.path.insert(0, str(ARREL.parent))
@@ -11,6 +14,8 @@ sys.path.insert(0, str(ARREL))
 
 from streamlit.testing.v1 import AppTest
 from pagines import junta
+from nivell2.base import Base, CONTINGENCIES, GRAU_NOU, Proposta, Sessio
+from horaris.model import Aula
 
 
 def dades():
@@ -23,7 +28,8 @@ def dades():
     fila = {'cohort': 'GXX:1r', 'nom': 'Grau inventat, 1r', 'sessions': 10,
             'mogudes': 0, 'mogudes_pct': 0, 'franja': 0, 'franja_pct': 0,
             'aules_assignades': 0, 'aula': 0, 'aula_pct': 0, 'torn': 0, 'torn_pct': 0}
-    return {'data': '2026-11-07', 'pics': {'mati': torn, 'tarda': copy.deepcopy(torn)},
+    return {'data': '2026-11-07', 'aulari': {'ordinaries': 21, 'reserva': 2, 'disponibles': 19},
+            'pics': {'mati': torn, 'tarda': copy.deepcopy(torn)},
             'sessions_mogudes': [fila], 'pitjor_cohort': ['GXX:1r'],
             'fora_torn_ja_avui': 0, 'excepcions': [], 'excepcions_resum': [], 'torn_no_avaluable': 0,
             'com_ho_hem_calculat': 'Segon semestre; canvi de dia, hora o aula.'}
@@ -43,8 +49,10 @@ junta.mostra()
 
 
 def test_junta_obre_sense_errors_i_zero_sense_grafic():
-    app = obre(dades(), ['Avui', '5.1', '5.2'])
+    app = obre(dades(), ['Avui', '5.1', '5.2', '5.3', '5.4'])
     assert app.selectbox[0].value == '5.2'
+    assert app.selectbox[0].options == ['Avui', 'Aules assignades (5.1)', 'Horari complet (5.2)',
+                                       'Amb imprevistos (5.3)', 'Amb el grau nou (5.4)']
     assert any('Cap curs canvia' in m.value for m in app.markdown)
     assert not app.get('plotly_chart')
     assert app.get('download_button')
@@ -54,7 +62,7 @@ def test_junta_obre_sense_errors_i_zero_sense_grafic():
 def test_sense_52():
     app = obre(dades(), ['Avui', '5.1'])
     assert app.selectbox[0].value == '5.1'
-    assert any(i.value == 'El resum definitiu sortirà amb la proposta del 5.2' for i in app.caption)
+    assert not any('El resum definitiu sortirà' in i.value for i in app.caption)
 
 
 def test_percentatges_ordenats_i_absoluts_al_costat():
@@ -172,7 +180,8 @@ def test_textos_principals_sense_codis_i_detall_tancat():
 
 
 def test_quatre_fitxes_i_colors():
-    for n, color, text in ((19, 'ambre', 'Va just'), (13, 'verd', 'Hi cap'),
+    for n, color, text in ((19, 'ambre', 'Sense marge'), (18, 'verd', 'Hi cap'),
+                           (17, 'verd', 'Hi cap'), (13, 'verd', 'Hi cap'),
                            (21, 'vermell', 'Falten aules')):
         d = dades()
         d['pics']['mati']['pitjor'] = dict(d['pics']['mati']['pitjor'], classes=n)
@@ -183,9 +192,70 @@ def test_quatre_fitxes_i_colors():
             assert titol in html
         assert f'{n} <small>de 19 aules' in html
         assert f'estat {color}' in html and text in html
+        assert html.count('L&#x27;aulari té 21 aules ordinàries; en guardem 2 de reserva per a imprevistos.') == 2
+        assert ('Si una aula falla, cal fer servir la reserva.' in html) == (n == 19)
+        assert 'Va just' not in html
         assert 'grid-template-columns:repeat(2,minmax(0,1fr))' in junta.ESTIL
     assert junta.ocupacio(19, 19)[2] == '#e8820c'
     assert '#9a5200' in junta.ESTIL
+
+
+def test_marge_al_detall_i_fitxes_amb_inventari_diferent():
+    d = dades()
+    d['aulari'] = {'ordinaries': 9, 'reserva': 2, 'disponibles': 7}
+    for torn in d['pics'].values():
+        torn['pitjor'] = dict(torn['pitjor'], classes=7, aules_disponibles=7)
+    app = obre(d, ['Avui'])
+    html = next(m.value for m in app.markdown if '<div class="junta-fitxes">' in m.value)
+    assert html.count('9 aules ordinàries') == 2
+    assert html.count('Sense marge') == 2
+    detall = next(e for e in app.expander if e.label == 'Detall tècnic')
+    assert any(s.value == 'Per què 7 de 7 no és prou' for s in detall.subheader)
+    assert any('Recomanem mantenir almenys 1–2 aules lliures' in m.value for m in detall.markdown)
+
+
+@pytest.mark.parametrize('nom,escenari', [('5.1', None), ('5.2', None),
+                                         ('5.3', CONTINGENCIES), ('5.4', GRAU_NOU)])
+def test_propostes_completes_amb_escenari_inventat(tmp_path, nom, escenari):
+    s = Sessio('inventada-' + nom, '100000', 'TE', '81', date(2027, 2, 15),
+               'L', 510, 60, 40, 'A', ('GXX:1r',), 'mati', '', frozenset())
+    b = Base({s.id: s}, {a: Aula(a, '', 'Aules docents', 50) for a in ('A', 'B', 'C')}, [s.id])
+    p = Proposta.de_base(b)
+    if nom == '5.3':
+        p.files[s.id].data = '2027-02-16'
+        p.files[s.id].dia = 'M'
+    p.escriu(tmp_path / nom / 'proposta.csv')
+    with patch.object(junta, 'RESULTATS', tmp_path), patch.object(junta, 'SORTIDA', tmp_path), \
+         patch.object(junta.junta, 'carrega_oficial', return_value=b) as oficial, \
+         patch.object(junta.junta, 'carrega_model', return_value=b) as model:
+        junta.genera.clear()
+        app = AppTest.from_string("""
+from pagines import junta
+junta.mostra()
+""").run(timeout=90)
+        assert app.selectbox[0].value == nom
+        assert not app.exception and not app.error and not app.info
+        assert app.get('download_button')
+        app.radio[0].set_value('Tarda').run()
+        assert not app.exception and not app.error
+        oficial.assert_called_once_with(escenari)
+        model.assert_called_once_with(escenari)
+        d = junta.carrega(nom)
+        assert d['aulari'] == {'ordinaries': 3, 'reserva': 2, 'disponibles': 1}
+        assert d['sessions_mogudes'][0]['franja'] == (1 if nom == '5.3' else 0)
+        junta.genera.clear()
+
+
+def test_regenera_resum_sense_aulari(tmp_path):
+    desti = tmp_path / 'junta' / '5.3'
+    desti.mkdir(parents=True)
+    d = dades()
+    del d['aulari']
+    (desti / 'junta.json').write_text(json.dumps(d))
+    with patch.object(junta, 'RESULTATS', tmp_path), patch.object(junta, 'SORTIDA', tmp_path), \
+         patch.object(junta, 'genera', return_value=dades()) as genera:
+        assert junta.carrega('5.3') == dades()
+        genera.assert_called_once_with('5.3', 0, 0)
 
 
 def test_barres_vuit_i_desplegable_ordenats():

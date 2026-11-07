@@ -9,8 +9,9 @@ from html import escape
 from pathlib import Path
 from statistics import median
 
-from nivell2.base import (Informe, RESULTATS, Proposta, carrega_model,
+from nivell2.base import (CONTINGENCIES, GRAU_NOU, Informe, RESULTATS, Proposta, carrega_model,
                          carrega_oficial, fmt)
+from nivell2.franges import RESERVA
 from nivell2.xifres import calcula as calcula_xifres
 from horaris.check import Informe as InformeIntern, _col_loca, _torn_ok
 from horaris.model import llegeix_proposta, llegeix_relaxacions, a_traslladar
@@ -48,12 +49,40 @@ DETALL_TECNIC += (
     ' R1-TORN identifica la regla de torn; PLAB identifica els laboratoris. '
     'Les aules J són aules d’un altre edifici que s’han de portar a l’Escola. '
     'Llindars acumulats: demanda i oferta de totes les mides a partir del mínim indicat. '
-    'Oferta limitada a 19, amb reserva flexible de dues aules: cota optimista, '
+    'Oferta limitada a les aules ordinàries menys la reserva flexible: cota optimista, '
     'no garantia d’encaix. No se sumen els marges.')
 
 
 def percentatge(valor):
     return f'{valor:.1f}'.rstrip('0').rstrip('.').replace('.', ',') + ' %'
+
+
+def escenari_proposta(nom):
+    return CONTINGENCIES if nom == '5.3' else GRAU_NOU if nom.startswith('5.4') else None
+
+
+def aulari(base):
+    ordinaries = sum(a.ordinaria for a in base.aules.values())
+    return {'ordinaries': ordinaries, 'reserva': RESERVA,
+            'disponibles': max(0, ordinaries - RESERVA)}
+
+
+def explicacio_aulari(d):
+    a = d['aulari']
+    return (f"L'aulari té {a['ordinaries']} aules ordinàries; "
+            f"en guardem {a['reserva']} de reserva per a imprevistos.")
+
+
+def titol_marge(d):
+    n = d['aulari']['disponibles']
+    return f'Per què {n} de {n} no és prou'
+
+
+def explicacio_marge(d):
+    return ("Ocupar totes les aules disponibles a l'hora punta vol dir que qualsevol avaria, "
+            f"reserva o grup que creix obliga a fer servir les {d['aulari']['reserva']} aules "
+            'de reserva o a moure classes. Recomanem mantenir almenys 1–2 aules lliures '
+            "a l'hora punta.")
 
 
 def nom(cohort):
@@ -62,12 +91,12 @@ def nom(cohort):
     return NOMS.get(tit, f'Titulació {tit}') + sufix
 
 
-def carrega_proposta(path, base):
+def carrega_proposta(path, base, escenari=None):
     """Rebutja errors estructurals; ignora les files d'altres semestres com el jurat."""
     files = llegeix_proposta(Path(path))
     altres = {f.id for f in files} - base.sessions.keys()
     if altres:
-        conegudes = carrega_oficial(semestre=None).sessions
+        conegudes = carrega_oficial(escenari, semestre=None).sessions
         desconegudes = altres - conegudes.keys()
         if desconegudes:
             raise ValueError(f'Sessions desconegudes: {sorted(desconegudes)[:5]}')
@@ -83,7 +112,7 @@ def carrega_proposta(path, base):
 def pics_i_mides(base, model, col, nomes_mati_requerit=False):
     """Pic R8 d’aules ordinàries; demanda estimada quan falta aula.
 
-    Les mides acumulades són cotes amb reserva flexible: min(19, aules prou
+    Les mides acumulades són cotes amb reserva flexible: min(disponibles, aules prou
     grans). No se sumen els marges dels diferents llindars.
     """
     setmanes = Counter(c.data.isocalendar()[:2] for c in col.values())
@@ -97,6 +126,7 @@ def pics_i_mides(base, model, col, nomes_mati_requerit=False):
     ocupacio = defaultdict(dict)
     estimacions = set()
     ordinaries = {a for a, x in base.aules.items() if x.ordinaria}
+    maxim = aulari(base)['disponibles']
     alumnes_unitat = {u: sum(model.sessions[sid].alumnes for sid, _ in membres)
                       for u, membres in unitats.items()}
     # R8 compta aules diferents durant tota l'hora, també si dues classes
@@ -120,7 +150,7 @@ def pics_i_mides(base, model, col, nomes_mati_requerit=False):
         pics = [(d, h, v) for (d, h), v in ocupacio.items() if ini <= h < fi]
         def pic(rows):
             d, h, v = min(rows, key=lambda r: (-len(r[2]), r[0], r[1])) if rows else (None, ini, {})
-            return {'classes': len(v), 'aules_disponibles': 19,
+            return {'classes': len(v), 'aules_disponibles': maxim,
                     'estimacio': any((dd, hh) in estimacions for dd, hh, _ in rows),
                     'setmana': d.strftime('%G-W%V') if d else None,
                     'data': str(d) if d else None, 'hora': fmt(h)}
@@ -135,7 +165,7 @@ def pics_i_mides(base, model, col, nomes_mati_requerit=False):
             # El primer llindar inclou també els grups encara sense dada.
             if baix == 0:
                 demanda = max((len(v) for _, _, v in pics), default=0)
-            disponibles = min(19, sum(a.capacitat >= baix for a in base.aules.values() if a.ordinaria))
+            disponibles = min(maxim, sum(a.capacitat >= baix for a in base.aules.values() if a.ordinaria))
             mides.append({'mida': etiqueta, 'pic_categoria': exacta,
                           'ocupades_al_pic': sum(baix <= n <= alt for n in al_pic.values()),
                           'estimacio': any((d, h) in estimacions for d, h, _ in pics),
@@ -189,6 +219,7 @@ def calcula(proposta, base, model, col, relaxacions=None):
                  mogudes_pct=100 * mogudes[r['cohort']] / r['sessions'])
     pitjor = max((r['mogudes_pct'] for r in cohorts), default=0)
     return {'data': datetime.now().astimezone().isoformat(timespec='seconds'),
+            'aulari': aulari(base),
             'pics': pics_i_mides(base, model, col), 'sessions_mogudes': cohorts,
             'pitjor_cohort': [r['cohort'] for r in cohorts if r['mogudes_pct'] == pitjor],
             'excepcions': excepcions, 'fora_torn_ja_avui': fora_torn_ja_avui,
@@ -204,14 +235,14 @@ def documents(d):
     """Una mateixa pàgina de contingut per al Markdown i l’HTML imprimible."""
     md = ['# Resum per a la Junta', f"Data: {d['data'][:10]}",
           '## Moment amb més aules ocupades',
-          'Mostrem quantes aules calen en el moment de més ocupació. Si falta assignar una aula, en fem una estimació.', 'De les 21 aules per a classes, dues sempre han de quedar lliures: **19 disponibles**.',
+          'Mostrem quantes aules calen en el moment de més ocupació. Si falta assignar una aula, en fem una estimació.', explicacio_aulari(d),
           '| Torn | Màxim de la setmana més plena | Màxim d’una setmana habitual |', '|---|---|---|']
     for torn, nom_torn in [('mati', 'Matí'), ('tarda', 'Tarda')]:
         p, t = d['pics'][torn]['pitjor'], d['pics'][torn]['tipica']
         nom_torn += ' (estimació)' if p['estimacio'] else ' (aules per a classes)'
-        md.append(f"| {nom_torn} | {p['classes']}/19 · {p['setmana']} · {p['hora']} | {t['classes']}/19 · {t['setmana']} · {t['hora']} |")
+        md.append(f"| {nom_torn} | {p['classes']}/{p['aules_disponibles']} · {p['setmana']} · {p['hora']} | {t['classes']}/{t['aules_disponibles']} · {t['setmana']} · {t['hora']} |")
     md += ['## Aules per nombre de places (estimació si falta aula)',
-           'La mida indica les places de l’aula; si encara no en té, indica els alumnes previstos. Les aules ocupades per mida sumen el màxim de cada torn. Comparem també les classes i les aules prou grans: + vol dir que sobren aules; − vol dir que en falten. Una aula gran pot acollir un grup petit. Cal mantenir dues aules lliures. No s’han de sumar els resultats de les files. Aquest recompte no garanteix que tot l’horari encaixi.',
+           f"La mida indica les places de l’aula; si encara no en té, indica els alumnes previstos. Les aules ocupades per mida sumen el màxim de cada torn. Comparem també les classes i les aules prou grans: + vol dir que sobren aules; − vol dir que en falten. Una aula gran pot acollir un grup petit. Cal guardar {d['aulari']['reserva']} aules de reserva. No s’han de sumar els resultats de les files. Aquest recompte no garanteix que tot l’horari encaixi.",
            '| Places · mínim per comparar | Aules d’aquesta mida | Ocupades al màxim: matí / tarda | Matí: classes/aules prou grans (sobren o falten) | Tarda: classes/aules prou grans (sobren o falten) |', '|---|---|---|---|---|']
     for i, (_, _, mida) in enumerate(MIDES):
         vals = [d['pics'][t]['mides'][i] for t in ('mati', 'tarda')]
@@ -242,7 +273,9 @@ def documents(d):
     if d['torn_no_avaluable']:
         md.append(f"No podem comprovar el torn de {d['torn_no_avaluable']} classes perquè no tenen un torn definit.")
     md += ['## Com ho hem calculat', COM_HO_HEM_CALCULAT,
-           '## Detall tècnic', '<small>', d.get('detall_tecnic', DETALL_TECNIC)]
+           '## Detall tècnic', '<small>',
+           '## ' + titol_marge(d), explicacio_marge(d),
+           d.get('detall_tecnic', DETALL_TECNIC)]
     for r in d['excepcions_resum']:
         md.append(r['motiu'] + ': ' + r['nom'] + f": {percentatge(r['percentatge'])} ({r['sessions']}).")
     md.append('</small>')
@@ -289,8 +322,9 @@ def main(argv=None):
     parser.add_argument('--sortida', type=Path, default=RESULTATS / 'junta')
     args = parser.parse_args(argv)
     try:
-        base, model = carrega_oficial(), carrega_model()
-        proposta, col = carrega_proposta(args.proposta, base)
+        escenari = escenari_proposta(args.proposta.parent.name)
+        base, model = carrega_oficial(escenari), carrega_model(escenari)
+        proposta, col = carrega_proposta(args.proposta, base, escenari)
         relax = args.proposta.parent / 'relaxacions.csv'
         dades = calcula(proposta, base, model, col, relax if relax.exists() else None)
         md, html = documents(dades)
@@ -301,8 +335,9 @@ def main(argv=None):
         for torn in ('mati', 'tarda'):
             resum = dades['pics'][torn]
             etiqueta = ' (estimació)' if resum['pitjor']['estimacio'] else ''
-            print(f"{torn}{etiqueta}: pic {resum['pitjor']['classes']}/19; "
-                  f"total taula de mides {resum['total_mides']}/19")
+            maxim = resum['pitjor']['aules_disponibles']
+            print(f"{torn}{etiqueta}: pic {resum['pitjor']['classes']}/{maxim}; "
+                  f"total taula de mides {resum['total_mides']}/{maxim}")
         print(f"Resum escrit a {args.sortida}: junta.json, junta.md i junta.html")
         return 0
     except (OSError, ValueError, KeyError) as exc:
