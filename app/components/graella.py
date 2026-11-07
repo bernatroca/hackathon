@@ -1,6 +1,6 @@
-"""Graelles pures: cap dependència de Streamlit ni lectura de dades."""
+"""Graelles i exportació HTML, sense lectura de dades."""
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from html import escape
 from statistics import median
@@ -52,6 +52,10 @@ class Cella:
     relaxacions: tuple[str, ...] = ()
 
     aula_assignada: bool = False
+    compartida: str = ''
+    abans: str = ''
+    setmana_diferent: bool = False
+    grups_compartits: tuple[str, ...] = ()
 
     @property
     def canvi(self):
@@ -90,7 +94,10 @@ def celles(base, proposta, setmana, *, cohort=None, linia=None, aula=None,
             data != s.data or inici != s.ini,
             bool(s.aula and not a_traslladar(s.aula) and not s.sense_espai and a.aula != s.aula),
             tuple((relaxacions or {}).get(sid, ())),
-            bool(not s.aula and a.aula and not s.sense_espai)))
+            bool(not s.aula and a.aula and not s.sense_espai),
+            s.compartida,
+            f'Abans: {NOMS_DIES[s.data.weekday()].lower()} {fmt(s.ini)} · {s.aula or "aula no indicada"} ({s.data:%d/%m/%Y})',
+            dilluns(data) != dilluns(s.data)))
     return sorted(resultat, key=lambda c: (DIES.index(c.dia), c.ini, c.id_sessio))
 
 
@@ -103,7 +110,7 @@ def celles_aula(base, proposta, setmana, aula, **kwargs):
     return celles(base, proposta, setmana, aula=aula, **kwargs)
 
 
-def resum_grup(base, proposta, actuals, noves):
+def canvis_grup(base, proposta, actuals, noves):
     """Compara les sessions presents en qualsevol de les dues setmanes visibles."""
     ids = {c.id_sessio for c in actuals + noves}
     franja = aula = torn = assignades = 0
@@ -115,6 +122,12 @@ def resum_grup(base, proposta, actuals, noves):
         aula += bool(s.aula and not a_traslladar(s.aula) and not s.sense_espai and a.aula != s.aula)
         assignades += bool(not s.aula and a.aula and not s.sense_espai)
         torn += (s.ini < 870) != (inici < 870)
+    return {'franja': franja, 'aula': aula, 'torn': torn, 'assignades': assignades}
+
+
+def resum_grup(base, proposta, actuals, noves):
+    canvis = canvis_grup(base, proposta, actuals, noves)
+    franja, aula, torn, assignades = (canvis[k] for k in ('franja', 'aula', 'torn', 'assignades'))
     abans = len({c.aula for c in actuals if c.aula})
     despres = len({c.aula for c in noves if c.aula})
     return (f'{franja} classes canvien de dia o d’hora · {aula} canvien d’aula · '
@@ -122,47 +135,105 @@ def resum_grup(base, proposta, actuals, noves):
 
 
 def nom_grup(grup, tipus):
-    """El codi del fitxer no és una explicació per a qui consulta l'horari."""
     numero = grup.rsplit('/', 1)[-1]
-    return f'{"Grup" if tipus == "Teoria" else "Subgrup"} {numero}'
+    nom_tipus = TIPUS.get(tipus, tipus).lower()
+    return f'{"Grup" if nom_tipus == "teoria" else "Subgrup"} {numero} · {nom_tipus}'
+
+
+# Un únic estat per bloc: els casos especials prevalen sobre els altres canvis.
+ESTATS = {
+    'totes': ('▦', 'Totes', 'var(--blau,#2a78d6)', 'var(--blau-fons,#eef5fd)', 'var(--blau-text,#205c9e)'),
+    'aula-nova': ('✓', 'Aula assignada', 'var(--verd,#2f8f46)', 'var(--verd-fons,#e9f4ec)', 'var(--verd-text,#1f6b33)'),
+    'canvi': ('!', 'Canvia', 'var(--p2-taronja,#e8820c)', 'var(--p2-taronja-fons,#fff1e0)', 'var(--p2-taronja-text,#9a5200)'),
+    'relaxada': ('×', 'Cas especial', 'var(--vermell,#d03b3b)', 'var(--vermell-fons,#fbe9e9)', 'var(--vermell-text,#a12c2c)'),
+    'igual': ('●', 'Sense canvis', 'var(--blau,#2a78d6)', 'var(--blau-fons,#eef5fd)', 'var(--blau-text,#205c9e)'),
+}
+
+
+def estat_cella(c):
+    return ('relaxada' if c.relaxacions or c.setmana_diferent else
+            'canvi' if c.canvi else 'aula-nova' if c.aula_assignada else 'igual')
+
+
+def agrupa_compartides(celles):
+    """Una classe física compartida ocupa un sol carril, també a la vista d'aula."""
+    grups = {}
+    for c in celles:
+        clau = ((c.compartida, c.dia, c.ini, c.fi, c.aula) if c.compartida else ('sessio', c.id_sessio))
+        grups.setdefault(clau, []).append(c)
+    resultat = []
+    for cs in grups.values():
+        c = cs[0]
+        resultat.append(replace(c,
+            assignatura=' / '.join(dict.fromkeys(x.assignatura for x in cs)),
+            canvi_franja=any(x.canvi_franja for x in cs),
+            canvi_aula=any(x.canvi_aula for x in cs),
+            aula_assignada=any(x.aula_assignada for x in cs),
+            setmana_diferent=any(x.setmana_diferent for x in cs),
+            relaxacions=tuple(dict.fromkeys(r for x in cs for r in x.relaxacions)),
+            abans='; '.join(dict.fromkeys(x.abans for x in cs if x.abans)),
+            grups_compartits=tuple(dict.fromkeys(nom_grup(x.grup, x.tipus) for x in cs))))
+    return resultat
+
+
+def recomptes_estat(celles):
+    return Counter(estat_cella(c) for c in agrupa_compartides(celles))
 
 
 def llegenda_html():
-    return '''<ul class="llegenda-horari" aria-label="Com llegir els colors de l’horari">
-<li><span class="mostra-classe"></span><b>Blau · Sense canvis</b><span>Es manté la classe de les dades originals.</span></li>
-<li><span class="mostra-classe aula-nova"></span><b>Verd · Aula afegida</b><span>La proposta posa aula a una classe que no la tenia indicada.</span></li>
-<li><span class="mostra-classe canvi"></span><b>Groc · Classe modificada</b><span>Canvia el dia, l’hora o una aula que ja tenia.</span></li>
-<li><span class="mostra-classe relaxada"></span><b>Vora discontínua · Cas especial</b><span>El motiu s’explica a la classe; també el pots consultar a «Veure les dades».</span></li>
-</ul>'''
+    return '<ul class="p2-llegenda">' + ''.join(
+        f'<li style="color:{text}">{icona} {nom}</li>'
+        for clau, (icona, nom, color, fons, text) in ESTATS.items() if clau != 'totes') + '</ul>'
 
 
-CSS = ''' .horari-scroll{overflow:auto;min-width:0}.horari{border-collapse:collapse;table-layout:fixed;width:100%;min-width:900px;font:12px/1.35 system-ui;color:var(--tinta,#0b0b0b);background:white}.horari th,.horari td{border:1px solid #e6e5e0;padding:3px;vertical-align:top}.horari th{background:#f4f3ef}.horari tbody tr{height:32px}.horari .hora{width:78px}.classe{background:#cde2fb;border-left:3px solid #2a78d6;border-radius:4px;padding:5px;overflow-wrap:anywhere;height:100%;box-sizing:border-box}.classe.canvi{background:#fff5dc;border-color:#b67b00}.classe.relaxada{border:2px dashed #a12c2c}.classe small{display:block}.horari caption{text-align:left;font-size:16px;font-weight:600;padding:8px}.comparacio-horaris{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;container-type:normal}@media(max-width:900px){.comparacio-horaris{grid-template-columns:minmax(0,1fr)}}'''
-CSS += '''
-.classe.aula-nova,.mostra-classe.aula-nova{background:#e7f6e7;border-color:#086b28}
-.llegenda-horari{list-style:none;padding:0;margin:12px 0 20px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;color:#172b38;font:14px/1.5 system-ui}
-.llegenda-horari li{display:grid;grid-template-columns:24px 1fr;gap:2px 8px;align-items:start}
-.llegenda-horari li>span:last-child{grid-column:2}
-.mostra-classe{display:inline-block;width:22px;height:22px;background:#cde2fb;border-left:3px solid #2a78d6;border-radius:4px}
-.mostra-classe.canvi{background:#fff5dc;border-color:#b67b00}
-.mostra-classe.relaxada{border:2px dashed #a12c2c}
-.comparacio-horaris{align-items:start}
-@container contingut (max-width:1819px){.comparacio-horaris{grid-template-columns:minmax(0,1fr)}}
-@media(max-width:650px){.llegenda-horari{grid-template-columns:1fr}}
-'''
+# El prefix evita que l'HTML exportat alteri altres components de l'app.
+CSS = """
+.p2-horari{min-width:0;color:var(--tinta,#1a1a18);font:13px/1.35 system-ui}
+.p2-horari .horari-scroll{overflow:auto;max-width:100%;border:1px solid var(--linia,#e6e5e0);border-radius:14px;background:var(--targeta,#fff)}
+.p2-horari .horari{border-collapse:collapse;table-layout:fixed;width:100%;background:var(--targeta,#fff)}
+.p2-horari .horari th,.p2-horari .horari td{border:1px solid var(--linia,#e6e5e0);padding:4px;vertical-align:top}
+.p2-horari .horari th{background:var(--fons,#f4f3ef);font-weight:600}
+.p2-horari .horari tbody tr{height:32px}
+.p2-horari .horari .hora{width:90px}
+.p2-horari .horari caption{text-align:left;font-size:16px;font-weight:600;padding:10px 12px}
+.p2-horari .classe{background:var(--targeta,#fff);border:1px solid var(--linia,#e6e5e0);border-left:5px solid var(--blau,#2a78d6);border-radius:8px;padding:7px;min-width:140px;height:100%;box-sizing:border-box;word-break:normal;overflow-wrap:normal;hyphens:auto}
+.p2-horari .classe.aula-nova{border-left-color:var(--verd,#2f8f46)}
+.p2-horari .classe.canvi{border-left-color:var(--p2-taronja,#e8820c)}
+.p2-horari .classe.relaxada{border-left-color:var(--vermell,#d03b3b)}
+.p2-horari .classe small{display:block;margin-top:3px}
+.p2-horari .classe .estat{display:inline-flex;align-items:center;gap:4px;white-space:normal;font-size:12px;font-weight:600;border-radius:999px;padding:2px 7px;margin-top:5px}
+.p2-horari .classe.aula-nova .estat{background:var(--verd-fons,#e9f4ec);color:var(--verd-text,#1f6b33)}
+.p2-horari .classe.canvi .estat{background:var(--p2-taronja-fons,#fff1e0);color:var(--p2-taronja-text,#9a5200)}
+.p2-horari .classe.relaxada .estat{background:var(--vermell-fons,#fbe9e9);color:var(--vermell-text,#a12c2c)}
+.p2-horari .classe .estat svg{width:14px;height:14px;flex:none}
+.p2-horari .classe.apagada{opacity:.25}
+.p2-horari .classe summary:focus-visible{outline:3px solid var(--blau,#2a78d6);outline-offset:2px}
+.p2-horari .classe summary{cursor:pointer;list-style:none}
+.p2-horari .classe summary::-webkit-details-marker{display:none}
+.p2-horari .classe .detall{padding-top:6px;border-top:1px solid var(--linia,#e6e5e0);margin-top:6px}
+"""
 
 
-def taula_html(celles, titol='Horari setmanal', *, originals=False):
+def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='totes', estils=True):
     """Una cel·la amb rowspan per sessió; carrils paral·lels si se solapen.
 
     Arrodonim només l'espai visual a mitges hores. El text manté l'hora exacta.
     """
+    from components.vistes import estat as pastilla_estat
+
+    celles = agrupa_compartides(celles)
+    # Conservem el dia sencer si hi ha matí i tarda; un únic torn comença
+    # a la primera mitja hora ocupada, mantenint sempre el final a les 21 h.
+    torns = {c.ini < 870 for c in celles}
+    inici_dia = max(510, min((c.ini for c in celles), default=510) // 30 * 30) if len(torns) == 1 else 510
+    franges = tuple(range(inici_dia, 1260, 30))
     carrils = {}
     for dia in DIES:
         ocupats = []
         entrades = []
         for c in sorted((c for c in celles if c.dia == dia), key=lambda c: (c.ini, c.fi, c.id_sessio)):
-            inici = max(0, (c.ini - 510) // 30)
-            final = min(len(FRANGES), (c.fi - 510 + 29) // 30)
+            inici = max(0, (c.ini - inici_dia) // 30)
+            final = min(len(franges), (c.fi - inici_dia + 29) // 30)
             if final <= inici:
                 continue
             carril = next((i for i, fi in enumerate(ocupats) if fi <= inici), len(ocupats))
@@ -189,13 +260,17 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False):
             for fila in range(primera, final):
                 for columna in range(carril, carril + ample):
                     cobertes[dia, fila, columna] = True
-    html = f'<style>{CSS}</style><div class="horari-scroll"><table class="horari"><caption>{escape(titol)}</caption><colgroup><col class="hora">'
+    # Cada carril disposa de 150 px: 140 de bloc i el marge de la cel·la.
+    total = sum(n for n, _ in carrils.values())
+    amplada = 90 + 150 * total
+    html = (f'<style>{CSS}</style>' if estils else '') + f'<div class="p2-horari"><div class="horari-scroll" tabindex="0" role="region" aria-label="{escape(titol, quote=True)}"><table class="horari"><caption>{escape(titol)}</caption><colgroup><col class="hora">'
     for dia in DIES:
         n, _ = carrils[dia]
-        html += ''.join(f'<col style="width:{18/n}%">' for _ in range(n))
+        html += ''.join('<col style="width:150px">' for _ in range(n))
+    html = html.replace('<table class="horari">', f'<table class="horari" style="min-width:{amplada}px">')
     html += '</colgroup><thead><tr><th scope="col">Hora</th>'
     html += ''.join(f'<th scope="col" colspan="{carrils[d][0]}">{nom}</th>' for d, nom in zip(DIES, NOMS_DIES)) + '</tr></thead><tbody>'
-    for fila, inici in enumerate(FRANGES):
+    for fila, inici in enumerate(franges):
         html += f'<tr><th scope="row">{fmt(inici)}–{fmt(inici+30)}</th>'
         for dia in DIES:
             n, entrades = carrils[dia]
@@ -206,15 +281,30 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False):
                         html += '<td></td>'
                     continue
                 final, ample, c = entrada
-                marques = (' canvi' if c.canvi else ' aula-nova' if c.aula_assignada else '') + (' relaxada' if c.relaxacions else '')
+                estat = estat_cella(c)
+                marques = (' ' + estat if estat != 'igual' else '')
+                if filtre != 'totes' and filtre != estat:
+                    marques += ' apagada'
                 ubicacio = c.aula or ('Aula no indicada a les dades' if originals else 'Pendent d’assignar aula')
-                detall = f'{fmt(c.ini)}–{fmt(c.fi)} · {c.tipus} · {nom_grup(c.grup, c.tipus)} · {ubicacio}'
-                avis = ('Canvi de dia o d’hora. ' if c.canvi_franja else '') + ('Canvi d’aula. ' if c.canvi_aula else '')
-                avis += 'Aula assignada. ' if c.aula_assignada else ''
-                avis += ' '.join(c.relaxacions)
-                html += f'<td rowspan="{final-fila}" colspan="{ample}"><div class="classe{marques}" title="{escape(avis, quote=True)}"><b>{escape(c.assignatura)}</b><small>{escape(detall)}</small><small>{escape(avis)}</small></div></td>'
+                grup = ' / '.join(c.grups_compartits) or nom_grup(c.grup, c.tipus)
+                detall = f'{fmt(c.ini)}–{fmt(c.fi)} · {grup} · {ubicacio}'
+                avis = ' '.join(c.relaxacions)
+                if c.setmana_diferent:
+                    avis = 'Setmana diferent. ' + avis
+                if c.canvi or c.aula_assignada:
+                    abans = c.abans or ('Aula assignada.' if c.aula_assignada else 'Canvi de dia, hora o aula.')
+                    avis = abans + (' · ' + avis if avis else '')
+                icona, nom, *_ = ESTATS[estat]
+                color_estat = {'aula-nova': 'verd', 'canvi': 'ambre', 'relaxada': 'vermell'}.get(estat)
+                pastilla = pastilla_estat({'estat': color_estat, 'etiqueta': nom}) if color_estat else ''
+                compartida = '<small>Classe compartida</small>' if c.compartida else ''
+                contingut = f'<b>{escape(c.assignatura)}</b><small>{escape(detall)}</small>{compartida}{pastilla}'
+                # Details ofereix el mateix detall amb clic, teclat o en passar el ratolí.
+                classe = (f'<details class="classe{marques}" data-estat="{estat}" title="{escape(avis, quote=True)}">'
+                    f'<summary>{contingut}</summary><small class="detall">{escape(avis or "Es manté la classe de les dades originals.")}</small></details>')
+                html += f'<td rowspan="{final-fila}" colspan="{ample}">{classe}</td>'
         html += '</tr>'
-    return html + '</tbody></table></div>'
+    return html + '</tbody></table></div></div>'
 
 
 def exporta_aula_html(base, proposta, setmana, aula, **kwargs):

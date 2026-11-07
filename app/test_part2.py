@@ -40,6 +40,28 @@ def crea_base():
     return Base({s.id: s for s in sessions}, {})
 
 
+@contextmanager
+def app_inventada():
+    """Cap prova nova de pàgina depèn de les dades del repte."""
+    from tempfile import TemporaryDirectory
+    from streamlit.testing.v1 import AppTest
+    base = crea_base()
+    base.sessions['S90001'].aula = ''
+    tercer = sessio('S90020', cohorts=('GXX:3r',), ini=900)
+    base.sessions[tercer.id] = tercer
+    proposta = Proposta.de_base(base)
+    proposta.files['S90001'].aula = 'Q9/0001'
+    proposta.files['S90002'].h_ini = '10:00'
+    with TemporaryDirectory(dir=ARREL.parent) as carpeta:
+        arrel = Path(carpeta)
+        (arrel / '5.2').mkdir()
+        (arrel / '5.2' / 'proposta.csv').touch()
+        with patch('pagines.part2.RESULTATS', arrel), \
+             patch('pagines.part2.carrega_dades', return_value=(base, {'100001': 'Assignatura Inventada'}, {'GXX': 'Grau inventat'})), \
+             patch('pagines.part2.carrega_proposta', return_value=proposta):
+            yield AppTest.from_string('from pagines.part2 import mostra\nmostra()').run(timeout=30)
+
+
 class TestGraella(unittest.TestCase):
     def test_grup_i_linies(self):
         base = crea_base()
@@ -95,34 +117,31 @@ class TestGraella(unittest.TestCase):
 
 
     def test_pagina_sense_errors(self):
-        from streamlit.testing.v1 import AppTest
-        at = AppTest.from_string('from pagines.part2 import mostra\nmostra()').run(timeout=30)
-        assert not at.exception
-        assert not at.error
-        assert not any(s.label in ('Grup de teoria', 'Grup d’estudiants') for s in at.selectbox)
-        assert any('únic grup d’estudiants' in s.value for s in at.caption)
-        at.selectbox(key='p2-setmana').select(date(2027, 3, 15)).run(timeout=30)
-        assert not at.exception and not at.error
+        with app_inventada() as at:
+            assert not at.exception and not at.error
+            assert at.selectbox(key='p2-proposta').label == 'Proposta'
+            assert at.selectbox(key='p2-curs').label == 'Curs'
+            at.selectbox(key='p2-setmana').select(date(2027, 3, 15)).run(timeout=30)
+            assert not at.exception and not at.error
 
     def test_consulta_actual_i_guia(self):
-        from streamlit.testing.v1 import AppTest
-        at = AppTest.from_string('from pagines.part2 import mostra\nmostra()').run(timeout=30)
-        at.radio(key='p2-vista').set_value('Només l’horari actual').run(timeout=30)
-        assert not at.exception and not at.error
-        html = '\n'.join(m.value for m in at.markdown)
-        assert html.count('<table class="horari">') == 2  # estudiants + aula, sense comparació duplicada
-        assert 'Amb la proposta ·' not in html
-        assert 'Aula no indicada a les dades' in html
-        at.selectbox(key='p2-curs').select('3r').run(timeout=30)
-        assert not at.exception and not at.error
-        at.button(key='p2-inicia-guia').click().run(timeout=30)
-        assert any(c.value == 'Guia · Pas 1 de 6' for c in at.caption)
-        for pas in range(2, 7):
-            at.button(key='p2-guia-seguent').click().run(timeout=30)
+        with app_inventada() as at:
+            at.get('button_group')[0].set_value('Només avui').run(timeout=30)
             assert not at.exception and not at.error
-            assert any(c.value == f'Guia · Pas {pas} de 6' for c in at.caption)
-        at.button(key='p2-guia-seguent').click().run(timeout=30)
-        assert not any(c.value.startswith('Guia · Pas') for c in at.caption)
+            html = '\n'.join(m.value for m in at.markdown)
+            assert html.count('<table class="horari"') == 2
+            assert 'Amb la proposta ·' not in html
+            assert 'Aula no indicada a les dades' in html
+            at.selectbox(key='p2-curs').select('3r').run(timeout=30)
+            assert not at.exception and not at.error
+            at.button(key='p2-inicia-guia').click().run(timeout=30)
+            assert any(c.value == 'Guia · Pas 1 de 6' for c in at.caption)
+            for pas in range(2, 7):
+                at.button(key='p2-guia-seguent').click().run(timeout=30)
+                assert not at.exception and not at.error
+                assert any(c.value == f'Guia · Pas {pas} de 6' for c in at.caption)
+            at.button(key='p2-guia-seguent').click().run(timeout=30)
+            assert not any(c.value.startswith('Guia · Pas') for c in at.caption)
 
 class TestMillores(unittest.TestCase):
     def test_bloc_unic_dues_hores_i_solapament(self):
@@ -194,7 +213,7 @@ class TestMillores(unittest.TestCase):
         dades = celles_grup(base, Proposta.de_base(base), date(2027, 3, 8), 'GXX', '1r', '81', relaxacions=motius)
         html = taula_html(dades)
         assert 'classe relaxada' in html
-        assert 'title="Excepció de calendari' in html
+        assert 'Excepció de calendari' in html
         assert 'Festiu &lt;especial&gt;' in html
 
 
@@ -206,7 +225,7 @@ class TestAssignacions(unittest.TestCase):
         assert 'Grup 81' in html and 'TE/81' not in html
         assert 'Aula no indicada a les dades' in html
         assert 'Pendent d’assignar aula' in taula_html([c])
-        assert all(t in llegenda_html() for t in ('Blau', 'Verd', 'Groc', 'Vora discontínua'))
+        assert all(t in llegenda_html() for t in ('Sense canvis', 'Aula assignada', 'Canvia', 'Cas especial'))
 
     # Simula una aula a traslladar sense codificar noms reals de l'inventari.
     @patch('components.graella.a_traslladar', lambda aula: aula == 'Q9/0004')
@@ -226,7 +245,145 @@ class TestAssignacions(unittest.TestCase):
         assert sum(c.canvi for c in noves) == 0
         assert sum(c.aula_assignada for c in noves) == 1
         html = taula_html(noves)
-        assert 'Aula assignada.' in html and 'class="classe canvi' not in html
+        assert 'Aula assignada' in html and 'class="classe canvi' not in html
         assert 'class="classe aula-nova"' in html
         resum = resum_grup(base, p, actuals, noves)
         assert '0 canvien d’aula' in resum and '1 amb aula assignada' in resum
+
+
+class TestRedisseny(unittest.TestCase):
+    def test_colors_variables_i_prioritat(self):
+        from dataclasses import replace
+        from components.graella import Cella, CSS, ESTATS, estat_cella
+        c = Cella('S90001', 'L', 510, 570, 'Q9/0001', 'Inventada', 'Teoria', '81', False, False)
+        casos = [(c, 'igual'), (replace(c, aula_assignada=True), 'aula-nova'),
+                 (replace(c, canvi_aula=True), 'canvi'),
+                 (replace(c, canvi_franja=True, setmana_diferent=True), 'relaxada'),
+                 (replace(c, aula_assignada=True, relaxacions=('Excepció inventada',)), 'relaxada')]
+        for cella, esperat in casos:
+            assert estat_cella(cella) == esperat
+            assert f'data-estat="{esperat}"' in taula_html([cella])
+        assert ESTATS['igual'][2] == 'var(--blau,#2a78d6)'
+        assert 'border-left:5px solid var(--blau,#2a78d6)' in CSS
+        assert 'var(--verd,#2f8f46)' in CSS and 'var(--verd-fons,#e9f4ec)' in CSS
+        assert 'var(--verd-text,#1f6b33)' in CSS and 'var(--vermell,' in CSS
+        assert 'var(--p2-taronja,' in CSS
+        assert '<svg' in taula_html([casos[1][0]])
+
+    def test_filtre_apaga_sense_amagar_ni_recolocar(self):
+        from dataclasses import replace
+        from components.graella import Cella, recomptes_estat
+        a = Cella('S90001', 'L', 510, 570, '', 'Inventada I', 'Teoria', '81', False, False)
+        b = replace(a, id_sessio='S90002', ini=570, fi=630, aula='Q9/0001', aula_assignada=True)
+        html = taula_html([a, b], filtre='aula-nova')
+        assert 'class="classe apagada" data-estat="igual"' in html
+        assert 'class="classe aula-nova" data-estat="aula-nova"' in html
+        assert html.count('<details class="classe') == 2
+        assert 'apagada"' not in taula_html([a, b], filtre='totes')
+        assert recomptes_estat([a, b]) == {'igual': 1, 'aula-nova': 1}
+        with app_inventada() as at:
+            at.button(key='p2-boto-aula-nova').click().run(timeout=30)
+            assert not at.exception and not at.error
+            assert at.button(key='p2-boto-aula-nova').proto.type == 'primary'
+            assert 'apagada"' in '\n'.join(m.value for m in at.markdown)
+            at.button(key='p2-boto-totes').click().run(timeout=30)
+            assert 'apagada"' not in '\n'.join(m.value for m in at.markdown)
+
+    def test_compartida_un_bloc_en_grup_aula_i_exportacio(self):
+        from components.graella import recomptes_estat
+        a = sessio('S90001', compartida='C90001', codi='100000')
+        b = sessio('S90002', compartida='C90001', codi='100001')
+        base = Base({a.id: a, b.id: b}, {})
+        p = Proposta.de_base(base)
+        noms = {'100000': 'Inventada I', '100001': 'Inventada II'}
+        grup = celles_grup(base, p, date(2027, 3, 8), 'GXX', '1r', '81', noms=noms)
+        aula = celles_aula(base, p, date(2027, 3, 8), 'Q9/0001', noms=noms)
+        for html in (taula_html(grup), taula_html(aula), exporta_aula_html(base, p, date(2027, 3, 8), 'Q9/0001', noms=noms)):
+            assert html.count('<details class="classe') == 1
+            assert 'Inventada I / Inventada II' in html
+            assert html.count('Classe compartida') == 1
+        assert recomptes_estat(aula) == {'igual': 1}
+        p.files['S90002'].aula = 'Q9/0002'
+        assert taula_html(celles_grup(base, p, date(2027, 3, 8), 'GXX', '1r', '81')).count('<details class="classe') == 2
+        p.files['S90002'].aula = 'Q9/0001'
+        p.files['S90002'].h_ini = '09:30'
+        assert taula_html(celles_aula(base, p, date(2027, 3, 8), 'Q9/0001')).count('<details class="classe') == 2
+
+    def test_noms_grups_i_amplada_per_carril(self):
+        from components.graella import Cella, CSS, nom_grup
+        assert nom_grup('TE/912', 'Teoria') == 'Grup 61 · teoria'
+        assert nom_grup('PAUL/903', 'Problemes') == 'Subgrup 611 · problemes'
+        assert nom_grup('SEM/906', 'Seminari') == 'Subgrup 612 · seminari'
+        cs = [Cella(f'S90{i:03}', 'L', 510, 570, '', 'Assignatura Inventada', 'Problemes', f'PAUL/904{i}', False, False) for i in range(4)]
+        html = taula_html(cs)
+        assert 'min-width:1290px' in html  # 90 + (4 carrils + 4 dies) * 150
+        assert html.count('<col style="width:150px">') == 8
+        assert 'min-width:140px' in CSS and 'overflow:auto' in CSS
+        assert 'overflow-wrap:anywhere' not in CSS and 'word-break:normal' in CSS
+        assert 'PAUL/' not in html
+
+    def test_torn_unic_i_detall_accessible(self):
+        base = Base({'S90001': sessio('S90001', ini=900)}, {})
+        p = Proposta.de_base(base)
+        p.files['S90001'] = Assignacio('M', '16:00', 'Q9/0002')
+        c, = celles_grup(base, p, date(2027, 3, 8), 'GXX', '1r', '81')
+        html = taula_html([c])
+        assert '08:30–09:00' not in html and '16:00–16:30' in html
+        assert '20:30–21:00' in html
+        assert 'Abans: dilluns 15:00' in html
+        assert '<summary>' in html and 'title="Abans:' in html
+
+    def test_resum_inclou_classe_que_marxa_de_la_setmana(self):
+        from pagines.part2 import resum_html
+        base = crea_base()
+        avui, proposta = Proposta.de_base(base), Proposta.de_base(base)
+        proposta.files['S90001'] = Assignacio('V', '16:00', 'Q9/0002', '2027-03-19')
+        args = date(2027, 3, 8), 'GXX', '1r', '81'
+        html = resum_html(base, proposta, celles_grup(base, avui, *args), celles_grup(base, proposta, *args), True)
+        assert '<b>1</b><span>canvis d’hora' in html
+        assert '<b>1</b><span>canvis d’aula' in html
+
+    def test_guia_passos_enfocament_i_posicio_al_costat(self):
+        import json
+        import shutil
+        import subprocess
+        from components.ajuda_part2 import PASSOS, POSICIO_JS
+        from pagines.part2 import CSS_PAGINA
+        assert len(PASSOS) == 6
+        assert all(selector.startswith('.st-key-p2-') and titol and text for selector, titol, text in PASSOS)
+        assert 'position:fixed;left:18px;bottom:18px' in CSS_PAGINA
+        assert 'box-shadow:0 0 0 100vmax' in CSS_PAGINA
+        assert 'outline:3px solid var(--blau)' in CSS_PAGINA
+        assert 'prefers-reduced-motion' in CSS_PAGINA
+        with app_inventada() as at:
+            at.button(key='p2-inicia-guia').click().run(timeout=30)
+            scripts = '\n'.join(e.value for e in at.get('html'))
+            assert "e.key==='Escape'" in scripts
+            assert "panell.focus({preventScroll:true})" in scripts
+            assert "getBoundingClientRect" in scripts and "ResizeObserver" in scripts
+            at.button(key='p2-guia-tanca').click().run(timeout=30)
+            assert not any(c.value.startswith('Guia · Pas') for c in at.caption)
+        node = shutil.which('node')
+        if not node:
+            self.skipTest('Node no disponible per executar la geometria JavaScript')
+        script = POSICIO_JS + '''
+console.log(JSON.stringify([
+  posicioPanell({left:30,right:500,top:100,bottom:250},350,200,1280,800),
+  posicioPanell({left:280,right:1100,top:100,bottom:250},350,200,1280,800),
+  posicioPanell({left:10,right:370,top:100,bottom:250},350,200,390,800)
+]));'''
+        resultat = subprocess.run([node, '-e', script], check=True, capture_output=True, text=True)
+        dreta, sota, estret = json.loads(resultat.stdout)
+        assert dreta == {'mode': 'dreta', 'left': 512, 'top': 100, 'width': 350}
+        assert sota['mode'] == 'sota' and sota['top'] > 250
+        assert estret['mode'] == 'estret' and estret['width'] == 366
+
+    def test_navegacio_seccions_i_paths(self):
+        import ast
+        arbre = ast.parse((ARREL / 'app.py').read_text())
+        crida = next(n for n in ast.walk(arbre) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == 'navigation')
+        assert [n.value for n in crida.args[0].keys] == ['Com està l’horari', 'La proposta', 'Ajuda']
+        pagines = [n for n in ast.walk(crida) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == 'Page']
+        titols = [next(k.value.value for k in n.keywords if k.arg == 'title') for n in pagines]
+        assert 'Horari proposat' in titols
+        assert [k.value.value for n in pagines for k in n.keywords if k.arg == 'url_path'] == ['avui', 'respostes', 'part2', 'junta']
