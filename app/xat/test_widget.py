@@ -75,3 +75,87 @@ def test_preguntes_i_junta():
     assert len(widget.pantalla_actual('Imprevistos', {})['preguntes']) == 2
     assert widget.pantalla_actual('Totes les respostes', {})['preguntes'] == widget.PER_DEFECTE
     assert '5.4' in widget.pantalla_actual('Resum per a la Junta', {'junta-proposta': '5.4'})['text']
+
+
+def test_estils_consultes_i_correccio_footer():
+    css = (widget.WEB / 'xat-ia.css').read_text()
+    assert '.xatia-consultes' in css
+    assert 'white-space: pre-wrap' in css
+    assert '.xatia-consulta-error { color: var(--xatia-error); }' in css
+    assert '.xatia footer.xatia-peu { display: block !important; }' in css
+
+
+def test_consultes_js_sense_navegador():
+    """Executa el JS real amb Node: SSE fragmentat, escapament i memòria."""
+    import shutil
+    import subprocess
+
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('Node no disponible per executar el JavaScript sense navegador')
+    prova = r'''
+const fs = require('node:fs');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+let desat;
+const sandbox = {
+  window: {}, TextDecoder, performance: { now: () => 0 },
+  localStorage: {
+    setItem: (k, v) => { if (k === 'prova') desat = v; },
+    getItem: (k) => k === 'prova' ? desat : null,
+  },
+};
+const source = fs.readFileSync(process.argv[1], 'utf8').replace('  window.XatIA = {', `
+  window.prova = { htmlMissatge, llegeixFlux, perAlServidor, desa, llegeixMemoria, estat,
+    prepara() { op = { clauMemoria: 'prova' }; } };
+  window.XatIA = {`);
+vm.runInNewContext(source, sandbox);
+const p = sandbox.window.prova;
+p.prepara();
+const mal = '<img src=x onerror="alert(1)">';
+const consultes = [{ eina: mal, args: { [mal]: mal, llarg: 'x'.repeat(120), limit: 50 },
+  ok: false, consulta: 'SELECT *\nFROM inventat WHERE x < 4; ' + mal,
+  id_sessio: [mal, ...Array.from({length: 10}, (_, i) => 'S' + i)], total_id: 23, error: mal }];
+async function flux(fi) {
+  const cru = 'data: ' + JSON.stringify({tros: 'Resposta inventada'}) + '\n\n' +
+    'data: ' + JSON.stringify({consultes}) + '\n\n' + (fi ? 'data: {"fi":true}\n\n' : '');
+  const bytes = new TextEncoder().encode(cru);
+  let pos = 0;
+  return p.llegeixFlux({getReader: () => ({read: async () => {
+    if (pos >= bytes.length) return {done:true};
+    const value = bytes.slice(pos, pos + 7); pos += 7;
+    return {value, done:false};
+  }})});
+}
+(async () => {
+  const r = await flux(true);
+  assert.equal(r.text, 'Resposta inventada');
+  assert.equal(r.consultes[0].total_id, 23);
+  assert.equal(r.tallada, false);
+  const truncada = await flux(false);
+  assert.equal(truncada.tallada, true);
+  assert.equal(truncada.consultes.length, 1);
+  const missatge = {role: 'assistant', content: r.text, consultes: r.consultes};
+  const html = p.htmlMissatge(missatge);
+  assert.ok(html.includes('<details class="xatia-consultes" open>'));
+  assert.ok(html.includes('Com es comprova · 1 consultes'));
+  assert.ok(html.includes('i 13 més'));
+  assert.ok(html.includes('SELECT *\nFROM inventat WHERE x &lt; 4;'));
+  assert.ok(html.includes('xatia-consulta-error'));
+  assert.ok(html.includes('&lt;img src=x onerror=&quot;alert(1)&quot;&gt;'));
+  assert.ok(!html.includes('<img'));
+  assert.ok(!html.includes('<code>S9</code>'));
+  assert.ok(!html.includes('x'.repeat(120)));
+  assert.ok(!p.htmlMissatge({role:'assistant', content:'Antiga'}).includes('<details'));
+  p.estat.missatges = [missatge];
+  p.desa();
+  p.estat.missatges = [];
+  p.llegeixMemoria();
+  assert.equal(p.estat.missatges[0].consultes[0].total_id, 23);
+  const enviat = JSON.parse(JSON.stringify(p.perAlServidor()));
+  assert.deepEqual(enviat, [{role:'assistant', content:'Resposta inventada'}]);
+})().catch((error) => { console.error(error); process.exitCode = 1; });
+'''
+    resultat = subprocess.run([node, '-e', prova, str(widget.WEB / 'xat-ia.js')],
+                              text=True, capture_output=True, timeout=15)
+    assert resultat.returncode == 0, resultat.stderr
