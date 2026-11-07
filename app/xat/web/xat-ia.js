@@ -568,7 +568,7 @@
       const error = c.ok === false ? `<div class="xatia-consulta-error">error: ${escapa(String(c.error || 'No s’ha pogut comprovar.'))}</div>` : '';
       return `<div class="xatia-consulta"><div><strong>${escapa(String(c.eina || 'Consulta'))}</strong>${argumentsCurts ? ' · ' + argumentsCurts : ''}</div>${consulta}${identificadors}${error}</div>`;
     }).join('');
-    return `<details class="xatia-consultes" open><summary>Com es comprova · ${escapa(String(uniques.length))} ${uniques.length === 1 ? 'consulta' : 'consultes'}</summary>${files}</details>`;
+    return `<details class="xatia-consultes"><summary>Com ho he comprovat</summary>${files}</details>`;
   }
 
   function htmlMissatge(m) {

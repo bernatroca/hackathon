@@ -254,8 +254,7 @@ async function flux(fi) {
   assert.equal(truncada.consultes.length, 1);
   const missatge = {role: 'assistant', content: r.text, consultes: r.consultes};
   const html = p.htmlMissatge(missatge);
-  assert.ok(html.includes('<details class="xatia-consultes" open>'));
-  assert.ok(html.includes('Com es comprova · 1 consulta'));
+  assert.ok(html.includes('<details class="xatia-consultes"><summary>Com ho he comprovat</summary>'));
   assert.ok(html.includes('i 13 més'));
   assert.ok(html.includes('SELECT *\nFROM inventat WHERE x &lt; 4;'));
   assert.ok(html.includes('xatia-consulta-error'));
@@ -269,7 +268,7 @@ async function flux(fi) {
   const duplicada = {eina:'consulta_sql', args:{filtre:{a:1, b:2}, proposta:'avui', sql}, consulta:sql};
   const render = (consultes) => p.htmlMissatge({role:'assistant', content:'Prova', consultes});
   const unica = render([original, duplicada]);
-  assert.ok(unica.includes('Com es comprova · 1 consulta</summary>'));
+  assert.ok(unica.includes('<summary>Com ho he comprovat</summary>'));
   assert.equal((unica.match(/class="xatia-consulta"/g) || []).length, 1);
   assert.equal(unica.split(sql).length - 1, 1);
   assert.ok(!unica.includes('sql='));
@@ -281,7 +280,9 @@ async function flux(fi) {
     {...original, args:{...original.args, proposta:'5.2'}},
     {...original, consulta:sql + ' LIMIT 1'},
   ]) {
-    assert.ok(render([original, duplicada, diferent]).includes('Com es comprova · 2 consultes</summary>'));
+    const dues = render([original, duplicada, diferent]);
+    assert.ok(dues.includes('<summary>Com ho he comprovat</summary>'));
+    assert.equal((dues.match(/class="xatia-consulta"/g) || []).length, 2);
   }
   p.estat.missatges = [missatge];
   p.desa();
