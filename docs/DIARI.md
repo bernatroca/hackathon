@@ -117,3 +117,10 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - Millores: alçades iguals a les targetes, singulars, proporció «cap de les classes» quan és un 2 %, estat de càrrega, i % escrit al plànol.
 - SOLUCIÓ en marxa: dades-1 (desglossament 4.541), dades-2 (pregunta 4 amb matí i tarda), dades-3 (grau nou corregit i provisional) i frontend-1 (textos planers, responsivitat i estats), en paral·lel.
 - PROBLEMA nostre: una edició de l'integrador (abe83e1) va tallar l'especificació de la part 2; la sessió Part 2 l'ha restaurada (9c3488b).
+
+### [ds 17:19] SOLUCIÓ · Correccions de la validació de la part 1, unides
+- La resposta gran ara diu «Hi ha marge d'hores» (matí 70 %, tarda 42 %), i el més ajustat és el matí en conjunt la setmana 2027-W06. Hi ha l'estat «Pendent de validar».
+- Hi ha el desglossament 5.722 = 4.541 per assignar + 919 laboratoris + 262 dobles. El grau nou queda provisional (181 h lliures a la setmana més plena, en necessita 26).
+- Textos planers a «Com ho hem calculat», gràfics fixos (sense zoom ni arrossegament), alçades iguals i % escrit al plànol.
+- PROBLEMA resolt: la portada quedava en blanc uns 15 s. Les hores mortes trigaven 14 s; amb SQL de finestra, 0,08 s. A més, el menú surt primer i la portada només calcula les seves 5 xifres.
+- 25/25 comprovacions; tests de l'app OK. VALIDATION.md amb 17 passos marcats per reprovar.
