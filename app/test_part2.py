@@ -29,6 +29,12 @@ def contingut_graella(html):
     return html.split('</style>', 1)[-1]
 
 
+def sense_marques_nom(html):
+    """Text dels noms sense els embolcalls visuals de paraula."""
+    import re
+    return re.sub(r'<span class="nom-paraula">(.*?)</span>', r'\1', html)
+
+
 def estructura_graella(html):
     from html.parser import HTMLParser
 
@@ -128,12 +134,12 @@ class TestGraellaResponsive(unittest.TestCase):
                       'Teoria', 'TE/81', False, False)
             parser = Noms()
             parser.feed(contingut_graella(taula_html([c])))
-            assert parser.noms == [nom]
+            assert ''.join(parser.noms) == nom
         assert 'font-family:system-ui,sans-serif' in CSS
         assert 'word-spacing:normal' in CSS and 'letter-spacing:normal' in CSS
         with app_inventada() as at:
             html = '\n'.join(m.value for m in at.markdown)
-            assert 'Desenvolupament d&#8217;aplicacions per a Enginys Inventats' in html
+            assert 'Desenvolupament d&#8217;aplicacions per a Enginys Inventats' in sense_marques_nom(html)
             assert not at.exception and not at.error
 
     def test_curs_desconegut_descriptiu_i_al_final(self):
@@ -195,7 +201,7 @@ class TestGraellaResponsive(unittest.TestCase):
             assert tuple(d['aria-label'] for d in graella.dies) == NOMS_DIES
             assert len(graella.caps) == 5
             assert len(graella.classes) == len(classes)
-            assert all(html.count('<b>' + c.assignatura + '</b>') == 1 for c in classes if '’' not in c.assignatura)
+            assert all(sense_marques_nom(html).count('<b>' + c.assignatura + '</b>') == 1 for c in classes if '’' not in c.assignatura)
 
     def test_noms_sencers_i_colors_amb_contrast(self):
         from components.graella import CSS, ESTATS
@@ -204,11 +210,11 @@ class TestGraellaResponsive(unittest.TestCase):
         html = taula_html(classes)
         from html import unescape
         for c in classes:
-            assert f'<b>{c.assignatura}</b>' in unescape(html)
+            assert f'<b>{c.assignatura}</b>' in unescape(sense_marques_nom(html))
         assert '…' not in html  # El text complet roman al DOM; el CSS aplica l'el·lipsi.
         assert 'text-overflow:ellipsis' in CSS
         assert 'hyphens:none' in CSS and 'word-break:normal' in CSS
-        assert 'overflow-wrap:anywhere' not in CSS and '-webkit-line-clamp:var(--linies-nom)' in CSS
+        assert 'overflow-wrap:anywhere' in CSS and '-webkit-line-clamp:var(--linies-nom)' in CSS
         assert 'color:#1a1a18;font-size:14px;font-weight:600' in CSS
         assert 'font-size:12px;color:#52514e' in CSS
         esperats = {
@@ -253,7 +259,7 @@ class TestGraellaResponsive(unittest.TestCase):
         html = genera()
         assert CSS in html and CSS_FILTRES in html
         assert 'background-image:var(--linies)' in html
-        assert all(f'style="width:{ample}px"' in html for ample in (1160, 887, 390))
+        assert all(f'style="width:{ample}px"' in html for ample in (1160, 900, 390))
         assert html.count(taula_html(setmana_inventada(), 'Setmana inventada', estils=False)) == 3
 
 
@@ -432,8 +438,8 @@ class TestMillores(unittest.TestCase):
         b = Cella('S90008', 'L', 555, 615, 'Q9/0002', 'Assignatura Inventada II', 'Problemes', '811', False, False)
         html = taula_html([a, b])
         graella = estructura_graella(html)
-        assert html.count('<b>Assignatura Inventada I</b>') == 1
-        assert html.count('<b>Assignatura Inventada II</b>') == 1
+        assert sense_marques_nom(html).count('<b>Assignatura Inventada I</b>') == 1
+        assert sense_marques_nom(html).count('<b>Assignatura Inventada II</b>') == 1
         assert [posicio_classe(c) for _, c in graella.classes] == [(1, 121, 1, 2), (46, 106, 2, 3)]
         assert graella.dies[0]['data-carrils'] == '2'
         assert '08:30–10:30' in html
@@ -551,8 +557,8 @@ class TestRedisseny(unittest.TestCase):
         html = taula_html(cs)
         graella = estructura_graella(html)
         assert [d['data-carrils'] for d in graella.dies] == ['2', '1', '1', '1', '1']
-        assert 'grid-template-columns:56px minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)' in html
-        assert 'min-width:864px' in html
+        assert 'grid-template-columns:56px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)' in html
+        assert '--ample-mobil:888px' in html
         assert [posicio_classe(c)[3] - posicio_classe(c)[2] for _, c in graella.classes] == [2, 1, 1, 1, 1, 1, 1]
         assert 'container:p2-graella / inline-size' in CSS
         assert 'overflow-x:auto' in CSS and 'position:sticky;left:0' in CSS
@@ -564,13 +570,13 @@ class TestRedisseny(unittest.TestCase):
         b = replace(a, id_sessio='S90002', ini=555, fi=615, assignatura='Inventada II')
         html = taula_html([a, b])
         graella = estructura_graella(html)
-        assert 'min-width:738px' in html
+        assert '--ample-mobil:498px' in html
         assert graella.dies[0]['data-carrils'] == '1'
         assert '09:15–10:15' in html
         assert len(graella.classes) == 2
         assert [posicio_classe(c) for _, c in graella.classes] == [(1, 46, 1, 2), (46, 106, 1, 2)]
         html = taula_html([a, replace(b, ini=554)])
-        assert 'min-width:864px' in html
+        assert '--ample-mobil:888px' in html
         assert estructura_graella(html).dies[0]['data-carrils'] == '2'
 
     def test_colors_variables_i_prioritat(self):
@@ -635,7 +641,7 @@ class TestRedisseny(unittest.TestCase):
                   'Assignatura Inventada', 'Problemes', 'PAUL/999', True, False,
                   abans='Abans: dijous 12:30 · Aula anterior inventada (08/03/2027)')
         html = taula_html([c])
-        assert '<b>Assignatura Inventada</b><small class="ubicacio">08:30–10:30 · Aula inventada</small><small>Problemes · Subgrup 999</small><small class="nota">Abans: dijous 12:30</small>' in html
+        assert '<b>Assignatura Inventada</b><small class="ubicacio">08:30–10:30 · Aula inventada</small><small>Problemes · Subgrup 999</small><small class="nota">Abans: dijous 12:30</small>' in sense_marques_nom(html)
         assert 'Aula anterior inventada' in html
         igual = taula_html([replace(c, canvi_franja=False)])
         assignada = taula_html([replace(c, canvi_franja=False, aula_assignada=True)])
@@ -693,10 +699,10 @@ class TestRedisseny(unittest.TestCase):
         assert nom_grup('SEM/906', 'Seminari') == 'Subgrup 906 · seminari'
         cs = [Cella(f'S90{i:03}', 'L', 510, 570, '', 'Assignatura Inventada', 'Problemes', f'PAUL/904{i}', False, False) for i in range(4)]
         html = contingut_graella(taula_html(cs))
-        assert 'min-width:1116px' in html  # Hores, padding, espais i vuit carrils.
+        assert '--ample-mobil:1668px' in html  # Mínim mòbil per a cinc dies iguals.
         assert sum(int(d['data-carrils']) for d in estructura_graella(html).dies) == 8
         assert 'min-width:0;min-height:0' in CSS and 'overflow:auto' not in CSS
-        assert 'overflow-wrap:anywhere' not in CSS and 'word-break:normal' in CSS
+        assert 'overflow-wrap:anywhere' in CSS and 'word-break:normal' in CSS
         assert 'PAUL/' not in html
 
     def test_torn_unic_i_detall_accessible(self):
@@ -874,3 +880,47 @@ assert.equal(host.listeners.resize.size,1);
         titols = [next(k.value.value for k in n.keywords if k.arg == 'title') for n in pagines]
         assert 'Horari proposat' in titols
         assert [k.value.value for n in pagines for k in n.keywords if k.arg == 'url_path'] == ['avui', 'respostes', 'part2', 'junta', 'imprevistos']
+
+
+def test_setmana_densa_cap_en_escriptori_i_dies_iguals():
+    from components.graella import CSS
+    from components.prova_graella import setmana_carrils_inventada
+    for carrils in ((2, 2, 1, 3, 2), (4, 3, 3, 3, 3), (4, 4, 4, 4, 4)):
+        html = taula_html(setmana_carrils_inventada(carrils), estils=False)
+        assert [int(d['data-carrils']) for d in estructura_graella(html).dies] == list(carrils)
+        assert 'grid-template-columns:56px ' + ' '.join(['minmax(0, 1fr)'] * 5) in html
+        assert 'min-width:' not in html  # Cap mínim inline que forci scroll a escriptori.
+    assert '.horari{min-width:0px;' in CSS
+    assert '@container p2-graella (width < 900px)' in CSS
+    assert 'min-width:var(--ample-mobil)' in CSS
+    assert 'container:p2-classe / inline-size' in CSS
+    assert '@container p2-classe (width < 90px)' in CSS
+
+
+def test_paraules_noms_atomiques_amb_abreviacio_marcada():
+    import re
+    from html import unescape
+    from components.graella import CSS, nom_assignatura_html
+    from components.prova_graella import setmana_carrils_inventada
+    noms = ('Organització i Gestió', 'Probabilitat i Processos',
+            'Electromagnetisme interdisciplinari', "Desenvolupament d’aplicacions")
+    for nom in noms:
+        markup = nom_assignatura_html(nom)
+        paraules = re.findall(r'<span class="nom-paraula">(.*?)</span>', markup)
+        # Cap fragment sense marca: cada unitat conté una paraula sencera.
+        assert [unescape(p) for p in paraules] == nom.split()
+    for carrils in ((3, 3, 3, 3, 3), (4, 3, 3, 3, 3)):
+        classes = setmana_carrils_inventada(carrils)
+        html = taula_html(classes, estils=False)
+        for c in classes:
+            assert nom_assignatura_html(c.assignatura) in html
+            assert c.assignatura in unescape(html)  # title i aria-label complets.
+    for selector, regla in re.findall(r'([^{}]+)\{([^{}]*)\}', CSS):
+        if '.classe' in selector and (' b' in selector or '.nom-paraula' in selector):
+            assert 'word-break:break-all' not in regla
+            assert 'overflow-wrap:anywhere' not in regla
+    regla = re.search(r'\.nom-paraula\{([^}]*)}', CSS)[1]
+    assert 'white-space:nowrap' in regla and 'display:inline-block' in regla
+    assert 'max-width:100%' in regla
+    assert 'overflow:hidden' in regla and 'text-overflow:ellipsis' in regla
+    assert '.classe[open] .nom-paraula{max-width:none;overflow:visible;}' in CSS
