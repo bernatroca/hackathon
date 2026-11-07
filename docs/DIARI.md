@@ -191,3 +191,11 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - Es veu a ull nu que el 5.1 fa servir massa aules diferents per grup: la millora de l'aula base passa per davant.
 - Pendent de la graella: quan coincideixen subgrups, les columnes queden massa estretes.
 - La pàgina de la Junta espera el format de n2-dades-2, que ha preguntat dues coses i l'equip ha respost (excepcions agrupades a la pàgina; «No s'ha explicat per què» si no hi ha motiu).
+
+### [ds 18:23] PROBLEMA · La setmana d'avaluació d'abril no hi cap amb els torns nous
+- El 5.2 complet no troba aules ni franges per a la setmana del 5 al 9 d'abril. Del dilluns al dijous és setmana d'avaluació: el verificador no hi deixa portar classes d'un altre dia, i les que han de canviar de torn s'amunteguen el divendres 9 a la tarda, on xoquen docents i grups.
+- Decisió, d'acord amb l'especificació: només en aquella setmana, i només si es demostra que és impossible, es demana l'excepció a la regla 1. El mínim de sessions es queda al torn d'avui, declarades com a relaxació R1-TORN amb la prova.
+
+### [ds 18:24] IA · n2-dades-2 unit: resum per a la Junta
+- `python -m nivell2.junta <proposta>` escriu junta.json, junta.md i junta.html (una pàgina A4 per imprimir) en uns 2 s. Té 8 proves verdes, inclosa la xifra de l'enunciat del pic del matí. Els resums es queden a resultats/, fora de git.
+- Llançat n2-frontend-3: la pàgina «Resum per a la Junta» a l'app. Hem avisat la sessió Part 1 que toca la navegació d'app/app.py.
