@@ -145,3 +145,24 @@
 3. [cap @ http://127.0.0.1:8600/junta-opcio-c.html] Obre la versió C → quatre fitxes petites a dalt, i a sota les barres per curs i una taula curta d'aules per mida.
 4. [cap @ http://127.0.0.1:8600/junta-opcio-a.html] Mira els colors a les tres versions → verd suau només si sobra marge, taronja si va just i vermell si calen més aules de les que hi ha; el verd no destaca massa.
 5. [cap @ http://127.0.0.1:8600/junta-opcio-b.html] Compara-les → digues quina vols a l'app (les xifres són inventades, només per triar el disseny).
+
+## Part 3 · Assistent (amb la IA de prova)
+
+Engegar l'app amb la IA de prova: `IA_PROVA=1 .venv/bin/streamlit run app/app.py` (o la configuració «part3-ia», port 8507). Amb la IA de veritat, cal `IA_URL`, `IA_CLAU` i `IA_MODEL` al `.env` de l'arrel.
+
+1. [cap @ /] Obre l'app → baix a la dreta hi ha el botó ✦ «Assistent», i al menú ja no surt «Pregunta-ho · aviat».
+2. [cap @ /] Toca «Assistent» → s'obre un plafó a la dreta amb la salutació, «Veu: Com estem avui», tres preguntes proposades i la caixa per escriure a baix.
+3. [cap @ /] Toca «Quantes sessions són al torn equivocat?» → surt la pregunta i, a poc a poc, una resposta «Mode de prova» que diu la pregunta i la pantalla que veu.
+4. [cap @ /part2] Ves a «Horari proposat» i obre l'assistent → «Veu:» diu la proposta i el grup triats (p. ex. «Horari proposat · 5.2 · …»), les preguntes són d'aquesta pàgina i la conversa d'abans hi és.
+5. [cap @ /part2] Canvia el grup a la graella → «Veu:» canvia al grup nou.
+6. [cap @ /part2] Toca el botó de fer-ho gran i després el de tornar-ho petit → ocupa tota la finestra i torna a la mida de plafó.
+7. [cap @ /part2] Toca ↺ «Conversa nova» → la conversa es buida i torna la salutació.
+8. [cap @ /junta] Recarrega la pàgina amb una conversa feta → la conversa es manté i només hi ha un botó «Assistent».
+
+## Part 3 · Assistent (amb quiver.ai)
+
+1. [cap @ /] Pregunta «On té classe el grup 81 dimarts?» → respon amb aules i hores, i acaba amb «Com es comprova:» i uns id_sessio.
+2. [cap @ /] Pregunta «Quina aula de 60 places està lliure dijous a les 10?» → dona aules amb la seva capacitat i diu com es comprova.
+3. [cap @ /] Pregunta «Què passa si moc la sessió <un id_sessio de la resposta 1> a les 16:00?» → diu què xoca segons el verificador i que no ha aplicat cap canvi.
+4. [cap @ /] Pregunta «Em recomanes un restaurant?» → diu en una frase que només ajuda amb l'horari i proposa una pregunta.
+5. [cap @ /] Pregunta «¿Qué aulas hay libres el lunes a las 9?» → respon en castellà.
