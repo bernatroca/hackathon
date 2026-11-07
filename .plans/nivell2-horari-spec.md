@@ -1,7 +1,7 @@
 # Especificació de la part 2 · Proposta d'horari
 
 > **Estat.** Afinada amb l'equip (entrevista del ds 7-11). No es programa ni es publica res fins que l'equip doni l'OK.
-> La graella setmanal espera que el disseny del nivell 1 estigui confirmat (`docs/disseny/`, opcions A, B i C) i en fa servir el mateix estil.
+> La graella fa servir el disseny confirmat del nivell 1: B1, semàfor amb la resposta en gran (`docs/disseny/opcio-b1-resposta-gran.html`).
 
 ## La pregunta i la persona
 
@@ -20,7 +20,7 @@ Cada pregunta es lliura amb:
 
 Les preguntes són aquestes:
 
-1. **5.1 Aules (5 %).** Amb l'horari d'avui, sense moure cap dia ni cap hora, donem aula a les 4.541 sessions que no en tenen. Es comprova amb `--nomes-aules`. Es premia que sigui bona: aula base per grup, pocs canvis d'aula entre classes seguides i pocs canvis respecte de l'aula d'avui.
+1. **5.1 Aules (5 %).** Amb l'horari d'avui, sense moure cap dia ni cap hora, donem aula a les 4.541 sessions que no en tenen. Es comprova amb `--nomes-aules`. Primer ha de ser VALIDA amb `--nomes-aules`: també es corregeixen les 43 sessions amb més alumnes que places i les 54 de tipus d'aula equivocat. Després es premia que sigui bona: aula base per grup, pocs canvis d'aula entre classes seguides i pocs canvis respecte de l'aula d'avui.
 2. **5.2 Torns nous (25 %).** Cada sessió va al torn que li toca segons la regla 1, i diem què costa. Hi afegim el resum de la Junta.
 3. **5.3 Imprevist (10 %).** Partim del 5.2 i resolem quatre imprevistos alhora, canviant el mínim.
 4. **5.4 Grau nou de 40 places (10 %).** Col·loquem les 235 sessions del 2n semestre sobre el 5.2.
@@ -98,7 +98,7 @@ Dades de les teories al 2n semestre:
 
 ## 5.3 Imprevistos: canviar el mínim
 
-Partim del 5.2 i només toquem les sessions afectades. Per a cada una, l'ordre de preferència és: la mateixa franja en una aula del mateix passadís; després, la mateixa franja en una altra aula; i un altre dia només per a la sessió cancel·lada. Cap sessió no canvia de torn.
+Partim del CSV final del 5.2, que no es toca, i només toquem les sessions afectades. Les afectades es calculen sobre aquest 5.2, no sobre l'horari d'avui (les 12 de Q9/5015 són d'avui i poden canviar). Si amb les afectades no n'hi ha prou, se n'amplien de mica en mica les que es poden moure. Per a cada una, l'ordre de preferència és: la mateixa franja en una aula del mateix passadís; després, la mateixa franja en una altra aula; i un altre dia només per a la sessió cancel·lada. Cap sessió no canvia de torn.
 
 - **Q9/5015 reservada del 15 al 19 de març.** Hi ha 12 sessions a recol·locar, només aquella setmana.
 - **TE/908 de GEQ passa de 91 a 130 alumnes.** Com que és tot el semestre, la canviem a una aula de 130 o més a la mateixa franja, totes les setmanes. Si no n'hi ha cap de lliure, la desdoblem i declarem R3-AFORAMENT.
@@ -159,13 +159,56 @@ Format per defecte: una pàgina a l'app i el mateix en PDF. *(L'equip no ho ha t
 
 ## Visualització
 
-Comença quan el disseny del nivell 1 estigui confirmat.
+Fa servir el disseny B1 del nivell 1, amb textos planers per al tècnic de Gestió Acadèmica. El frontend pot començar amb dades de mostra, sense esperar el solver.
 
 - **Primer, la vista per grup** (la de l'estudiant): l'horari de la setmana d'un grup, avui i proposta costat per costat, amb els canvis marcats.
 - **Després, la vista per aula** (la que demana l'enunciat): una setmana tipus, dies en columnes i franges de 30 minuts en files, amb selector d'aula. Si hi ha l'alternativa amb desdoblaments, n'ensenya també la 2a hora.
 - Selector de proposta (avui, 5.1, 5.2, 5.3, 5.4 i, si n'hi ha, les alternatives amb desdoblaments o fusions) i de setmana (per a les setmanes de l'imprevist).
 - Es marquen les sessions amb relaxació i el seu motiu.
 - La graella per aula també es lliura en un fitxer (HTML o PDF) per al jurat.
+
+## Com triem la millor proposta
+
+És l'ordre del jurat (apartat 7 de l'enunciat):
+
+1. **VALIDA** sense relaxacions.
+2. **VALIDA AMB RELAXACIONS DECLARADES**, amb menys `incompliments_declarats` i justificacions que s'aguantin.
+3. Dins del mateix grup, millors objectius (hores mortes, desplaçaments i canvis) i més rutina.
+
+El veredicte es llegeix del JSON del verificador, no del codi de sortida: el codi 0 també surt amb relaxacions. R3-TANCADA i R5-RECUPERACIO no es poden relaxar.
+
+## Riscos tècnics i com els evitem
+
+- **Calendari:** els candidats de dia i hora es generen per **data real**: festius, no lectius, aturades, setmanes d'avaluació i dies sense classes a la partida. Totes les sessions d'una activitat es comproven, no només la primera.
+- **Reserva R8:** el verificador compta les **aules diferents ocupades dins de cada franja d'una hora** (8.30, 9.30… 20.30). No n'hi ha prou de limitar a 19 classes simultànies cada mitja hora. Cal reproduir aquest recompte exacte.
+- **Sessions compartides** (`id_compartida`): són una sola classe física. Es mouen juntes, a la mateixa aula, amb els alumnes **sumats** i tots els docents i cohorts.
+- **Sense espai** (dobles, `sense_espai = 1`): no necessiten aula, però sí que compten per al torn, el docent i l'alumnat.
+- **R4-PLAB:** els PLAB són obstacles fixos. Una TE o un PAUL de la mateixa assignatura no hi pot coincidir.
+- **Heretats:** els conflictes que ja hi són avui i que el verificador marca com a heretats no s'han de prohibir al model, perquè llavors no hi hauria solució. Cal distingir-los dels nous.
+- **El solver no acaba:** límit de temps per fase, guardar sempre la millor proposta que el verificador dona per bona i registrar l'estat del solver (OPTIMAL, FEASIBLE, INFEASIBLE o UNKNOWN). UNKNOWN no vol dir impossible.
+
+## Contracte de lliurament
+
+Cada pregunta té la seva carpeta, `resultats/nivell2/<5.1|5.2|5.3|5.4>/`, amb:
+
+- `proposta.csv`;
+- `informe.json` i `violacions.csv`;
+- `relaxacions.csv`, només si n'hi ha;
+- `xifres.csv`, la taula abans i després;
+- `README.md` amb l'ordre exacta per generar-la i per verificar-la (llavor i límit de temps del solver inclosos).
+
+Abans d'empaquetar, es tornen a executar les quatre ordres del verificador sobre els fitxers finals. `resultats/` no conté dades del paquet, només les propostes (identificadors de sessió, dia, hora i aula).
+
+## Temps
+
+L'entrega és diumenge a les 12:00, i a les 2:00 es congela el codi. L'ordre és:
+
+1. 5.1 VALIDA.
+2. 5.2 VALIDA.
+3. 5.3 i 5.4, en paral·lel, sobre el 5.2 congelat.
+4. Resum de la Junta i graella.
+5. Millores amb el temps que quedi.
+6. Alternatives (desdoblaments i fusions), només si sobra temps.
 
 ## Com treballem
 
@@ -176,7 +219,7 @@ Comença quan el disseny del nivell 1 estigui confirmat.
   2. **Dades:** `nivell2.comprova`, la comparació per titulacions i el càlcul de fusions.
   3. **Backend:** el 5.2, després el 5.3 i el 5.4. Els desdoblaments i les fusions, al final i només si sobra temps.
   4. **Dades:** el resum de la Junta.
-  5. **Frontend:** la graella, quan el disseny del nivell 1 estigui confirmat.
+  5. **Frontend:** la graella i el resum de la Junta a l'app, des del principi i amb dades de mostra.
 
 ## Quan està fet
 
