@@ -1,94 +1,158 @@
-"""Ajuda opcional que recorre els apartats reals de la pàgina."""
+"""Guia contextual amb focus de teclat i panell al costat de l'apartat."""
 import json
 
 import streamlit as st
 
 
 PASSOS = (
-    ('p2-proposta', 'Què vols comparar?',
-     'L’horari actual és el que consta als fitxers originals. Una proposta és una possible millora. '
-     'La d’assignar aules conserva els dies i les hores; les altres poden reorganitzar-los. '
-     'Si només vols consultar les dades originals, tria «Només l’horari actual».'),
-    ('p2-alumnat', 'De quins estudiants vols veure l’horari?',
-     'Tria la titulació i el curs. Pots consultar tots els cursos, amb classes al matí o a la tarda. '
-     'Si hi ha diversos grups d’estudiants, també en podràs triar un. '
-     'La graella inclou la teoria i els seus subgrups de problemes i seminaris.'),
-    ('p2-dades', 'Per què pot faltar l’aula?',
-     '«Aula no indicada a les dades» vol dir que el fitxer original no diu on es fa aquella classe. '
-     'No vol dir que la classe no es faci. La proposta pot completar aquesta informació assignant-li una aula.'),
-    ('p2-llegenda', 'Què vol dir cada color?',
-     'Blau: es conserva la classe. Verd: la proposta hi afegeix una aula. '
-     'Groc: canvia el dia, l’hora o una aula que ja tenia. Una vora discontínua assenyala un cas especial. '
-     'Les classes també porten el canvi escrit: no cal distingir els colors per entendre-les.'),
-    ('p2-horaris', 'Com es llegeix la setmana?',
-     'Els dies són a les columnes i les hores a les files. Un bloc llarg és una sola classe que dura més estona. '
-     'Els blocs simultanis poden correspondre a subgrups diferents. '
-     'Compara «Horari actual» amb «Amb la proposta»; en una pantalla petita apareixen un sota l’altre.'),
-    ('p2-aula', 'I si vols consultar una aula?',
-     'Aquest apartat mostra totes les classes que ocuparien l’aula triada aquella setmana. '
-     'Fa servir el mateix horari i la mateixa setmana que has triat a dalt. '
-     'Pots descarregar-lo per compartir-lo o imprimir-lo.'),
+    ('.st-key-p2-seleccio-proposta', 'Què vols veure?',
+     '«Proposta i avui» mostra la proposta i marca els canvis respecte dels fitxers originals. '
+     '«Només avui» mostra l’horari original. Tria també la proposta i la setmana.'),
+    ('.st-key-p2-seleccio-alumnat', 'De quin grup?',
+     'Tria estudis, curs i grup. Incloem la teoria i els seus subgrups de problemes i seminaris. '
+     'Dos subgrups simultanis no impliquen que cada estudiant assisteixi a tots dos.'),
+    ('.st-key-p2-context-dades', 'Què canvia?',
+     'El resum compta canvis de dia o hora, canvis d’una aula que ja hi era i aules diferents. '
+     'Si faltava l’aula original, assignar-ne una es marca en verd. No és un veredicte de validació.'),
+    ('.st-key-p2-clau-colors', 'Filtra per color',
+     'Blau: sense canvis. Verd: aula assignada. Taronja: canvia. Vermell: cas especial. '
+     'Tria una pastilla per apagar la resta de classes; «Totes» les torna a mostrar.'),
+    ('.st-key-p2-graelles .horari-scroll', 'Llegeix la setmana',
+     'Cada bloc és una classe. Les compartides apareixen juntes. Passa-hi el ratolí o obre el bloc '
+     'amb clic o teclat per llegir què hi havia abans. Si no hi cap, desplaça la graella lateralment.'),
+    ('.st-key-p2-vista-aula', 'Consulta i comparteix una aula',
+     'Mostra totes les classes de l’aula, amb la mateixa setmana i proposta. '
+     'Descarrega l’HTML per compartir-lo o imprimir-lo sense connexió.'),
 )
+
+# Funció pura exercitada amb rectangles inventats a les proves.
+POSICIO_JS = """
+function posicioPanell(rect, ample, alt, vw, vh) {
+  const marge = 12;
+  if (vw < 640) return {mode:'estret', left:marge, top:Math.max(marge,vh-alt-marge), width:vw-2*marge};
+  if (rect.right + ample + 2*marge <= vw)
+    return {mode:'dreta', left:rect.right+marge, top:Math.max(marge,Math.min(rect.top,vh-alt-marge)), width:ample};
+  return {mode:'sota', left:Math.max(marge,Math.min(rect.left,vw-ample-marge)), top:rect.bottom+marge, width:ample};
+}
+"""
 
 
 def _pas(valor):
     st.session_state['p2-guia-pas'] = valor
-    st.session_state.pop('p2-guia-enfocat', None)
 
 
 def mostra_guia():
-    st.markdown('''<style>
-    .block-container:has(.st-key-p2-pagina){max-width:2000px}
-    .st-key-p2-guia{position:fixed;right:20px;bottom:20px;width:min(440px,calc(100vw - 40px));max-height:calc(100vh - 40px);overflow:auto;z-index:10000;background:white;border:2px solid #256abf;border-radius:14px;padding:18px;box-shadow:0 6px 30px #0003}
-    .st-key-p2-guia h3{font-size:22px!important}
-    .st-key-p2-guia [data-testid="stHorizontalBlock"]{flex-wrap:nowrap;gap:8px}
-    .st-key-p2-guia [data-testid="stColumn"]{min-width:0!important;flex:1 1 0!important;width:auto!important}
-    .p2-pas-actiu{outline:3px solid #256abf;outline-offset:5px;border-radius:8px}
-    [id^="p2-"]{scroll-margin-top:24px}
-    </style>''', unsafe_allow_html=True)
-    st.button('Com funciona? Guia pas a pas', key='p2-inicia-guia', on_click=_pas, args=(0,))
+    with st.container(key='p2-obre-guia'):
+        st.button('Com funciona? Guia pas a pas', key='p2-inicia-guia', on_click=_pas, args=(0,))
     pas = st.session_state.get('p2-guia-pas')
     if pas is None:
         return
-    desti, titol, text = PASSOS[pas]
+    _, titol, text = PASSOS[pas]
     with st.container(key='p2-guia'):
         st.caption(f'Guia · Pas {pas + 1} de {len(PASSOS)}')
-        st.markdown(f'<div aria-live="polite"><h3>{titol}</h3><p>{text}</p></div>', unsafe_allow_html=True)
-        st.markdown(f'[Vés a aquest apartat](#{desti})')
+        st.markdown(f'<div aria-live="polite"><h3 id="p2-titol-guia">{titol}</h3><p>{text}</p></div>', unsafe_allow_html=True)
         abans, despres, tanca = st.columns(3)
         abans.button('Anterior', key='p2-guia-anterior', disabled=pas == 0, on_click=_pas, args=(max(0, pas - 1),))
-        ultim = pas == len(PASSOS) - 1
-        despres.button('Acaba' if ultim else 'Següent', key='p2-guia-seguent', on_click=_pas, args=(None if ultim else pas + 1,))
+        despres.button('Acaba' if pas == len(PASSOS) - 1 else 'Següent', key='p2-guia-seguent',
+            on_click=_pas, args=(None if pas == len(PASSOS) - 1 else pas + 1,))
         tanca.button('Tanca', key='p2-guia-tanca', on_click=_pas, args=(None,))
 
 
 def enfoca_pas():
-    """Desplaçament només en avançar la guia, mai quan es canvia un filtre."""
     pas = st.session_state.get('p2-guia-pas')
-    if st.session_state.get('p2-guia-enfocat', 'inicial') == pas:
-        return
-    st.session_state['p2-guia-enfocat'] = pas
-    desti = PASSOS[pas][0] if pas is not None else None
-    # Només s'interpolen identificadors fixos de PASSOS, mai contingut de les dades.
-    st.html('''<script>(()=>{
-      document.querySelectorAll('.p2-pas-actiu').forEach(e=>e.classList.remove('p2-pas-actiu'));
-      const id=''' + json.dumps(desti) + ''';
-      if(!id)return;
-      let observer;
-      const mostra=()=>{
-        const ancora=document.getElementById(id);
-        if(!ancora)return false;
-        const apartat=ancora.closest('[data-testid="stVerticalBlock"]')||ancora;
-        apartat.classList.add('p2-pas-actiu');
-        apartat.setAttribute('tabindex','-1');
-        apartat.focus({preventScroll:true});
-        apartat.scrollIntoView({behavior:'instant',block:'start'});
-        if(observer)observer.disconnect();
-        return true;
+    selector = PASSOS[pas][0] if pas is not None else None
+    # st.html executa el script al document de Streamlit (sense iframe).
+    # Es netegen listeners i observadors a cada renderitzat, també en filtrar.
+    script = """<script>(()=>{
+      if(window.__p2GuiaNeteja)window.__p2GuiaNeteja();
+      const pagina=document.querySelector('.st-key-p2-pagina');
+      if(!pagina)return;
+      // El CSS comú usa container-type: el bloc pot ser el containing block
+      // dels elements fixed. Compensem-ne l'origen per mantenir coordenades de viewport.
+      const origen=e=>{
+        const parent=e.offsetParent;
+        const r=parent?.getBoundingClientRect()||{left:0,top:0};
+        return {left:r.left-(parent?.scrollLeft||0),top:r.top-(parent?.scrollTop||0)};
       };
-      if(!mostra()){
-        observer=new MutationObserver(mostra);
-        observer.observe(document.body,{childList:true,subtree:true});
-        setTimeout(()=>observer.disconnect(),3000);
+      if(window.__p2GuiaLlançadorNeteja)window.__p2GuiaLlançadorNeteja();
+      const obre=pagina.querySelector('.st-key-p2-obre-guia');
+      let frameObre;
+      const situaObre=()=>{
+        if(!obre?.isConnected){window.__p2GuiaLlançadorNeteja?.();return;}
+        const r=origen(obre);
+        obre.style.bottom='auto';obre.style.left=(18-r.left)+'px';
+        obre.style.top=(innerHeight-obre.offsetHeight-18-r.top)+'px';
+      };
+      const programaObre=()=>{cancelAnimationFrame(frameObre);frameObre=requestAnimationFrame(situaObre);};
+      addEventListener('resize',programaObre);document.addEventListener('scroll',programaObre,true);
+      window.__p2GuiaLlançadorNeteja=()=>{
+        cancelAnimationFrame(frameObre);removeEventListener('resize',programaObre);
+        document.removeEventListener('scroll',programaObre,true);
+      };
+      situaObre();
+      const selector=SELECTOR, pas=PAS;
+      pagina.querySelectorAll('.p2-pas-actiu').forEach(e=>e.classList.remove('p2-pas-actiu'));
+      if(!selector){window.__p2GuiaPas=null;return;}
+      POSICIO
+      let objectiu,panell,observer,resizeObserver,frame,acabat=false;
+      const redueix=matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const situa=()=>{
+        if(!objectiu?.isConnected||!panell?.isConnected)return;
+        const rect=objectiu.getBoundingClientRect();
+        const ample=Math.min(350,innerWidth-24);
+        const pos=posicioPanell(rect,ample,panell.offsetHeight,innerWidth,innerHeight);
+        panell.dataset.posicio=pos.mode;
+        panell.style.width=pos.width+'px';
+        if(pos.mode==='sota'){
+          // Coordenades relatives al contenidor posicionat de Streamlit.
+          panell.style.position='absolute';
+          const r=origen(panell);
+          panell.style.left=(pos.left-r.left)+'px';
+          panell.style.top=(pos.top-r.top)+'px';
+        }else{
+          panell.style.position='fixed';
+          const r=origen(panell);
+          panell.style.left=(pos.left-r.left)+'px';panell.style.top=(pos.top-r.top)+'px';
+        }
+      };
+      const programa=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(situa);};
+      const esc=e=>{
+        if(e.key==='Escape'){
+          e.preventDefault();
+          pagina.querySelector('.st-key-p2-guia-tanca button')?.click();
+          pagina.querySelector('.st-key-p2-inicia-guia button')?.focus();
+        }
+      };
+      const inicia=()=>{
+        objectiu=pagina.querySelector(selector);panell=pagina.querySelector('.st-key-p2-guia');
+        if(!objectiu||!panell)return false;
+        objectiu.classList.add('p2-pas-actiu');
+        panell.setAttribute('role','dialog');panell.setAttribute('aria-labelledby','p2-titol-guia');
+        panell.setAttribute('tabindex','-1');
+        const nou=window.__p2GuiaPas!==pas;
+        window.__p2GuiaPas=pas;
+        if(nou)objectiu.scrollIntoView({behavior:redueix?'instant':'smooth',block:'start'});
+        situa();
+        if(nou){
+          panell.focus({preventScroll:true});
+          // En mode sota, el panell continua dins del flux desplaçable de la pàgina.
+          if(panell.dataset.posicio==='sota')panell.scrollIntoView({behavior:redueix?'instant':'smooth',block:'nearest'});
+        }
+        observer?.disconnect();
+        resizeObserver=new ResizeObserver(programa);resizeObserver.observe(objectiu);resizeObserver.observe(panell);
+        acabat=true;return true;
+      };
+      addEventListener('resize',programa);document.addEventListener('scroll',programa,true);
+      document.addEventListener('keydown',esc);
+      if(!inicia()){
+        observer=new MutationObserver(()=>{if(!acabat)inicia();});
+        observer.observe(pagina,{childList:true,subtree:true});
       }
-    })()</script>''', unsafe_allow_javascript=True)
+      window.__p2GuiaNeteja=()=>{
+        objectiu?.classList.remove('p2-pas-actiu');observer?.disconnect();resizeObserver?.disconnect();
+        cancelAnimationFrame(frame);removeEventListener('resize',programa);
+        document.removeEventListener('scroll',programa,true);document.removeEventListener('keydown',esc);
+      };
+    })()</script>"""
+    st.html(script.replace('SELECTOR', json.dumps(selector)).replace('PAS;', json.dumps(pas) + ';')
+        .replace('POSICIO', POSICIO_JS), unsafe_allow_javascript=True)
