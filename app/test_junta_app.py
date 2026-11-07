@@ -28,7 +28,7 @@ def dades():
     fila = {'cohort': 'GXX:1r', 'nom': 'Grau inventat, 1r', 'sessions': 10,
             'mogudes': 0, 'mogudes_pct': 0, 'franja': 0, 'franja_pct': 0,
             'aules_assignades': 0, 'aula': 0, 'aula_pct': 0, 'torn': 0, 'torn_pct': 0}
-    return {'data': '2026-11-07', 'aulari': {'ordinaries': 21, 'reserva': 2, 'disponibles': 19},
+    return {'versio_resum': 2, 'data': '2026-11-07', 'aulari': {'ordinaries': 21, 'reserva': 2, 'disponibles': 19},
             'pics': {'mati': torn, 'tarda': copy.deepcopy(torn)},
             'sessions_mogudes': [fila], 'pitjor_cohort': ['GXX:1r'],
             'fora_torn_ja_avui': 0, 'excepcions': [], 'excepcions_resum': [], 'torn_no_avaluable': 0,
@@ -103,7 +103,7 @@ def test_excepcions_agrupades_i_pic_vermell():
     app = obre(d, ['Avui'])
     assert any('estat vermell' in m.value for m in app.markdown)
     assert any(e.label == 'Detall tècnic' for e in app.expander)
-    assert len(app.dataframe[1].value) == 2
+    assert len(app.dataframe[2].value) == 2
 
 
 def test_assignacions_no_generen_grafic_i_estimacio_visible():
@@ -251,6 +251,7 @@ def test_regenera_resum_sense_aulari(tmp_path):
     desti.mkdir(parents=True)
     d = dades()
     del d['aulari']
+    del d['versio_resum']
     (desti / 'junta.json').write_text(json.dumps(d))
     with patch.object(junta, 'RESULTATS', tmp_path), patch.object(junta, 'SORTIDA', tmp_path), \
          patch.object(junta, 'genera', return_value=dades()) as genera:
@@ -318,3 +319,14 @@ def test_resum_antic_sense_camp_nou():
     app = obre(d, ['Avui'])
     assert app.info[0].value == 'Resum antic: cal tornar-lo a generar.'
     assert not app.get('download_button')
+
+
+def test_impacte_canvi_aula_visible_i_ordenat():
+    d = dades()
+    a = dict(d['sessions_mogudes'][0], nom='Canvi aula', aula=4,
+             afectades=4, afectades_pct=40)
+    d['sessions_mogudes'].append(a)
+    app = obre(d, ['5.2'])
+    assert app.dataframe[0].value.iloc[0]['Titulació i curs'] == 'Canvi aula'
+    assert app.dataframe[0].value.iloc[0]['Canvi d’aula'] == 4
+    assert '40 %' in junta.fitxes(d)
