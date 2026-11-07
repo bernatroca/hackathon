@@ -20,10 +20,6 @@ def proposta():
     st.info('Aviat · Una proposta per repartir les classes i assignar les aules.')
 
 
-def imprevistos():
-    st.info('Aviat · Reorganitza les classes quan hi hagi un canvi d’última hora.')
-
-
 def pregunta():
     st.info('Aviat · Fes preguntes sobre les aules i els horaris amb les teves paraules.')
 
@@ -37,7 +33,7 @@ pagina = st.navigation({
     'La proposta': [
         st.Page(part2.mostra,title='Horari proposat',url_path='part2',icon=':material/calendar_month:'),
         st.Page(junta.mostra,title='Resum per a la Junta',url_path='junta',icon=':material/description:'),
-        st.Page(imprevistos,title='Imprevistos · aviat',icon=':material/event_busy:'),
+        st.Page('pagines/imprevistos.py',title='Imprevistos',url_path='imprevistos',icon=':material/event_busy:'),
     ],
     'Ajuda': [st.Page(pregunta,title='Pregunta-ho · aviat',icon=':material/chat:')],
 })
