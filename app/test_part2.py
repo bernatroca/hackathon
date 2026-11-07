@@ -70,17 +70,18 @@ def posicio_classe(attrs):
 
 
 class TestGraellaResponsive(unittest.TestCase):
-    def test_rang_real_arrodonit_i_setmana_buida(self):
+    def test_dia_sencer_amb_mati_tarda_i_setmana_buida(self):
         from dataclasses import replace
         from components.graella import Cella
         mati = Cella('INVENTADA-MATI', 'L', 548, 803, '', 'Assignatura Inventada',
                      'Teoria', 'TE/81', False, False)
         tarda = replace(mati, id_sessio='INVENTADA-TARDA', ini=905, fi=1010, dia='X')
-        for classes, inici, final in (([mati], 540, 810), ([tarda], 900, 1020), ([mati, tarda], 540, 1020)):
+        for classes in ([mati], [tarda], [mati, tarda], []):
             graella = estructura_graella(taula_html(classes))
-            assert [int(h['data-minut']) for h in graella.hores] == list(range(inici, final, 30))
+            assert [int(h['data-minut']) for h in graella.hores] == list(range(510, 1261, 30))
+            assert len(graella.dies) == 5
         buit = taula_html([])
-        assert 'No hi ha classes aquesta setmana.' in buit and 'class="horari"' not in buit
+        assert 'No hi ha classes aquesta setmana.' in buit and 'class="horari"' in buit
 
     def test_linies_continues_alineades_amb_files_exactes(self):
         from components.graella import Cella, CSS
@@ -88,10 +89,10 @@ class TestGraellaResponsive(unittest.TestCase):
                   'Teoria', 'TE/81', False, False)
         html = taula_html([c])
         graella = estructura_graella(html)
-        assert [h['class'] for h in graella.hores] == ['hora hora-plena', 'hora', 'hora hora-plena', 'hora']
-        assert posicio_classe(graella.classes[0][1]) == (16, 106, 1, 2)
-        assert '--files:repeat(120,1.6px)' in html
-        assert '#d9d8d2 0 1px,transparent 1px 48px,#efeee9 48px 49px' in html
+        assert [h['class'] for h in graella.hores[:4]] == ['hora', 'hora hora-plena', 'hora', 'hora hora-plena']
+        assert posicio_classe(graella.classes[0][1]) == (46, 136, 1, 2)
+        assert '--files:repeat(750,1.6px)' in html
+        assert '#efeee9 0 1px,transparent 1px 48px,#d9d8d2 48px 49px' in html
         assert '.dia-horari{column-gap:6px;background-image:var(--linies)' in CSS
         assert 'background-position:0 6px' in CSS
         assert 'tbody' not in CSS and '<td' not in html
@@ -103,7 +104,7 @@ class TestGraellaResponsive(unittest.TestCase):
                   'Teoria', 'TE/81', False, False)
         html = taula_html([c])
         assert '#efeee9 0 1px,transparent 1px 48px,#d9d8d2 48px 49px' in html
-        assert [h['class'] for h in estructura_graella(html).hores] == [
+        assert [h['class'] for h in estructura_graella(html).hores[:4]] == [
             'hora', 'hora hora-plena', 'hora', 'hora hora-plena']
 
     def test_apostrof_tipografic_i_recte_sense_perdre_text(self):
@@ -178,7 +179,7 @@ class TestGraellaResponsive(unittest.TestCase):
         for classes in (setmana_inventada(), parcials):
             graella = estructura_graella(taula_html(classes))
             assert len(graella.dies) == 5 and len(graella.classes) == len(classes)
-            inici = min(c.ini for c in classes) // 30 * 30
+            inici = 510
             for dia, attrs in graella.classes:
                 fila, final, col, dret = posicio_classe(attrs)
                 assert 1 <= col < dret <= int(dia['data-carrils']) + 1
@@ -280,7 +281,7 @@ def crea_base():
 
 
 @contextmanager
-def app_inventada():
+def app_inventada(sessions_extra=()):
     """Cap prova nova de pàgina depèn de les dades del repte."""
     from tempfile import TemporaryDirectory
     from streamlit.testing.v1 import AppTest
@@ -290,6 +291,7 @@ def app_inventada():
     base.sessions[tercer.id] = tercer
     sense_curs = sessio('INVENTADA-SENSE-CURS', cohorts=('GXX:?',))
     base.sessions[sense_curs.id] = sense_curs
+    base.sessions.update((s.id, s) for s in sessions_extra)
     proposta = Proposta.de_base(base)
     proposta.files['S90001'].aula = 'Q9/0001'
     proposta.files['S90002'].h_ini = '10:00'
@@ -529,6 +531,110 @@ class TestAssignacions(unittest.TestCase):
 
 
 class TestRedisseny(unittest.TestCase):
+    def test_grup_es_reinicia_amb_curs_i_estudis_i_coincideix_amb_la_graella(self):
+        extra = (
+            sessio('INVENTADA-31', grup='TE/31', cohorts=('GXX:3r',), ini=900),
+            sessio('INVENTADA-61', grup='TE/61', cohorts=('GXX:3r',), ini=960),
+            sessio('INVENTADA-ALTRE-31', grup='TE/31', cohorts=('GYY:1r',)),
+            sessio('INVENTADA-ALTRE-914', grup='TE/914', cohorts=('GYY:1r',)),
+        )
+        with app_inventada(extra) as at:
+            def comprova_grup(numero):
+                assert not at.exception and not at.error
+                assert at.selectbox(key='p2-grup').value == numero
+                assert at.session_state['p2-grup'] == numero
+                html = '\n'.join(m.value for m in at.markdown)
+                assert f'class="horari-titol">Proposta · Grup {numero} ·' in html
+
+            at.selectbox(key='p2-curs').select('3r').run(timeout=30)
+            comprova_grup('31')
+            at.selectbox(key='p2-grup').select('61').run(timeout=30)
+            comprova_grup('61')
+            at.selectbox(key='p2-curs').select('1r').run(timeout=30)
+            comprova_grup('81')
+            at.selectbox(key='p2-grup').select('914').run(timeout=30)
+            # 914 també és vàlid als altres estudis: igualment tria el primer.
+            at.selectbox(key='p2-titulacio').select('GYY').run(timeout=30)
+            comprova_grup('31')
+            at.selectbox(key='p2-titulacio').select('GXX').run(timeout=30)
+            at.selectbox(key='p2-curs').select('?').run(timeout=30)
+            at.selectbox(key='p2-titulacio').select('GYY').run(timeout=30)
+            assert at.selectbox(key='p2-curs').value == '1r'
+            comprova_grup('31')
+
+    def test_una_hora_reserva_abans_abans_del_grup_tambe_en_carrils_estrets(self):
+        from components.graella import Cella, CSS, pressupost_classe
+        cs = [Cella(f'INVENTADA-MOGUDA-{i}', 'J', 750, 810, 'Q9/0001',
+                    'Assignatura inventada amb nom llarg', 'Problemes', f'PAUL/81{i}',
+                    True, False, abans='Abans: dijous 12:30 · Q9/0002') for i in range(4)]
+        html = taula_html(cs)
+        p = pressupost_classe(60, nota=True)
+        assert p['ubicacio'] and p['nota'] and not p['grup']
+        for _, attrs in estructura_graella(html).classes:
+            assert '--mostra-nota:block;' in attrs['style']
+            assert '--mostra-grup:none;' in attrs['style']
+        assert html.count('<small class="nota">Abans: dijous 12:30</small>') == 4
+        estret = CSS.split('@container p2-classe (width < 90px)', 1)[1]
+        assert '.nota{display:none;}' not in estret
+
+    def test_detalls_natius_fora_del_scroll_i_amb_tot_el_text(self):
+        from html.parser import HTMLParser
+        from components.graella import Cella, CSS
+
+        class Detalls(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.pila, self.panells, self.botons = [], {}, []
+
+            def handle_starttag(self, tag, attrs):
+                attrs = dict(attrs)
+                if 'popover' in attrs:
+                    assert not any('horari-scroll' in a.get('class', '').split() for a in self.pila)
+                    self.panells[attrs['id']] = attrs
+                if 'classe' in attrs.get('class', '').split():
+                    assert tag == 'button' and attrs['aria-haspopup'] == 'dialog'
+                    self.botons.append(attrs)
+                if tag not in ('br', 'hr', 'meta', 'input'):
+                    self.pila.append(attrs)
+
+            def handle_endtag(self, tag):
+                self.pila.pop()
+
+        cs = [Cella(f'INVENTADA-DETALL-{i}', 'L', 510, 570, 'Q9/0001',
+                    'Nom complet d’una assignatura inventada molt llarga & especial',
+                    'Problemes', f'PAUL/81{i}', True, False,
+                    abans='Abans: dijous 12:30 · Q9/0002') for i in range(4)]
+        parser = Detalls()
+        html = taula_html(cs, 'Grup inventat', estils=False) + taula_html(cs, 'Aula inventada', estils=False)
+        parser.feed(html)
+        assert len(parser.panells) == len(parser.botons) == 8
+        assert not parser.pila
+        for boto in parser.botons:
+            panel = parser.panells[boto['popovertarget']]
+            assert panel['popover'] == 'auto'  # Tancament natiu amb fora o Esc.
+            assert panel['role'] == 'dialog'
+            assert f'id="{panel["aria-labelledby"]}"' in html
+            assert f'popovertarget="{panel["id"]}" popovertargetaction="hide"' in html
+        assert '<h4' in html and 'Nom complet d’una assignatura inventada molt llarga &amp; especial</h4>' in html
+        assert 'position:fixed;inset:12px' in CSS
+        assert 'min-width:min(260px,calc(100vw - 24px))' in CSS
+        assert 'max-width:calc(100vw - 24px)' in CSS
+        assert '.classe[open]' not in CSS and '<details' not in html
+
+    def test_resum_compta_aules_uniques_de_tots_els_subgrups_sense_buides(self):
+        from dataclasses import replace
+        from components.graella import Cella
+        from pagines.part2 import resum_html
+        base = crea_base()
+        p = Proposta.de_base(base)
+        c = Cella('S90001', 'L', 510, 570, 'Q9/0001', 'Inventada', 'Teoria', 'TE/81', False, False)
+        cs = [c, replace(c, id_sessio='S90002', aula='Q9/0002', grup='PAUL/811'),
+              replace(c, id_sessio='S90003', aula='Q9/0003', grup='SEM/813'),
+              replace(c, id_sessio='S90004', aula='Q9/0004'),
+              replace(c, id_sessio='S90005', aula='Q9/0001'),
+              replace(c, id_sessio='S90006', aula='')]
+        assert '<b>4</b><span>aules a la setmana</span>' in resum_html(base, p, cs, cs, True)
+
     def test_controls_unics_i_titol_amb_espai(self):
         from pagines.part2 import CSS_PAGINA
         with app_inventada() as at:
@@ -622,7 +728,9 @@ class TestRedisseny(unittest.TestCase):
                         assert visible <= durada * 1.6 - 6
                         assert abs(visible - p['visible']) < 1e-6
                         assert p['nom'] >= 1 and p['ubicacio']
-                        assert not p['nota'] or p['grup']
+                        assert not p['nota'] or p['ubicacio']
+                        if durada >= 60 and nota:
+                            assert p['nota']
                         if nota:
                             assert f'--linies-nom:{p["nom"]};' in attrs['style']
                             for camp in ('ubicacio', 'grup', 'nota'):
@@ -631,8 +739,8 @@ class TestRedisseny(unittest.TestCase):
                     assert pressupost_classe(durada)['padding'] == 2
                     assert not pressupost_classe(durada, nota=True)['grup']
         assert '-webkit-line-clamp:var(--linies-nom)' in CSS
-        assert '.classe:not([open]){overflow:hidden;}' in CSS
-        assert '.classe[open] b' in CSS
+        assert '.classe{overflow:hidden;}' in CSS
+        assert '.classe[open]' not in CSS
 
     def test_tres_linies_i_nota_curta_amb_detall_complet(self):
         from dataclasses import replace
@@ -648,7 +756,8 @@ class TestRedisseny(unittest.TestCase):
         assert '<small class="nota">' not in igual and '<small class="nota">' not in assignada
         motiu = 'Motiu inventat amb <etiqueta> i prou paraules per comprovar que el resum és curt i el detall es conserva sencer.'
         especial = taula_html([replace(c, relaxacions=(motiu,))])
-        assert '<small class="nota">Motiu inventat amb &lt;etiqueta&gt;' in especial
+        assert '<small class="nota">Abans: dijous 12:30</small>' in especial
+        assert 'Motiu inventat amb &lt;etiqueta&gt;' in especial  # Motiu complet al detall.
         assert motiu.replace('<', '&lt;').replace('>', '&gt;') in especial
         assert '<etiqueta>' not in especial
 
@@ -660,7 +769,7 @@ class TestRedisseny(unittest.TestCase):
         html = contingut_graella(taula_html([a, b], filtre='aula-nova'))
         assert 'class="classe igual apagada" data-estat="igual"' in html
         assert 'class="classe aula-nova" data-estat="aula-nova"' in html
-        assert html.count('<details class="classe') == 2
+        assert len(estructura_graella(html).classes) == 2
         assert 'apagada"' not in taula_html([a, b], filtre='totes')
         assert recomptes_estat([a, b]) == {'igual': 1, 'aula-nova': 1}
         with app_inventada() as at:
@@ -682,15 +791,15 @@ class TestRedisseny(unittest.TestCase):
         aula = celles_aula(base, p, date(2027, 3, 8), 'Q9/0001', noms=noms)
         for html in (taula_html(grup), taula_html(aula), exporta_aula_html(base, p, date(2027, 3, 8), 'Q9/0001', noms=noms)):
             html = contingut_graella(html)
-            assert html.count('<details class="classe') == 1
+            assert len(estructura_graella(html).classes) == 1
             assert 'Inventada I / Inventada II' in html
             assert 'Classe compartida' in html
         assert recomptes_estat(aula) == {'igual': 1}
         p.files['S90002'].aula = 'Q9/0002'
-        assert contingut_graella(taula_html(celles_grup(base, p, date(2027, 3, 8), 'GXX', '1r', '81'))).count('<details class="classe') == 2
+        assert len(estructura_graella(taula_html(celles_grup(base, p, date(2027, 3, 8), 'GXX', '1r', '81'))).classes) == 2
         p.files['S90002'].aula = 'Q9/0001'
         p.files['S90002'].h_ini = '09:30'
-        assert contingut_graella(taula_html(celles_aula(base, p, date(2027, 3, 8), 'Q9/0001'))).count('<details class="classe') == 2
+        assert len(estructura_graella(taula_html(celles_aula(base, p, date(2027, 3, 8), 'Q9/0001'))).classes) == 2
 
     def test_noms_grups_i_amplada_per_carril(self):
         from components.graella import Cella, CSS, nom_grup
@@ -711,10 +820,9 @@ class TestRedisseny(unittest.TestCase):
         p.files['S90001'] = Assignacio('M', '16:00', 'Q9/0002')
         c, = celles_grup(base, p, date(2027, 3, 8), 'GXX', '1r', '81')
         html = contingut_graella(taula_html([c]))
-        assert 'data-minut="510"' not in html and 'data-minut="960"' in html
-        assert 'data-minut="990"' in html and 'data-minut="1230"' not in html
+        assert [int(h['data-minut']) for h in estructura_graella(html).hores] == list(range(510, 1261, 30))
         assert 'Abans: dilluns 15:00' in html
-        assert '<summary>' in html and 'title="Canvia ·' in html
+        assert 'aria-haspopup="dialog"' in html and 'title="Canvia ·' in html
 
     def test_resum_inclou_classe_que_marxa_de_la_setmana(self):
         from pagines.part2 import resum_html
@@ -923,4 +1031,4 @@ def test_paraules_noms_atomiques_amb_abreviacio_marcada():
     assert 'white-space:nowrap' in regla and 'display:inline-block' in regla
     assert 'max-width:100%' in regla
     assert 'overflow:hidden' in regla and 'text-overflow:ellipsis' in regla
-    assert '.classe[open] .nom-paraula{max-width:none;overflow:visible;}' in CSS
+    assert '.detall-classe h4' in CSS and '.classe[open]' not in CSS

@@ -3,6 +3,7 @@ from collections import Counter
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from html import escape
+from hashlib import sha256
 from statistics import median
 
 from nivell2.base import fmt, hm
@@ -246,34 +247,34 @@ CSS = """
 .p2-horari .hores,.p2-horari .dia-horari{display:grid;grid-template-rows:var(--files);padding-top:6px;min-width:0;align-content:start;}
 .p2-horari .hora{font-size:12px;color:#8a8984;font-weight:400;transform:translateY(-7px);font-variant-numeric:tabular-nums;}
 .p2-horari .hora-plena{color:#3d3c39;font-weight:600;}
+.p2-horari .hora-final{position:absolute;bottom:-7px;transform:none;}
 .p2-horari .dia-horari{column-gap:6px;background-image:var(--linies);background-position:0 6px;background-repeat:repeat;}
 .p2-horari .classe{container:p2-classe / inline-size;position:relative;z-index:1;color:#1a1a18;border:0;border-radius:10px;padding:8px 10px;margin:3px 0;min-width:0;min-height:0;box-sizing:border-box;word-break:normal;overflow-wrap:normal;hyphens:none;}
 .p2-horari .classe b{display:block;color:#1a1a18;font-size:14px;font-weight:600;line-height:1.25;white-space:normal;word-break:normal;overflow-wrap:normal;hyphens:none;font-family:system-ui,sans-serif;font-variant-ligatures:none;letter-spacing:normal;word-spacing:normal;text-transform:none;}
-.p2-horari .classe summary{display:flex;flex-direction:column;gap:3px;cursor:pointer;list-style:none;}
-.p2-horari .classe summary::-webkit-details-marker{display:none;}
+.p2-horari .classe{appearance:none;display:block;text-align:left;font:inherit;cursor:pointer;}
+.p2-horari .classe .resum-classe{display:flex;flex-direction:column;gap:3px;min-width:0;}
 .p2-horari .classe small{display:block;font-size:12px;color:#52514e;}
 .p2-horari .classe .ubicacio{color:#3d3c39;}
 .p2-horari .classe .nota{font-size:12px;font-weight:500;}
 .p2-horari .classe.apagada{opacity:.25;}
-.p2-horari .classe summary:focus-visible{outline:3px solid #2a78d6;outline-offset:2px;}
+.p2-horari .classe:focus-visible{outline:3px solid #2a78d6;outline-offset:2px;}
 /* El pressupost usa línies senceres: nom 17.5px, secundàries 16.2px i gap 3px.
-   Només el resum tancat queda limitat; obrir recupera tot el contingut. */
+   El detall viu en un popover independent: mai no estira el bloc. */
 .p2-horari .classe{padding-block:var(--padding-classe,8px);}
-.p2-horari .classe:not([open]){overflow:hidden;}
-.p2-horari .classe:not([open]) summary{min-width:0;}
-.p2-horari .classe:not([open]) b{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:var(--linies-nom);max-height:calc(var(--linies-nom)*17.5px);overflow:hidden;text-overflow:ellipsis;}
-.p2-horari .classe:not([open]) small{line-height:16.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
-.p2-horari .classe:not([open]) .ubicacio{display:var(--mostra-ubicacio);}
-.p2-horari .classe:not([open]) summary>small:not([class]){display:var(--mostra-grup);}
-.p2-horari .classe:not([open]) .nota{display:var(--mostra-nota);}
+.p2-horari .classe{overflow:hidden;}
+.p2-horari .classe b{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:var(--linies-nom);max-height:calc(var(--linies-nom)*17.5px);overflow:hidden;text-overflow:ellipsis;}
+.p2-horari .classe small{line-height:16.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.p2-horari .classe .ubicacio{display:var(--mostra-ubicacio);}
+.p2-horari .classe .resum-classe>small:not([class]){display:var(--mostra-grup);}
+.p2-horari .classe .nota{display:var(--mostra-nota);}
 /* Cada paraula és atòmica: només saltem de línia entre paraules.
    Si no cap sola, l'el·lipsi marca l'abreviació a l'amplada real disponible. */
 .p2-horari .classe .nom-paraula{display:inline-block;vertical-align:bottom;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.p2-horari .classe[open] b{overflow-x:auto;}
-.p2-horari .classe[open] .nom-paraula{max-width:none;overflow:visible;}
-.p2-horari .classe[open] small{overflow-wrap:anywhere;}
-.p2-horari .classe[open]{z-index:3;align-self:start;min-height:calc(100% - 6px);box-shadow:0 4px 12px #0002;}
-.p2-horari .classe .detall{padding-top:6px;border-top:1px solid #e6e5e0;margin-top:6px;}
+.p2-horari .detall-classe{position:fixed;inset:12px;margin:auto;width:360px;min-width:min(260px,calc(100vw - 24px));max-width:calc(100vw - 24px);height:fit-content;max-height:calc(100dvh - 24px);overflow-y:auto;box-sizing:border-box;padding:20px;border:1px solid #e6e5e0;border-radius:14px;background:#fff;color:#1a1a18;box-shadow:0 8px 32px #0003;font:14px/1.5 system-ui;white-space:normal;overflow-wrap:anywhere;word-break:normal;}
+.p2-horari .detall-classe h4{margin:0 0 12px;font:600 18px/1.35 system-ui;}
+.p2-horari .detall-classe p{margin:8px 0;}
+.p2-horari .detall-classe button{font:inherit;padding:6px 12px;border:1px solid #e6e5e0;border-radius:8px;background:#fff;color:#1a1a18;cursor:pointer;}
+.p2-horari .detall-classe button:focus-visible{outline:3px solid #2a78d6;outline-offset:2px;}
 
 /* El mínim de carril només s'aplica per sota de 900px de contenidor. */
 @container p2-graella (width < 900px){
@@ -282,9 +283,8 @@ CSS = """
 /* Amplada real de la casella, també quan una classe ocupa tot el dia.
    Amagar secundàries allibera espai sense excedir el pressupost vertical. */
 @container p2-classe (width < 90px){
-  .p2-horari .classe:not([open]) summary>small:not([class]),
-  .p2-horari .classe:not([open]) .nota{display:none;}
-  .p2-horari .classe:not([open]) b{-webkit-line-clamp:min(var(--linies-nom),3);max-height:calc(min(var(--linies-nom),3)*17.5px);}
+  .p2-horari .classe .resum-classe>small:not([class]){display:none;}
+  .p2-horari .classe b{-webkit-line-clamp:min(var(--linies-nom),3);max-height:calc(min(var(--linies-nom),3)*17.5px);}
 }
 
 .p2-llegenda{display:flex;flex-wrap:wrap;gap:8px;padding:0;list-style:none;font:13px/1.35 system-ui;color:#1a1a18;}
@@ -313,21 +313,24 @@ def nom_assignatura_html(nom):
 def pressupost_classe(durada, *, nota=False):
     """Alçades en px, compartides amb el CSS; vàlid per qualsevol ample de carril.
 
-    Cada secundària ocupa una sola línia amb el·lipsi. Reservem fins a tres
-    línies de nom abans del grup i la nota; el nom aprofita la resta d'espai.
+    Cada secundària ocupa una sola línia amb el·lipsi. Prioritzem una línia
+    de nom, l'hora i «Abans»; després ampliem el nom i afegim el grup.
     Els 6px de marge vertical es resten de l'àrea de la graella.
     """
     padding = 2 if durada <= 30 else 8
     caixa = durada * 1.6 - 6
     disponible = max(0, caixa - 2 * padding)
-    nom = min(3, max(1, int((disponible - 19.2) // 17.5)))
+    nom = 1
     visible = nom * 17.5
     ubicacio = visible + 19.2 <= disponible
     visible += 19.2 if ubicacio else 0
+    mostra_nota = nota and ubicacio and visible + 19.2 <= disponible
+    visible += 19.2 if mostra_nota else 0
+    extra_nom = min(2, max(0, int((disponible - visible) // 17.5)))
+    nom += extra_nom
+    visible += extra_nom * 17.5
     grup = ubicacio and visible + 19.2 <= disponible
     visible += 19.2 if grup else 0
-    mostra_nota = nota and grup and visible + 19.2 <= disponible
-    visible += 19.2 if mostra_nota else 0
     extra = max(0, int((disponible - visible) // 17.5))
     nom += extra
     visible += extra * 17.5
@@ -343,10 +346,11 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
     """
     celles = agrupa_compartides(celles)
     estil = f'<style>{CSS}</style>' if estils else ''
-    if not celles:
-        return estil + '<div class="p2-horari"><p class="p2-buit" role="status">No hi ha classes aquesta setmana.</p></div>'
-    inici_dia = min(c.ini for c in celles) // 30 * 30
-    final_dia = (max(c.fi for c in celles) + 29) // 30 * 30
+    buit = '' if celles else '<p class="p2-buit" role="status">No hi ha classes aquesta setmana.</p>'
+    inici_dia, final_dia = 510, 1260
+    # Identificadors estables i diferents per a les vistes de grup i d'aula.
+    prefix = 'p2-detall-' + sha256(titol.encode()).hexdigest()[:16]
+    detalls = []
     carrils = {}
     for dia in DIES:
         ocupats, entrades = [], []
@@ -367,7 +371,7 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
     primer = '#d9d8d2' if inici_dia % 60 == 0 else '#efeee9'
     segon = '#efeee9' if inici_dia % 60 == 0 else '#d9d8d2'
     linies = f'repeating-linear-gradient(to bottom,{primer} 0 1px,transparent 1px 48px,{segon} 48px 49px,transparent 49px 96px)'
-    html = (estil + '<div class="p2-horari"><div class="p2-setmana">'
+    html = (estil + '<div class="p2-horari">' + buit + '<div class="p2-setmana">'
         f'<div class="horari-scroll" tabindex="0" role="region" aria-label="{escape(titol, quote=True)} · Dilluns – Divendres">'
         f'<div class="horari" style="--ample-mobil:{ample}px;grid-template-columns:{columnes};--files:repeat({final_dia-inici_dia},1.6px);--linies:{linies}">'
         f'<div class="horari-titol">{escape(titol)}</div><div class="dia-cap hora-cap">Hora</div>')
@@ -376,11 +380,12 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
     for inici in range(inici_dia, final_dia, 30):
         plena = ' hora-plena' if inici % 60 == 0 else ''
         html += f'<div class="hora{plena}" data-minut="{inici}" style="grid-row:{inici-inici_dia+1}/span 30">{fmt(inici)}</div>'
+    html += f'<div class="hora hora-plena hora-final" data-minut="{final_dia}">{fmt(final_dia)}</div>'
     html += '</div>'
     for dia, (n, entrades) in carrils.items():
         html += (f'<section class="dia-horari" aria-label="{NOMS_DIES[DIES.index(dia)]}" '
                  f'data-carrils="{n}" style="grid-template-columns:repeat({n},minmax(0,1fr))">')
-        for carril, coincideix, c in entrades:
+        for index, (carril, coincideix, c) in enumerate(entrades):
             estat = estat_cella(c)
             nom, _, _, _ = ESTATS[estat]
             marques = estat + (' apagada' if filtre not in ('totes', estat) else '')
@@ -397,7 +402,9 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
                 avisos.append(c.abans or ('Aula assignada.' if c.aula_assignada else 'Canvi de dia, hora o aula.'))
             avis = ' · '.join(avisos)
             nota = ''
-            if estat == 'relaxada':
+            if c.canvi and c.abans:
+                nota = c.abans.split(' · ', 1)[0]
+            elif estat == 'relaxada':
                 nota = avisos[0]
             elif estat == 'canvi':
                 nota = c.abans.split(' · ', 1)[0] if c.abans else 'Canvi de dia, hora o aula.'
@@ -418,12 +425,21 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
                      f'--linies-nom:{pressupost["nom"]};' + ''.join(
                          f'--mostra-{camp}:{"block" if pressupost[camp] else "none"};'
                          for camp in ('ubicacio', 'grup', 'nota')))
-            html += (f'<details class="classe {marques}" data-estat="{estat}" '
+            detall_id = f'{prefix}-{dia}-{index}'
+            html += (f'<button type="button" class="classe {marques}" data-estat="{estat}" '
                 f'style="grid-row:{c.ini-inici_dia+1}/span {c.fi-c.ini};grid-column:{columna};{ajust}" '
+                f'popovertarget="{detall_id}" aria-haspopup="dialog" '
                 f'title="{escape(etiqueta, quote=True)}" aria-label="{escape(etiqueta, quote=True)}">'
-                f'<summary>{contingut}</summary><small class="detall">{escape(avis or nom)}</small></details>')
+                f'<span class="resum-classe">{contingut}</span></button>')
+            detalls.append(f'<div class="detall-classe" id="{detall_id}" popover="auto" '
+                f'role="dialog" aria-labelledby="{detall_id}-nom">'
+                f'<h4 id="{detall_id}-nom">{escape(c.assignatura)}</h4>'
+                f'<p>{NOMS_DIES[DIES.index(c.dia)]} · {fmt(c.ini)}–{fmt(c.fi)}</p>'
+                f'<p>{escape(ubicacio)}</p><p>{escape(tipus)} · {escape(grup)}</p>'
+                f'<p>{escape(avis or nom)}</p>'
+                f'<button type="button" popovertarget="{detall_id}" popovertargetaction="hide" autofocus>Tanca</button></div>')
         html += '</section>'
-    return html + '</div></div></div></div>'
+    return html + '</div></div></div>' + ''.join(detalls) + '</div>'
 
 
 def exporta_aula_html(base, proposta, setmana, aula, **kwargs):
