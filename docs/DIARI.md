@@ -283,3 +283,11 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - L'horari del grup, el de l'aula i l'HTML descarregat conserven una única graella de dilluns a divendres inclòs. S'eliminen les còpies de la setmana dividides en blocs de dies o carrils.
 - Quan falta amplada, es desplaça lateralment la mateixa graella i les hores queden fixes. Es mantenen l'amplada llegible de les classes i els subgrups simultanis costat per costat.
 - Comprovat visualment amb dades inventades en contenidors de 1.160, 887 i 390 px; s'arriba a divendres dins de la mateixa taula i les hores continuen visibles. Proves de part 2, app i Junta: 78 correctes i 1 omesa. `valida-guia`: 102 passos en 8 apartats.
+
+### [ds 22:00] DADA · Temes per a la presentació (demanat per Bernat)
+- Marge d'aules: a l'hora punta del matí ocupem totes les aules ordinàries disponibles; l'aulari en té unes quantes més, però en guardem 2 de reserva. Ocupar-les totes no és viable: si una aula s'avaria o un grup creix, ja no queda marge i cal tirar de la reserva o moure classes. Recomanem deixar 1–2 aules lliures a l'hora punta.
+- Dobles graus: les dades no deien a quina classe van els estudiants dels dobles graus. Ho vam buscar a la web de la UAB (horaris 2026-27 i siq.uab.cat): tenen un grup propi i part de les classes les fan amb grups dels graus simples. Vam lligar cada classe del doble a la classe on va perquè no es separin ni es dupliquin.
+- Dades que faltaven: alguns grups no tenien nombre d'alumnes; els vam completar fora de git i sense publicar-los. L'aula «no indicada» vol dir que falta a les dades, no que la classe no es faci.
+- Norma de dades: cap agent llegeix les dades reals; el disseny es prova amb dades inventades i les comprovacions sobre dades reals només treuen recomptes (p. ex. nivell2/comprova_persones.py, que executa l'equip).
+- Validació: totes les propostes passen el verificador oficial del repte; les excepcions són declarades i amb motiu.
+- Feina en paral·lel: una sessió de Claude coordina i reparteix; programen subagents de Codex, cadascun al seu worktree.
