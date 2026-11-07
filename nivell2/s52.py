@@ -41,7 +41,7 @@ def resol(base, *, temps_franges=300, temps_aules=600, llavor=0):
                   'limits_capacitat':dict(limits),
                   'estadistiques_franges':dict(assigna_franges.estadistiques)}
         history.append(record)
-        print('Franges:',json.dumps(record,ensure_ascii=False),flush=True)
+        print('Franges:',state_f,f'{elapsed_f:.3f} s; sessions assignades: {len(slots)}',flush=True)
         if not slots:
             return None, exceptions, history
         start = time.monotonic()
@@ -75,9 +75,43 @@ def valida_excepcions(base, proposal, sessions):
     for sid in sessions:
         s = base.sessions[sid]
         if s.data.isocalendar()[:2] != (2027,14) or s.fixada:
-            raise ValueError(f'Excepció R1 no autoritzada: {sid}')
+            raise ValueError('Excepció R1 no autoritzada')
         if _referencia(s,proposal) != (s.data,s.ini) or _torn_ok(s.torn,s.ini,s.fi) is not False:
-            raise ValueError(f'Excepció R1 fora de la franja original: {sid}')
+            raise ValueError('Excepció R1 fora de la franja original')
+
+
+MOTIU_FIXADES = "La regla 1 diu que les classes de 1r i 2n d'aquests graus no es toquen; ja es fan a la tarda."
+MOTIU_DOBLES = "El doble va a la classe d'un altre grup, que no es mou."
+MOTIU_AVALUACIO = "Setmana d'avaluació: impossibilitat demostrada amb R1 dura; vegeu diagnostic.md."
+
+
+def relaxacions_proposta(base, proposal, w14):
+    """Només les tres decisions explícites; no declara errors desconeguts."""
+    from horaris.check import _torn_ok
+    from nivell2.franges import _referencia
+    from nivell2.comprova_persones import parelles_dobles
+    pairs,_ = parelles_dobles(base)
+    frozen_hosts = set()
+    for double,hosts in pairs.items():
+        members = [base.sessions[sid] for sid in [double,*hosts]]
+        if any(r.fixada or r.tipus == 'PLAB' for r in members):
+            frozen_hosts.update(hosts)
+    classified = {MOTIU_FIXADES:[],MOTIU_DOBLES:[],MOTIU_AVALUACIO:[]}
+    for s in base.sessions.values():
+        date,minute = _referencia(s,proposal)
+        if _torn_ok(s.torn,minute,minute+s.durada) is not False:
+            continue
+        if (s.sense_espai or (s.id in frozen_hosts and not s.fixada)) and (date,minute) == (s.data,s.ini):
+            if any(_referencia(base.sessions[p],proposal) != (base.sessions[p].data,base.sessions[p].ini)
+                   for p in pairs.get(s.id,())):
+                raise ValueError('Un doble fora de torn s’ha separat de la franja original')
+            classified[MOTIU_DOBLES].append(s.id)
+        elif s.fixada.startswith('R1') and not s.aula and (date,minute) == (s.data,s.ini):
+            classified[MOTIU_FIXADES].append(s.id)
+        elif s.id in w14:
+            classified[MOTIU_AVALUACIO].append(s.id)
+    return [{'restriccio':'R1-TORN','sessions':'|'.join(sorted(ids)),'justificacio':motiu}
+            for motiu,ids in classified.items() if ids]
 
 
 def main(argv=None):
@@ -107,15 +141,15 @@ def main(argv=None):
             'Això no és una prova d’impossibilitat del problema oficial complet: el model\n'
             'de franges inclou condicions conservadores de capacitat per cubell horari.\n'
             'No s’han generat xifres de després perquè no existeix una proposta completa.\n', encoding='utf-8')
-        print('No s’ha trobat proposta completa:',json.dumps(history,ensure_ascii=False))
+        print('No s’ha trobat proposta completa; intents:',len(history))
         return 1
     relaxed = [sid for record in history[-1:]
                for proof in record['estadistiques_franges'].get('proves_torn',[]) for sid in proof.get('sessions',[])]
     valida_excepcions(carrega_model(),proposal,relaxed)
     relax_path = out/'relaxacions.csv'
-    escriu_csv(relax_path,([{'restriccio':'R1-TORN','sessions':'|'.join(sorted(relaxed)),
-        'justificacio':'Setmana d’avaluació del 5 al 8 d’abril: no s’hi poden portar classes i el divendres 9 a la tarda no hi caben sense solapar docents o grups; demostrat INFEASIBLE, vegeu diagnostic.md'}] if relaxed else []),
-        ['restriccio','sessions','justificacio'])
+    base = carrega_model()
+    relaxations = relaxacions_proposta(base,proposal,set(relaxed))
+    escriu_csv(relax_path,relaxations,['restriccio','sessions','justificacio'])
     path = proposal.escriu(out/'proposta.csv')
     report = verifica(path,json_path=out/'informe.json',violacions_path=out/'violacions.csv',relaxacions=relax_path)
     comparison = compara(proposal,base=carrega_oficial(),proposta_path=path,relaxacions=relax_path)
@@ -136,13 +170,13 @@ def main(argv=None):
                 'Atenció a les fixades originalment sense aula: `_marca_heretades` exigeix '
                 'aula igual a l’original per eximir R1-TORN. Assignar una aula pot fer '
                 'comptar el torn; deixar-la buida fa comptar R5-SENSE-AULA i moure-la '
-                'fa comptar R1-FIXADA. No s’autoritzen relaxacions fora de W14.\n')
+                'fa comptar R1-FIXADA. Es declaren només els tres motius acordats: fixades sense aula, dobles vinculats i excepcions d’avaluació provades.\n')
     elapsed = time.monotonic()-start
     command = f'{PYTHON} -m nivell2.s52 --temps-franges {args.temps_franges:g} --temps-aules {args.temps_aules:g} --llavor {args.llavor}'
     checking = f'{PYTHON} -m horaris check {path.resolve()} --semestre 2 --relaxacions {relax_path.resolve()} --json {out.resolve()}/informe.json --violacions {out.resolve()}/violacions.csv'
     (out/'README.md').write_text(f'''# 5.2 Torns nous
 
-Veredicte oficial: **{report.veredicte}**. Excepcions R1-TORN: {len(relaxed)}. Temps total: {elapsed:.3f} s.
+Veredicte oficial: **{report.veredicte}**. Excepcions R1-TORN: {sum(len(r['sessions'].split('|')) for r in relaxations)}. Temps total: {elapsed:.3f} s.
 Llavor: {args.llavor}. Pressupostos: franges {args.temps_franges:g} s; aules {args.temps_aules:g} s.
 
 Des del worktree:
@@ -173,10 +207,29 @@ Si fallen les aules, hi ha com a màxim tres intents amb capacitat horària
 més estricta; aquests límits són una heurística, no una prova d'impossibilitat.
 ''',encoding='utf-8')
     print(report.veredicte,f'{elapsed:.3f} s')
-    for row in comparison.files:
-        print(f"{row['xifra']}: {row['abans']} → {row['despres']}")
+    metrics = {r['xifra']:r['despres'] for r in comparison.files}
+    counts = {
+        'sessions_mogudes':metrics.get('canvis_franja',0),
+        'canvis_aula':metrics.get('canvis_aula',0),
+        'aules_assignades_noves':sum(not s.aula and bool(proposal.files[s.id].aula) for s in base.sessions.values()),
+        'relaxacions_fixades':sum(len(r['sessions'].split('|')) for r in relaxations if r['justificacio']==MOTIU_FIXADES),
+        'relaxacions_dobles':sum(len(r['sessions'].split('|')) for r in relaxations if r['justificacio']==MOTIU_DOBLES),
+        'relaxacions_avaluacio':sum(len(r['sessions'].split('|')) for r in relaxations if r['justificacio']==MOTIU_AVALUACIO),
+        'incompliments_no_declarats':sum(report.compten().values()),
+    }
+    (out/'resum.json').write_text(json.dumps(counts,ensure_ascii=False,indent=2)+'\n')
+    for name,count in counts.items():
+        print(name,':',count)
     return 0 if report.veredicte in ('VALIDA','VALIDA AMB RELAXACIONS DECLARADES') else 1
 
 
 if __name__ == '__main__':
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except Exception:
+        import traceback
+        target = Path(__file__).resolve().parents[1]/'resultats/nivell2/5.2'
+        target.mkdir(parents=True,exist_ok=True)
+        (target/'error-s52.txt').write_text(traceback.format_exc(),encoding='utf-8')
+        print('Errors d’execució: 1; detall desat fora de git')
+        raise SystemExit(2)

@@ -83,3 +83,67 @@ def test_rebutja_relaxacio_fora_w14_i_fora_original():
     p.files['a'].h_ini = '10:00'
     with pytest.raises(ValueError):
         valida_excepcions(b,p,['a'])
+
+
+def test_doble_i_host_mouen_junts_sense_mutar_base():
+    from nivell2.franges import assigna_franges
+    host = sessio('inventat-host',codi='100000',ini=540,activitat='inventada-host')
+    double = sessio('inventat-doble',codi='100000',ini=540,grup='TE/91',
+                    activitat='inventada-doble',sense_espai=True,cohorts=('GZZ:3r',))
+    base = base_petita(host,double)
+    result,state,_ = assigna_franges(base,referencia=Proposta.de_base(base),temps_s=5)
+    assert state == 'FEASIBLE'
+    assert result[host.id] == result[double.id]
+    assert result[host.id][1] >= 870
+    assert host.compartida == double.compartida == ''
+    assert not host.fixada and not double.fixada
+
+
+def test_doble_fixat_i_no_aparellat_es_conserven():
+    from nivell2.franges import assigna_franges
+    host = sessio('inventat-host',codi='100000',ini=540,fixada='R1: GXX 1r')
+    double = sessio('inventat-doble',codi='100000',ini=540,sense_espai=True,grup='TE/91')
+    orphan = sessio('inventat-sol',codi='100099',ini=660,sense_espai=True,grup='TE/92')
+    base = base_petita(host,double,orphan)
+    result,state,_ = assigna_franges(base,referencia=Proposta.de_base(base),temps_s=5)
+    assert state == 'FEASIBLE'
+    assert all(result[s.id] == (s.data,s.ini) for s in base.sessions.values())
+    assert assigna_franges.estadistiques['dobles_sense_parella'] == 1
+
+
+def test_relaxacions_per_motiu_amb_dades_inventades():
+    from nivell2.s52 import relaxacions_proposta, MOTIU_FIXADES, MOTIU_DOBLES
+    fixed = sessio('inventat-fix',codi='100000',ini=900,torn='mati',fixada='R1: GXX 1r')
+    double = sessio('inventat-doble',codi='100000',ini=900,torn='mati',sense_espai=True,grup='TE/91')
+    base = base_petita(fixed,double)
+    proposal = Proposta.de_base(base)
+    proposal.files[fixed.id].aula = 'aula-inventada'
+    rows = relaxacions_proposta(base,proposal,set())
+    assert {r['justificacio'] for r in rows} == {MOTIU_FIXADES,MOTIU_DOBLES}
+    assert all(r['restriccio'] == 'R1-TORN' for r in rows)
+
+
+def test_vincles_horaris_no_sumen_aforament_de_classes_diferents():
+    from nivell2.franges import assigna_franges
+    rows = [sessio(f'inventat-{i}',codi='100000',tipus='PAUL',grup=f'PAUL/8{i}1',
+                    alumnes=70,ini=540,cohorts=(f'GXX{i}:3r',),docents=frozenset({f'doc-inventat-{i}'}))
+            for i in range(3)]
+    double = sessio('inventat-doble',codi='100000',tipus='PAUL',grup='PAUL/911',
+                    sense_espai=True,ini=540,cohorts=('GZZ:3r',),docents=frozenset())
+    base = base_petita(*rows,double)
+    result,state,_ = assigna_franges(base,referencia=Proposta.de_base(base),temps_s=5)
+    assert state == 'FEASIBLE'
+    assert len({result[s.id] for s in base.sessions.values()}) == 1
+
+
+def test_sortida_solver_no_mostra_detall_privatiu(capsys):
+    secret = 'identificador-inventat-privat'
+    row = sessio(secret,ini=870)
+    base = base_petita(row)
+    with patch('nivell2.s52.assigna_franges',return_value=({row.id:(row.data,row.ini)},'FEASIBLE',[])) as f, \
+         patch('nivell2.s52.assigna_aules',return_value=({row.id:'aula-inventada'},'OPTIMAL')):
+        f.estadistiques = {'proves_torn':[{'sessions':[secret]}]}
+        _,_,history = resol(base,temps_franges=1,temps_aules=1)
+    stdout = capsys.readouterr().out
+    assert secret not in stdout and 'aula-inventada' not in stdout
+    assert history[0]['estadistiques_franges']['proves_torn'][0]['sessions'] == [secret]

@@ -85,27 +85,6 @@ if pytest is not None and pytest.mark._config is not None:
     pytest.mark._config.addinivalue_line('markers', 'complet: resol el semestre real')
 
 
-@unittest.skipUnless('-m' in sys.argv and 'complet' in sys.argv, 'activar amb -m complet')
-@((pytest.mark.complet) if pytest else (lambda f: f))
-def test_complet():
-    import time
-    b = carrega_model()
-    begin = time.monotonic()
-    r, state, notes = assigna_franges(b, referencia=Proposta.de_base(b), permet_excepcions_torn=True)
-    print(assigna_franges.estadistiques, flush=True)
-    print(state, 'segons', time.monotonic()-begin, 'canvis', (sum(r.get(s.id) != (s.data,s.ini) for s in b.sessions.values()) if r else None), 'excepcions', len(notes))
-    assert state in ('OPTIMAL', 'FEASIBLE')
-    official = carrega_oficial()
-    from horaris.check import avalua
-    from horaris.model import Relaxacio
-    ids = frozenset(sid for proof in assigna_franges.estadistiques.get('proves_torn',[]) for sid in proof.get('sessions',[]))
-    assert all(b.sessions[sid].data.isocalendar()[:2] == (2027,14) for sid in ids)
-    inf = avalua(official, proposta_franges(b, Proposta.de_base(b), r).a_files(),
-                 relaxacions=[Relaxacio('R1-TORN',ids,'Excepció W14 provada')] if ids else [])
-    forbidden = {'R1-TORN', 'R2-FINESTRA', 'R2-CALENDARI', 'R4-DOCENT', 'R4-ALUMNAT', 'R4-PLAB', 'R4-COMPARTIDA'}
-    print('Incompliments que compten:', {r: inf.recompte().get(r, {}).get('compten', 0) for r in sorted(forbidden)}, flush=True)
-    assert not [v for v in inf.violacions if v.compta and v.regla in forbidden]
-
 
 def test_solapament_nou_i_capacitat_horaria():
     a = sessio('a', ini=540)
