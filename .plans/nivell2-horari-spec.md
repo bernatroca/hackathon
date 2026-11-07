@@ -92,8 +92,9 @@ Ja resolt (commit `e956847`): el model llegeix `dades/alumnes_sense_dada.json` (
 
 ### Vista de l'estudiant
 
-- Tres selectors: titulació → curs → grup de teoria (GED → 1r → 81).
+- Titulació → curs → grup d'estudiants (GED → 1r → 81). Si un camp només té una opció, s'explica com a dada i no es mostra com a selector. «Grup d'estudiants» són els alumnes que comparteixen la teoria i els subgrups de problemes i seminaris; s'explica també què vol dir que coincideixin subgrups.
 - La graella ensenya la setmana de l'estudiant: la teoria del grup i els seus problemes i seminaris (81, 811, 812…).
+- Es poden consultar tots els cursos i tot el dia (8.30–21.00). Primer és la selecció inicial, no un filtre del conjunt de dades.
 
 ### Propostes i dades fora de git
 
@@ -228,9 +229,12 @@ Format: una pàgina a l'app i el mateix exportat a PDF.
 
 Fa servir el disseny B1 del nivell 1, amb textos planers per al tècnic de Gestió Acadèmica. El frontend pot començar amb dades de mostra, sense esperar el solver.
 
-- **Primer, la vista per grup** (la de l'estudiant): l'horari de la setmana d'un grup, avui i proposta costat per costat, amb els canvis marcats.
+- **Primer, la vista per grup** (la de l'estudiant): «Horari actual · dades originals» i «Amb la proposta» costat per costat si hi ha prou espai, o apilats en pantalles petites. «Només l'horari actual» mostra una única graella; no compara les dades originals amb elles mateixes.
 - **Després, la vista per aula** (la que demana l'enunciat): una setmana tipus, dies en columnes i franges de 30 minuts en files, amb selector d'aula. Si hi ha l'alternativa amb desdoblaments, n'ensenya també la 2a hora.
-- Selector de proposta (avui, 5.1, 5.2, 5.3, 5.4 i, si n'hi ha, les alternatives amb desdoblaments o fusions) i de setmana (per a les setmanes de l'imprevist).
+- Les propostes disponibles s'anomenen amb la millora que fan, a més del número (5.1 assignar aules sense moure dies ni hores, 5.2 reorganitzar torns, etc.). Si només n'hi ha una, no cal un selector. La setmana seleccionada afecta les dues vistes i la vista per aula.
+- «Aula no indicada a les dades» explica una mancança dels fitxers originals, no que una classe no es faci. Es compten i s'expliquen aquestes mancances per al grup seleccionat.
+- Llegenda visible amb text: blau sense canvis, verd aula afegida, groc dia/hora/aula existent modificats, vora discontínua cas especial amb motiu. Els canvis també s'escriuen dins de la classe. TE/PAUL/SEM es tradueixen i els grups es mostren en paraules.
+- Ajuda opcional «Com funciona? Guia pas a pas»: sis passos que expliquen la comparació, els estudiants, les mancances d'aula, els colors, les graelles i la vista per aula. Cada pas porta al seu apartat; es pot retrocedir, acabar o tancar la guia.
 - Es marquen les sessions amb relaxació i el seu motiu.
 - La graella per aula també es lliura en un fitxer (HTML o PDF) per al jurat.
 

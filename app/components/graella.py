@@ -121,10 +121,37 @@ def resum_grup(base, proposta, actuals, noves):
             f'{assignades} amb aula assignada · {torn} canvien de torn · Aules diferents aquesta setmana: {abans} avui → {despres} a la proposta.')
 
 
-CSS = ''' .horari-scroll{overflow:auto;min-width:0}.horari{border-collapse:collapse;table-layout:fixed;width:100%;min-width:580px;font:12px/1.35 system-ui;color:var(--tinta,#0b0b0b);background:white}.horari th,.horari td{border:1px solid #e6e5e0;padding:3px;vertical-align:top}.horari th{background:#f4f3ef}.horari tbody tr{height:32px}.horari .hora{width:78px}.classe{background:#cde2fb;border-left:3px solid #2a78d6;border-radius:4px;padding:5px;overflow-wrap:anywhere;height:100%;box-sizing:border-box}.classe.canvi{background:#fff5dc;border-color:#b67b00}.classe.relaxada{border:2px dashed #a12c2c}.classe small{display:block}.horari caption{text-align:left;font-size:16px;font-weight:600;padding:8px}.comparacio-horaris{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;container-type:normal}@container contingut (max-width:1180px){.comparacio-horaris{grid-template-columns:minmax(0,1fr)}}@media(max-width:900px){.comparacio-horaris{grid-template-columns:minmax(0,1fr)}}'''
+def nom_grup(grup, tipus):
+    """El codi del fitxer no és una explicació per a qui consulta l'horari."""
+    numero = grup.rsplit('/', 1)[-1]
+    return f'{"Grup" if tipus == "Teoria" else "Subgrup"} {numero}'
 
 
-def taula_html(celles, titol='Horari setmanal'):
+def llegenda_html():
+    return '''<ul class="llegenda-horari" aria-label="Com llegir els colors de l’horari">
+<li><span class="mostra-classe"></span><b>Blau · Sense canvis</b><span>Es manté la classe de les dades originals.</span></li>
+<li><span class="mostra-classe aula-nova"></span><b>Verd · Aula afegida</b><span>La proposta posa aula a una classe que no la tenia indicada.</span></li>
+<li><span class="mostra-classe canvi"></span><b>Groc · Classe modificada</b><span>Canvia el dia, l’hora o una aula que ja tenia.</span></li>
+<li><span class="mostra-classe relaxada"></span><b>Vora discontínua · Cas especial</b><span>El motiu s’explica a la classe; també el pots consultar a «Veure les dades».</span></li>
+</ul>'''
+
+
+CSS = ''' .horari-scroll{overflow:auto;min-width:0}.horari{border-collapse:collapse;table-layout:fixed;width:100%;min-width:900px;font:12px/1.35 system-ui;color:var(--tinta,#0b0b0b);background:white}.horari th,.horari td{border:1px solid #e6e5e0;padding:3px;vertical-align:top}.horari th{background:#f4f3ef}.horari tbody tr{height:32px}.horari .hora{width:78px}.classe{background:#cde2fb;border-left:3px solid #2a78d6;border-radius:4px;padding:5px;overflow-wrap:anywhere;height:100%;box-sizing:border-box}.classe.canvi{background:#fff5dc;border-color:#b67b00}.classe.relaxada{border:2px dashed #a12c2c}.classe small{display:block}.horari caption{text-align:left;font-size:16px;font-weight:600;padding:8px}.comparacio-horaris{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;container-type:normal}@media(max-width:900px){.comparacio-horaris{grid-template-columns:minmax(0,1fr)}}'''
+CSS += '''
+.classe.aula-nova,.mostra-classe.aula-nova{background:#e7f6e7;border-color:#086b28}
+.llegenda-horari{list-style:none;padding:0;margin:12px 0 20px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;color:#172b38;font:14px/1.5 system-ui}
+.llegenda-horari li{display:grid;grid-template-columns:24px 1fr;gap:2px 8px;align-items:start}
+.llegenda-horari li>span:last-child{grid-column:2}
+.mostra-classe{display:inline-block;width:22px;height:22px;background:#cde2fb;border-left:3px solid #2a78d6;border-radius:4px}
+.mostra-classe.canvi{background:#fff5dc;border-color:#b67b00}
+.mostra-classe.relaxada{border:2px dashed #a12c2c}
+.comparacio-horaris{align-items:start}
+@container contingut (max-width:1819px){.comparacio-horaris{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:650px){.llegenda-horari{grid-template-columns:1fr}}
+'''
+
+
+def taula_html(celles, titol='Horari setmanal', *, originals=False):
     """Una cel·la amb rowspan per sessió; carrils paral·lels si se solapen.
 
     Arrodonim només l'espai visual a mitges hores. El text manté l'hora exacta.
@@ -145,6 +172,23 @@ def taula_html(celles, titol='Horari setmanal'):
                 ocupats[carril] = final
             entrades.append((inici, final, carril, c))
         carrils[dia] = (max(1, len(ocupats)), entrades)
+    # Una classe sense altres subgrups simultanis aprofita tot el dia.
+    # Reservem cada espai que ocupa, inclosos els colspans, per no emetre
+    # cel·les buides que desplacin les columnes de les files següents.
+    cobertes = {}
+    inicis = {}
+    for dia, (n, entrades) in carrils.items():
+        for primera, final, carril, c in entrades:
+            ample = 1
+            while carril + ample < n:
+                seguent = carril + ample
+                if any(i < final and primera < f and k == seguent for i, f, k, _ in entrades):
+                    break
+                ample += 1
+            inicis[dia, primera, carril] = (final, ample, c)
+            for fila in range(primera, final):
+                for columna in range(carril, carril + ample):
+                    cobertes[dia, fila, columna] = True
     html = f'<style>{CSS}</style><div class="horari-scroll"><table class="horari"><caption>{escape(titol)}</caption><colgroup><col class="hora">'
     for dia in DIES:
         n, _ = carrils[dia]
@@ -156,19 +200,19 @@ def taula_html(celles, titol='Horari setmanal'):
         for dia in DIES:
             n, entrades = carrils[dia]
             for carril in range(n):
-                entrada = next((e for e in entrades if e[2] == carril and e[0] <= fila < e[1]), None)
+                entrada = inicis.get((dia, fila, carril))
                 if entrada is None:
-                    html += '<td></td>'
+                    if (dia, fila, carril) not in cobertes:
+                        html += '<td></td>'
                     continue
-                primera, final, _, c = entrada
-                if primera != fila:
-                    continue
-                marques = (' canvi' if c.canvi else '') + (' relaxada' if c.relaxacions else '')
-                detall = f'{fmt(c.ini)}–{fmt(c.fi)} · {c.tipus} · {c.grup} · {c.aula or "Sense aula assignada"}'
-                avis = ('Canvi de franja. ' if c.canvi_franja else '') + ('Canvi d’aula. ' if c.canvi_aula else '')
+                final, ample, c = entrada
+                marques = (' canvi' if c.canvi else ' aula-nova' if c.aula_assignada else '') + (' relaxada' if c.relaxacions else '')
+                ubicacio = c.aula or ('Aula no indicada a les dades' if originals else 'Pendent d’assignar aula')
+                detall = f'{fmt(c.ini)}–{fmt(c.fi)} · {c.tipus} · {nom_grup(c.grup, c.tipus)} · {ubicacio}'
+                avis = ('Canvi de dia o d’hora. ' if c.canvi_franja else '') + ('Canvi d’aula. ' if c.canvi_aula else '')
                 avis += 'Aula assignada. ' if c.aula_assignada else ''
                 avis += ' '.join(c.relaxacions)
-                html += f'<td rowspan="{final-primera}"><div class="classe{marques}" title="{escape(avis, quote=True)}"><b>{escape(c.assignatura)}</b><small>{escape(detall)}</small><small>{escape(avis)}</small></div></td>'
+                html += f'<td rowspan="{final-fila}" colspan="{ample}"><div class="classe{marques}" title="{escape(avis, quote=True)}"><b>{escape(c.assignatura)}</b><small>{escape(detall)}</small><small>{escape(avis)}</small></div></td>'
         html += '</tr>'
     return html + '</tbody></table></div>'
 
@@ -176,4 +220,4 @@ def taula_html(celles, titol='Horari setmanal'):
 def exporta_aula_html(base, proposta, setmana, aula, **kwargs):
     titol = f'Aula {aula} · setmana del {dilluns(setmana):%d/%m/%Y}'
     contingut = taula_html(celles_aula(base, proposta, setmana, aula, **kwargs), titol)
-    return '<!doctype html><html lang="ca"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' + escape(titol) + '</title><body><h1>' + escape(titol) + '</h1><p>Groc: canvi de franja o aula. Vora discontínua: excepció declarada, amb el motiu.</p>' + contingut + '</body></html>'
+    return '<!doctype html><html lang="ca"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' + escape(titol) + '</title><body><h1>' + escape(titol) + '</h1>' + llegenda_html() + contingut + '</body></html>'

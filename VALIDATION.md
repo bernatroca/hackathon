@@ -76,18 +76,21 @@
 
 ## Part 2 · Proposta d'horari
 
-1. [cap @ /part2] Obre «Part 2 · Proposta d'horari» al menú → surt la pàgina amb el selector «Proposta», el de «Setmana de la graella» i cap error vermell.
-2. [cap @ /part2] Mira el selector «Proposta» sense tocar-lo → ja surt triada la «5.1» (la més avançada), i si l'obres hi ha «Avui» i «5.1». (reprova)
-3. [cap @ /part2] Tria «Avui» → les dues graelles són iguals i no surt cap classe en groc. (reprova)
-4. [cap @ /part2] A «La setmana de l'estudiant» tria Gestió de Ciutats Intel·ligents, curs 1r i grup 61 → surten dues graelles costat per costat, avui i proposta, de dilluns a divendres.
-5. [cap @ /part2] Tria la proposta «5.1» amb el mateix grup → les classes que avui diuen «Sense aula assignada» ara tenen aula, i cap no canvia de dia ni d'hora.
-6. [cap @ /part2] Llegeix la línia de resum sota «… classes amb canvis al grup» → diu 0 canvis de dia o d'hora, els canvis d'aula, 0 canvis de torn i quantes aules diferents fa servir el grup (avui contra la proposta). (reprova)
+1. [cap @ /part2] Obre «Part 2 · Proposta d'horari» al menú → surt la pàgina amb «Com funciona? Guia pas a pas», «Tria què vols veure», «Setmana que vols consultar» i cap error vermell. (reprova)
+2. [cap @ /part2] Mira la millora disponible → la 5.1 diu «Assignar aules, sense canviar dies ni hores». Si només n'hi ha una, es mostra com a dada, sense selector; si n'hi ha més, es poden triar amb noms entenedors. (reprova)
+3. [cap @ /part2] Tria «Només l'horari actual» → es mostra una única graella dels estudiants, titulada «Horari actual · dades originals», sense comparació duplicada. Torna a «Comparar horari actual i proposta». (reprova)
+4. [cap @ /part2] A «Tria els estudiants» tria Gestió de Ciutats Intel·ligents i curs 1r → s'explica que el grup és el 61 i no hi ha selector si és l'únic. Les graelles diuen «Horari actual · dades originals» i «Amb la proposta»; van costat per costat si hi ha prou espai i s'apilen en pantalles petites. (reprova)
+5. [cap @ /part2] Mira la proposta 5.1 amb el mateix grup → s'explica que l'aula falta als fitxers originals, no que les classes no es facin. Les classes «Aula no indicada a les dades» tenen aula a la proposta, són verdes i no canvien de dia ni d'hora. (reprova)
+6. [cap @ /part2] Llegeix «Què canvia amb la proposta?» → diferencia les aules afegides dels canvis de dia/hora/aula existent. «Detall dels canvis» mostra els recomptes; afegir una aula no compta com moure una classe. (reprova)
 7. [cap @ /part2] Mira una classe de 2 hores a la graella → és un sol bloc que ocupa 4 files de 30 minuts, amb l'assignatura, el tipus en paraules, les hores i l'aula; anota si el text queda massa estret quan coincideixen subgrups. (reprova)
-8. [cap @ /part2] Amb la proposta «5.1» i el grup 61, llegeix «Aules diferents aquesta setmana» → anota quantes aules fa servir el grup; com més poques, millor (millora prevista de l'aula base).
-9. [cap @ /part2] Baixa a «La setmana per aula» i tria l'aula Q9/5006 → surt la seva graella setmanal, sense dues classes a la mateixa hora.
-10. [cap @ /part2] Clica «Descarrega l'horari de l'aula per al jurat» → es baixa un fitxer HTML que s'obre sol al navegador amb la mateixa graella.
-11. [cap @ /part2] Canvia «Setmana de la graella» a la setmana del 15 de març → les dues graelles es tornen a dibuixar sense error.
-12. [cap @ /part2] Llegeix tots els textos de la pàgina → no hi surten sigles tècniques sense explicar, com «R1-TORN», «PAUL» o «TE».
+8. [cap @ /part2] Amb la proposta 5.1 i el grup 61, llegeix quantes aules diferents fa servir el grup → anota la xifra; com més poques, millor (millora prevista de l'aula base). (reprova)
+9. [cap @ /part2] Baixa a «Consulta una aula» i tria Q9/5006 → surt la seva graella setmanal. Si coincideixen assignatures, comprova si són una classe compartida o un solapament real. (reprova)
+10. [cap @ /part2] Clica «Descarrega l'horari d'aquesta aula» → es baixa un HTML autònom amb la mateixa graella i la llegenda. (reprova)
+11. [cap @ /part2] Canvia «Setmana que vols consultar» a la setmana del 15 de març → les graelles es tornen a dibuixar sense error. (reprova)
+12. [cap @ /part2] Llegeix les classes → el tipus s'escriu en paraules i els grups diuen «Grup» o «Subgrup», sense TE/PAUL/SEM. (reprova)
+13. [cap @ /part2] Canvia de curs → també es poden consultar els cursos superiors i les classes de tarda; es mostra tot el dia, de 8.30 a 21.00. (reprova)
+14. [cap @ /part2] Llegeix la llegenda → blau sense canvis, verd aula afegida, groc classe modificada i vora discontínua cas especial; el significat també està escrit i no depèn només del color. (reprova)
+15. [cap @ /part2] Obre «Com funciona? Guia pas a pas» → recorre els sis passos amb «Següent» i «Anterior», enfoca l'apartat que explica i es pot tancar o acabar; comprova-ho també en una pantalla estreta. (reprova)
 
 ## Resum per a la Junta
 

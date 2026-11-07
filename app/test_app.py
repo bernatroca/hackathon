@@ -304,7 +304,7 @@ part2.mostra()
 """).run(timeout=90)
         self.assertEqual(list(app.exception),[])
         self.assertEqual(list(app.error),[])
-        self.assertTrue(any(h.value == 'La setmana de l’estudiant' for h in app.subheader))
+        self.assertTrue(any(h.value == '3. Consulta la setmana dels estudiants' for h in app.subheader))
 
     def test_canvi_semestre(self):
         app = self.carrega()

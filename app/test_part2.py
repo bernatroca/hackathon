@@ -98,9 +98,30 @@ class TestGraella(unittest.TestCase):
         at = AppTest.from_string('from pagines.part2 import mostra\nmostra()').run(timeout=30)
         assert not at.exception
         assert not at.error
-        assert any(s.label == 'Grup de teoria' for s in at.selectbox)
+        assert not any(s.label in ('Grup de teoria', 'Grup d’estudiants') for s in at.selectbox)
+        assert any('únic grup d’estudiants' in s.value for s in at.caption)
         at.selectbox(key='p2-setmana').select(date(2027, 3, 15)).run(timeout=30)
         assert not at.exception and not at.error
+
+    def test_consulta_actual_i_guia(self):
+        from streamlit.testing.v1 import AppTest
+        at = AppTest.from_string('from pagines.part2 import mostra\nmostra()').run(timeout=30)
+        at.radio(key='p2-vista').set_value('Només l’horari actual').run(timeout=30)
+        assert not at.exception and not at.error
+        html = '\n'.join(m.value for m in at.markdown)
+        assert html.count('<table class="horari">') == 2  # estudiants + aula, sense comparació duplicada
+        assert 'Amb la proposta ·' not in html
+        assert 'Aula no indicada a les dades' in html
+        at.selectbox(key='p2-curs').select('3r').run(timeout=30)
+        assert not at.exception and not at.error
+        at.button(key='p2-inicia-guia').click().run(timeout=30)
+        assert any(c.value == 'Guia · Pas 1 de 6' for c in at.caption)
+        for pas in range(2, 7):
+            at.button(key='p2-guia-seguent').click().run(timeout=30)
+            assert not at.exception and not at.error
+            assert any(c.value == f'Guia · Pas {pas} de 6' for c in at.caption)
+        at.button(key='p2-guia-seguent').click().run(timeout=30)
+        assert not any(c.value.startswith('Guia · Pas') for c in at.caption)
 
 class TestMillores(unittest.TestCase):
     def test_bloc_unic_dues_hores_i_solapament(self):
@@ -113,6 +134,27 @@ class TestMillores(unittest.TestCase):
         assert 'rowspan="4"' in html
         assert 'colspan="2">Dilluns' in html
         assert '08:30–10:30' in html
+
+    def test_classe_sola_aprofita_amplada_del_dia(self):
+        from components.graella import Cella
+        from html.parser import HTMLParser
+
+        class Graella(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.celles = []
+            def handle_starttag(self, tag, attrs):
+                if tag == 'td':
+                    self.celles.append(dict(attrs))
+
+        cs = [Cella('T', 'L', 510, 630, 'A', 'Classe sola', 'Teoria', '81', False, False),
+              Cella('P1', 'L', 630, 690, 'A', 'Problemes A', 'Problemes', '811', False, False),
+              Cella('P2', 'L', 630, 690, 'B', 'Problemes B', 'Problemes', '812', False, False)]
+        p = Graella()
+        p.feed(taula_html(cs))
+        sessions = [a for a in p.celles if 'rowspan' in a]
+        assert sessions == [{'rowspan': '4', 'colspan': '2'},
+                            {'rowspan': '2', 'colspan': '1'}, {'rowspan': '2', 'colspan': '1'}]
 
     def test_proposta_defecte(self):
         from pagines.part2 import proposta_per_defecte, RESULTATS
@@ -155,6 +197,15 @@ class TestMillores(unittest.TestCase):
 
 
 class TestAssignacions(unittest.TestCase):
+    def test_llegenda_i_etiquetes_sense_codis(self):
+        from components.graella import Cella, llegenda_html
+        c = Cella('T', 'L', 510, 570, '', 'Teoria de prova', 'Teoria', 'TE/81', False, False)
+        html = taula_html([c], originals=True)
+        assert 'Grup 81' in html and 'TE/81' not in html
+        assert 'Aula no indicada a les dades' in html
+        assert 'Pendent d’assignar aula' in taula_html([c])
+        assert all(t in llegenda_html() for t in ('Blau', 'Verd', 'Groc', 'Vora discontínua'))
+
     def test_aula_assignada_neutra(self):
         from components.graella import resum_grup
         base = crea_base()
@@ -172,5 +223,6 @@ class TestAssignacions(unittest.TestCase):
         assert sum(c.aula_assignada for c in noves) == 1
         html = taula_html(noves)
         assert 'Aula assignada.' in html and 'class="classe canvi' not in html
+        assert 'class="classe aula-nova"' in html
         resum = resum_grup(base, p, actuals, noves)
         assert '0 canvien d’aula' in resum and '1 amb aula assignada' in resum

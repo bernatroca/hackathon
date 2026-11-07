@@ -204,3 +204,17 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - n2-frontend-3 ja ha posat la pàgina «Resum per a la Junta» a l'app (33 proves verdes, comprovada al navegador).
 - En provar-la amb el 5.1 hem vist dos errors. Comptava com a canvi posar aula a una classe que no en tenia (i sortien titulacions amb el 100 % «mogudes»). I el pic comptava totes les classes, no només les aules ordinàries (deia «falten aules» amb una proposta vàlida).
 - Com ho resolem: n2-dades-3 les corregeix amb el criteri del verificador (canvi d'aula només si ja en tenia, i pic d'aules ordinàries per franja d'una hora).
+
+### Usabilitat del nivell 2 · revisió demanada per Bernat
+- La consulta ha de ser entenedora per a Gestió Acadèmica: «Horari actual» són els fitxers originals i «Amb la proposta» és la millora escollida. Consultar només l'actual no dibuixa una comparació duplicada.
+- S'amaguen els selectors amb un sol valor. El grup de teoria passa a dir-se «Grup d'estudiants», amb l'explicació dels subgrups; es fa explícit que es poden consultar tots els cursos i les hores de tarda.
+- Les aules que falten són mancances dels fitxers originals, no classes cancel·lades. Blau sense canvis, verd aula afegida, groc classe modificada i vora discontínua cas especial: llegenda visible i text a cada classe.
+- Ajuda opcional de sis passos que porta als apartats de la pàgina, amb anterior, següent i tancar. Controls compactes en mòbil. Les classes soles aprofiten l'amplada del dia; les graelles s'apilen quan no hi caben totes dues i tenen desplaçament lateral en pantalles estretes.
+- Verificació funcional: 39 proves passen i 1 queda omesa en els tests de part 2, app i Junta. Comprovació al Chrome dels filtres, la consulta única i el recorregut de l'ajuda; revisada també la disposició a 390 px.
+
+### [ds 19:09] DECISIÓ · Norma nova de la direcció: els agents ja no llegeixen dades
+- Fins ara, amb el permís de l'organització, Claude i Codex treballaven amb el paquet de dades. Des d'ara, per precaució i per indicació de la direcció, cap agent llegeix dades reals: només recomptes, errors o el veredicte.
+- Barreres: .claude/settings.json (Claude Code no pot llegir repte/, resultats/ ni dades/), AGENTS.md (la norma per a Codex, repetida a cada encàrrec) i .gitignore.
+- L'app només s'obre des d'aquest ordinador: server.address = localhost, i el servidor de disseny lligat a 127.0.0.1.
+- No separem l'app de les dades: les parts 2 i 3 en necessiten (graella i assistent). Sí que traiem de les taules que es mostren les columnes que no calen (identificadors de docent i codis).
+- Pendent: treure de l'historial local el fitxer de dades i els detalls del diari abans de pujar res a GitHub (a GitHub no n'hi ha cap).
