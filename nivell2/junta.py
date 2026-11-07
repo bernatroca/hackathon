@@ -57,9 +57,18 @@ DETALL_TECNIC += (
 
 
 VERSIO_RESUM = 3
-VERSIO_CALCUL = 1
+VERSIO_CALCUL = 2
 MOTIU_S04526 = ("A la setmana d’avaluació no hi ha cap franja de tarda lliure "
                 "per a aquesta classe; ho demostra el càlcul.")
+
+
+EXPLICACIO_PICS = ('Les aules es compten durant tota la franja d’una hora, inclosos els laboratoris en aules ordinàries; '
+                   'les classes alhora es compten per instant, sense laboratoris. Per això les xifres poden diferir.')
+
+
+def resum_canvis_aula(d):
+    return (f"Canvis d’aula: {d['canvis_aula']} {classe(d['canvis_aula'])}." if 'canvis_aula' in d
+            else 'Canvis d’aula: vegeu el recompte per curs a la taula.')
 
 
 def classe(n):
@@ -297,11 +306,12 @@ def calcula(proposta, base, model, col, relaxacions=None):
                  nom=nom(r['cohort']), mogudes=mogudes[r['cohort']],
                  mogudes_pct=100 * mogudes[r['cohort']] / r['sessions'])
     cohorts.sort(key=lambda r: (-r['afectades_pct'], -r['afectades'], r['cohort']))
-    pitjor = max((r['afectades_pct'] for r in cohorts), default=0)
+    pitjor = max((r['mogudes_pct'] for r in cohorts), default=0)
     return {'versio_resum': VERSIO_RESUM, 'versio_calcul': VERSIO_CALCUL, 'data': datetime.now().astimezone().isoformat(timespec='seconds'),
+            'canvis_aula': sum(bool(c.s.aula and not a_traslladar(c.s.aula) and not c.s.sense_espai and c.aula != c.s.aula) for c in col.values()),
             'aulari': aulari(base),
             'pics': pics_i_mides(base, model, col), 'sessions_mogudes': cohorts,
-            'pitjor_cohort': [r['cohort'] for r in cohorts if r['afectades_pct'] == pitjor],
+            'pitjor_cohort': [r['cohort'] for r in cohorts if r['mogudes_pct'] == pitjor],
             'excepcions': excepcions, 'fora_torn_ja_avui': fora_torn_ja_avui,
             'excepcions_resum': [{'motiu': m, 'cohort': c, 'nom': nom(c), 'sessions': n,
                                   'percentatge': 100 * n / totals[c]}
@@ -321,7 +331,7 @@ def documents(d):
         p, t = d['pics'][torn]['pitjor'], d['pics'][torn]['tipica']
         nom_torn += ' (estimació)' if p['estimacio'] else ' (aules per a classes)'
         md.append(f"| {nom_torn} | {p['classes']}/{p['aules_disponibles']} · {p['setmana']} · {p['hora']} | {t['classes']}/{t['aules_disponibles']} · {t['setmana']} · {t['hora']} |")
-    md += ['## Màxim de classes alhora']
+    md += ['## Màxim de classes alhora', EXPLICACIO_PICS]
     for torn, etiqueta in [('mati', 'Matí'), ('tarda', 'Tarda')]:
         p = d['pics'][torn].get('simultani')
         if p:
@@ -334,15 +344,15 @@ def documents(d):
         llindar = ['Totes', '≥35', '≥51', '≥64', '≥91'][i]
         md.append('| ' + mida + ' · ' + llindar + f" | {vals[0]['aules_categoria']} | {vals[0]['ocupades_al_pic']} / {vals[1]['ocupades_al_pic']} | " + ' | '.join(
             f"{v['demanda_acumulada']}/{v['oferta_acumulada']} ({v['marge']:+})" for v in vals) + ' |')
-    md += ['## Classes que canvien',
+    md += ['## Classes que canvien', resum_canvis_aula(d),
            'Comptem les classes que canvien de dia, d’hora o d’aula. Ordenem pel percentatge total afectat, sense duplicar classes. Les aules assignades són per a classes que abans no en tenien. Els percentatges es calculen sobre totes les classes de cada titulació i curs.',
            '| Titulació i curs | Canvien de dia o hora | Canvien d’aula | Canvien de torn | Aules assignades |', '|---|---|---|---|---|']
     for r in d['sessions_mogudes']:
         md.append(f"| {r['nom']} | {percentatge(r['mogudes_pct'])} ({r['mogudes']}/{r['sessions']}) | " +
                   ' | '.join(f"{percentatge(r[c+'_pct'])} ({r[c]})" for c in ('aula', 'torn')) + f" | {r['aules_assignades']} |")
     pitjors = [r for r in d['sessions_mogudes'] if r['cohort'] in d['pitjor_cohort']]
-    md.append("Cap curs canvia de dia ni d'hora." if all(r.get('afectades', r['mogudes']) == 0 for r in pitjors)
-              else 'Percentatge més alt: ' + '; '.join(f"{r['nom']}: {percentatge(r.get('afectades_pct', r['mogudes_pct']))} ({r.get('afectades', r['mogudes'])})" for r in pitjors) + '.')
+    md.append("Cap curs canvia de dia ni d'hora." if all(r['mogudes'] == 0 for r in pitjors)
+              else 'Percentatge més alt: ' + '; '.join(f"{r['nom']}: {percentatge(r['mogudes_pct'])} ({r['mogudes']})" for r in pitjors) + '.')
     md += ['## Excepcions noves als torns']
     if not d['excepcions']:
         md.append('No hi ha excepcions noves als torns.')
@@ -366,11 +376,17 @@ def documents(d):
            '## ' + titol_marge(d), explicacio_marge(d),
            d.get('detall_tecnic', DETALL_TECNIC)]
     for r in d['excepcions_resum']:
-        md.append(r['motiu'] + ': ' + r['nom'] + f": {percentatge(r['percentatge'])} ({r['sessions']}).")
+        md.append(motiu_planer(r['motiu']) + ': ' + r['nom'] + f": {percentatge(r['percentatge'])} ({r['sessions']}).")
     md.append('</small>')
     # Petit renderitzador segur: tot text de la proposta s’escapa abans d’anar a HTML.
     html, taula = [], False
+    cursos = False
+    files_curs = 0
     for line in md:
+        if line == '## Classes que canvien':
+            cursos = True
+        elif line.startswith('## ') and cursos:
+            cursos = False
         if line == '## Detall tècnic':
             html.append('<section class="detall-tecnic">')
         if line in ('<small>', '</small>'):
@@ -382,7 +398,9 @@ def documents(d):
                 taula = True
             if line.startswith('|---'):
                 continue
-            html.append('<tr>' + ''.join('<td>' + escape(c.strip()) + '</td>' for c in line.strip('|').split('|')) + '</tr>')
+            files_curs += int(cursos)
+            classe_fila = ' class="nomes-pantalla"' if cursos and files_curs > 9 else ''
+            html.append('<tr' + classe_fila + '>' + ''.join('<td>' + escape(c.strip()) + '</td>' for c in line.strip('|').split('|')) + '</tr>')
         else:
             if taula:
                 html.append('</table>')
@@ -392,17 +410,14 @@ def documents(d):
     html.append('</section>')
     css = '''@page{size:A4;margin:10mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#172b38;margin:0;font-size:8pt;line-height:1.15}main{max-width:190mm;margin:auto}h1{font-size:17pt;margin:0 0 3mm}h2{font-size:10pt;margin:3mm 0 1mm}p{margin:1mm 0}table{width:100%;border-collapse:collapse;font-size:7.2pt}td{padding:1mm;border-bottom:1px solid #ccd5da}tr:first-child{font-weight:bold;background:#edf2f4}@media screen{body{background:#eee;padding:12mm}main{background:white;padding:8mm;max-width:210mm}}@media print{main{width:190mm}h2{break-after:avoid}tr{break-inside:avoid}}'''
     css += '.detall-tecnic{font-size:7pt}.detall-tecnic h2{font-size:8pt}'
-    css += '@media print{#page{width:190mm;height:277mm}}'
-    ajust = '''<script>
-window.addEventListener('beforeprint', () => {
-  const main = document.querySelector('main');
-  main.style.zoom = 1;
-  const available = document.querySelector('#page').clientHeight;
-  main.style.zoom = Math.min(1, (available - 2) / main.scrollHeight);
-});
-</script>'''
+    css += '@media print{body{font-size:7pt;line-height:1.1}h1{font-size:14pt;margin-bottom:2mm}h2{font-size:9pt;margin:2mm 0 1mm}p{margin:0.7mm 0}table{font-size:6.5pt}td{padding:0.6mm}main{break-inside:avoid}.detall-tecnic{display:none}}'
+    # La justificació del marge continua visible a l’A4, sense el detall intern.
+    html += ['<div class="marge-impressio"><h2>' + escape(titol_marge(d)) + '</h2><p>' + escape(explicacio_marge(d)) + '</p></div>']
+    css += '.marge-impressio{display:none}@media print{.marge-impressio{display:block}.nomes-pantalla{display:none}}'
+    if len(d['sessions_mogudes']) > 8:
+        html += ['<p>En paper: els vuit cursos amb més canvis. La resta es pot consultar a l’app.</p>']
     markdown = '\n'.join(line + ('' if line.startswith('|') else '\n') for line in md)
-    return markdown + '\n', '<!doctype html><html lang="ca"><meta charset="utf-8"><title>Resum per a la Junta</title><style>' + css + '</style><div id="page"><main>' + '\n'.join(html) + '</main></div>' + ajust + '</html>\n'
+    return markdown + '\n', '<!doctype html><html lang="ca"><meta charset="utf-8"><title>Resum per a la Junta</title><style>' + css + '</style><div id="page"><main>' + '\n'.join(html) + '</main></div>' + '</html>\n'
 
 
 def main(argv=None):

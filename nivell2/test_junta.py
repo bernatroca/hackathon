@@ -45,7 +45,7 @@ def test_percentatges_unio_i_pitjor_cohort(tmp_path):
     assert rows['GXX:1r']['mogudes_pct'] == pytest.approx(100 / 3)
     assert rows['GYY:1r']['mogudes_pct'] == 0
     assert rows['GYY:1r']['aula'] == 1
-    assert d['pitjor_cohort'] == ['GYY:1r']
+    assert d['pitjor_cohort'] == ['GXX:1r']
     assert d['excepcions'][0]['motiu'] == 'Prova explicada'
     assert d['excepcions_resum'][0]['percentatge'] == pytest.approx(100 / 3)
 
@@ -198,7 +198,7 @@ def test_textos_principals_planers_i_detall_separat():
         for cadena in ('R8', 'R1-', 'PLAB', ' J ', 'TE/', 'PAUL', 'SEM', 'llindar', 'cota'):
             assert cadena not in text
     assert '<small>' in md and '<small>' in html
-    assert 'R1-TORN PLAB TE/ PAUL SEM J R8' in md.split('## Detall tècnic')[1]
+    assert 'regla de torn' in md.split('## Detall tècnic')[1]
     metode = md.split('## Com ho hem calculat')[1].split('## Detall tècnic')[0]
     assert 3 <= metode.count('.') <= 4
 
@@ -358,3 +358,25 @@ def test_textos_planers():
     assert junta.classe(2) == 'classes'
     assert 'sense curs a les dades' in junta.nom('GXX:?')
     assert junta.motiu_planer('vegeu diagnostic.md') == junta.MOTIU_S04526
+
+
+def test_laboratori_ocupa_aula_pero_no_es_classe_simultania():
+    b = petita()
+    for sessio in b.sessions.values():
+        sessio.tipus = 'PLAB'
+    p = Proposta.de_base(b)
+    r = pics_i_mides(b, b, colloca(b, p))['mati']
+    assert r['pitjor']['classes'] == 1
+    assert r['simultani']['classes'] == 0
+
+
+def test_export_sense_fitxers_interns_ni_ajust_javascript():
+    b = petita()
+    p = Proposta.de_base(b)
+    d = calcula(p, b, b, colloca(b, p))
+    d['excepcions_resum'] = [dict(motiu='vegeu diagnostic.md', nom='Inventat', percentatge=1, sessions=1)]
+    md, html = documents(d)
+    assert 'diagnostic.md' not in md + html
+    assert 'beforeprint' not in html
+    assert '@page{size:A4;margin:10mm}' in html
+    assert '.detall-tecnic{display:none}' in html
