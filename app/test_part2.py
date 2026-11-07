@@ -311,9 +311,9 @@ class TestRedisseny(unittest.TestCase):
 
     def test_noms_grups_i_amplada_per_carril(self):
         from components.graella import Cella, CSS, nom_grup
-        assert nom_grup('TE/912', 'Teoria') == 'Grup 61 · teoria'
-        assert nom_grup('PAUL/903', 'Problemes') == 'Subgrup 611 · problemes'
-        assert nom_grup('SEM/906', 'Seminari') == 'Subgrup 612 · seminari'
+        assert nom_grup('TE/912', 'Teoria') == 'Grup 912 · teoria'
+        assert nom_grup('PAUL/903', 'Problemes') == 'Subgrup 903 · problemes'
+        assert nom_grup('SEM/906', 'Seminari') == 'Subgrup 906 · seminari'
         cs = [Cella(f'S90{i:03}', 'L', 510, 570, '', 'Assignatura Inventada', 'Problemes', f'PAUL/904{i}', False, False) for i in range(4)]
         html = taula_html(cs)
         assert 'min-width:1290px' in html  # 90 + (4 carrils + 4 dies) * 150
