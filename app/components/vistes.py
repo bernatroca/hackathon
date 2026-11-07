@@ -187,6 +187,17 @@ def estil_respostes():
 .st-key-respostes [class*="st-key-enllac-resposta-"] {margin-top:auto;flex:0 0 auto;}
 .st-key-respostes button[kind="secondary"] {color:#256abf;border:0;background:transparent;padding-left:0;}
 .st-key-respostes .recompte {font-size:16px;white-space:nowrap;margin:0;padding-top:30px;}
+/* El filtre d'estat fa servir els colors i les icones de les pastilles de les targetes. */
+.st-key-respostes-estat [role=toolbar] > button::before {content:'';width:16px;height:16px;flex:none;margin-right:6px;background:center/16px no-repeat;}
+.st-key-respostes-estat [role=toolbar] > button {display:inline-flex;align-items:center;font-weight:600;}
+.st-key-respostes-estat [role=toolbar] > button[aria-pressed=false] {background:#fff;color:#52514e;border-color:#e6e5e0;}
+.st-key-respostes-estat [role=toolbar] > button[aria-pressed=false]::before {filter:grayscale(1);opacity:.55;}
+.st-key-respostes-estat [role=toolbar] > button:nth-of-type(1)::before {background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23a12c2c'/%3E%3Cg fill='none' stroke='white' stroke-width='2'%3E%3Cpath d='m5 5 6 6m0-6-6 6'/%3E%3C/g%3E%3C/svg%3E");}
+.st-key-respostes-estat [role=toolbar] > button:nth-of-type(1)[aria-pressed=true] {background:#fbe9e9;color:#a12c2c;border-color:#fbe9e9;}
+.st-key-respostes-estat [role=toolbar] > button:nth-of-type(2)::before {background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%238a5c00'/%3E%3Cg fill='none' stroke='white' stroke-width='2'%3E%3Cpath d='M8 4v5m0 2v1'/%3E%3C/g%3E%3C/svg%3E");}
+.st-key-respostes-estat [role=toolbar] > button:nth-of-type(2)[aria-pressed=true] {background:#fff5dc;color:#8a5c00;border-color:#fff5dc;}
+.st-key-respostes-estat [role=toolbar] > button:nth-of-type(3)::before {background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%231f6b33'/%3E%3Cg fill='none' stroke='white' stroke-width='2'%3E%3Cpath d='m4.5 8 2.5 2.5 4.5-5'/%3E%3C/g%3E%3C/svg%3E");}
+.st-key-respostes-estat [role=toolbar] > button:nth-of-type(3)[aria-pressed=true] {background:#e9f4ec;color:#1f6b33;border-color:#e9f4ec;}
 @container respostes (max-width:850px) {
  .st-key-respostes .st-key-graella-respostes [data-testid="stHorizontalBlock"] {grid-template-columns:repeat(2,minmax(0,1fr));}
 }

@@ -1,7 +1,7 @@
 :root {
   --fons: #f4f3ef; --targeta: #ffffff; --tinta: #0b0b0b; --tinta-2: #52514e; --suau: #8a8984; --linia: #e6e5e0;
   --blau: #2a78d6; --blau-clar: #cde2fb;
-  --verd: #0ca30c; --verd-fons: #e7f6e7; --verd-text: #086b08;
+  --verd: #2f8f46; --verd-fons: #e9f4ec; --verd-text: #1f6b33;
   --ambre: #fab219; --ambre-fons: #fff5dc; --ambre-text: #8a5c00;
   --vermell: #d03b3b; --vermell-fons: #fbe9e9; --vermell-text: #a12c2c;
 }
@@ -150,3 +150,14 @@ main {padding:0;max-width:none;}
 .resum-grau p {margin:8px 0;}
 .resum-grau .xifra-targeta {display:inline-block;}
 .marge-semestral {border-top:1px solid var(--linia);padding-top:12px;}
+
+/* ds vespre: totes les pàgines centrades com la portada, amb la mateixa amplada màxima. */
+.block-container {margin-left:auto!important;margin-right:auto!important;}
+/* Portada: caixes més petites. */
+.st-key-targetes [data-testid="stHorizontalBlock"] {gap:16px;}
+.st-key-targetes .targeta-cor {gap:8px;}
+.st-key-targetes .targeta-cor h2 {font-size:18px!important;}
+.st-key-targetes .xifra-targeta {font-size:clamp(26px,2.4vw,34px);margin:4px 0;}
+.st-key-targetes .targeta-cor p {font-size:16px;}
+.st-key-targetes .metre {height:8px;}
+.st-key-targetes .proposem {min-height:0;padding-top:8px;font-size:14px;}
