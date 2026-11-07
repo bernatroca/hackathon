@@ -98,26 +98,70 @@ def celles_aula(base, proposta, setmana, aula, **kwargs):
     return celles(base, proposta, setmana, aula=aula, **kwargs)
 
 
-CSS = '''.horari-scroll{overflow:auto}.horari{border-collapse:collapse;width:100%;min-width:580px;font:12px/1.35 system-ui;color:#0b0b0b;background:white}.horari th,.horari td{border:1px solid #e6e5e0;padding:5px;vertical-align:top;width:18%}.horari th{background:#f4f3ef}.horari th:first-child{width:10%}.classe{background:#cde2fb;border-left:3px solid #2a78d6;border-radius:4px;padding:5px;margin:2px 0;overflow-wrap:anywhere}.classe.canvi{background:#fff5dc;border-color:#b67b00}.classe.relaxada{border:2px dashed #a12c2c}.classe small{display:block}.horari caption{text-align:left;font-size:16px;font-weight:600;padding:8px}'''
+def resum_grup(base, proposta, actuals, noves):
+    """Compara les sessions presents en qualsevol de les dues setmanes visibles."""
+    ids = {c.id_sessio for c in actuals + noves}
+    franja = aula = torn = 0
+    for sid in ids:
+        s, a = base.sessions[sid], proposta.files[sid]
+        data = date.fromisoformat(a.data) if a.data else dilluns(s.data) + timedelta(days=DIES.index(a.dia))
+        inici = hm(a.h_ini)
+        franja += data != s.data or inici != s.ini
+        aula += a.aula != s.aula
+        torn += (s.ini < 870) != (inici < 870)
+    abans = len({c.aula for c in actuals if c.aula})
+    despres = len({c.aula for c in noves if c.aula})
+    return (f'{franja} classes canvien de dia o d’hora · {aula} canvien d’aula · '
+            f'{torn} canvien de torn · Aules diferents aquesta setmana: {abans} avui → {despres} a la proposta.')
+
+
+CSS = ''' .horari-scroll{overflow:auto;min-width:0}.horari{border-collapse:collapse;table-layout:fixed;width:100%;min-width:580px;font:12px/1.35 system-ui;color:var(--tinta,#0b0b0b);background:white}.horari th,.horari td{border:1px solid #e6e5e0;padding:3px;vertical-align:top}.horari th{background:#f4f3ef}.horari tbody tr{height:32px}.horari .hora{width:78px}.classe{background:#cde2fb;border-left:3px solid #2a78d6;border-radius:4px;padding:5px;overflow-wrap:anywhere;height:100%;box-sizing:border-box}.classe.canvi{background:#fff5dc;border-color:#b67b00}.classe.relaxada{border:2px dashed #a12c2c}.classe small{display:block}.horari caption{text-align:left;font-size:16px;font-weight:600;padding:8px}.comparacio-horaris{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;container-type:normal}@container contingut (max-width:1180px){.comparacio-horaris{grid-template-columns:minmax(0,1fr)}}@media(max-width:900px){.comparacio-horaris{grid-template-columns:minmax(0,1fr)}}'''
 
 
 def taula_html(celles, titol='Horari setmanal'):
-    """Cada sessió ocupa totes les mitges hores que intersecta; conserva l'hora exacta."""
-    html = f'<style>{CSS}</style><div class="horari-scroll"><table class="horari"><caption>{escape(titol)}</caption><thead><tr><th scope="col">Hora</th>'
-    html += ''.join(f'<th scope="col">{d}</th>' for d in NOMS_DIES) + '</tr></thead><tbody>'
-    for inici in FRANGES:
+    """Una cel·la amb rowspan per sessió; carrils paral·lels si se solapen.
+
+    Arrodonim només l'espai visual a mitges hores. El text manté l'hora exacta.
+    """
+    carrils = {}
+    for dia in DIES:
+        ocupats = []
+        entrades = []
+        for c in sorted((c for c in celles if c.dia == dia), key=lambda c: (c.ini, c.fi, c.id_sessio)):
+            inici = max(0, (c.ini - 510) // 30)
+            final = min(len(FRANGES), (c.fi - 510 + 29) // 30)
+            if final <= inici:
+                continue
+            carril = next((i for i, fi in enumerate(ocupats) if fi <= inici), len(ocupats))
+            if carril == len(ocupats):
+                ocupats.append(final)
+            else:
+                ocupats[carril] = final
+            entrades.append((inici, final, carril, c))
+        carrils[dia] = (max(1, len(ocupats)), entrades)
+    html = f'<style>{CSS}</style><div class="horari-scroll"><table class="horari"><caption>{escape(titol)}</caption><colgroup><col class="hora">'
+    for dia in DIES:
+        n, _ = carrils[dia]
+        html += ''.join(f'<col style="width:{18/n}%">' for _ in range(n))
+    html += '</colgroup><thead><tr><th scope="col">Hora</th>'
+    html += ''.join(f'<th scope="col" colspan="{carrils[d][0]}">{nom}</th>' for d, nom in zip(DIES, NOMS_DIES)) + '</tr></thead><tbody>'
+    for fila, inici in enumerate(FRANGES):
         html += f'<tr><th scope="row">{fmt(inici)}–{fmt(inici+30)}</th>'
         for dia in DIES:
-            html += '<td>'
-            for c in celles:
-                if c.dia != dia or c.ini >= inici + 30 or c.fi <= inici:
+            n, entrades = carrils[dia]
+            for carril in range(n):
+                entrada = next((e for e in entrades if e[2] == carril and e[0] <= fila < e[1]), None)
+                if entrada is None:
+                    html += '<td></td>'
+                    continue
+                primera, final, _, c = entrada
+                if primera != fila:
                     continue
                 marques = (' canvi' if c.canvi else '') + (' relaxada' if c.relaxacions else '')
                 detall = f'{fmt(c.ini)}–{fmt(c.fi)} · {c.tipus} · {c.grup} · {c.aula or "Sense aula assignada"}'
                 avis = ('Canvi de franja. ' if c.canvi_franja else '') + ('Canvi d’aula. ' if c.canvi_aula else '')
                 avis += ' '.join(c.relaxacions)
-                html += f'<div class="classe{marques}"><b>{escape(c.assignatura)}</b><small>{escape(detall)}</small><small>{escape(avis)}</small></div>'
-            html += '</td>'
+                html += f'<td rowspan="{final-primera}"><div class="classe{marques}" title="{escape(avis, quote=True)}"><b>{escape(c.assignatura)}</b><small>{escape(detall)}</small><small>{escape(avis)}</small></div></td>'
         html += '</tr>'
     return html + '</tbody></table></div>'
 

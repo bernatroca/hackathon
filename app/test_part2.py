@@ -101,3 +101,54 @@ class TestGraella(unittest.TestCase):
         assert any(s.label == 'Grup de teoria' for s in at.selectbox)
         at.selectbox(key='p2-setmana').select(date(2027, 3, 15)).run(timeout=30)
         assert not at.exception and not at.error
+
+class TestMillores(unittest.TestCase):
+    def test_bloc_unic_dues_hores_i_solapament(self):
+        from components.graella import Cella
+        a = Cella('A', 'L', 510, 630, 'Q9/5004', 'Assignatura única', 'Teoria', '81', False, False)
+        b = Cella('B', 'L', 555, 615, 'Q9/5009', 'Subgrup paral·lel', 'Problemes', '811', False, False)
+        html = taula_html([a, b])
+        assert html.count('Assignatura única') == 1
+        assert html.count('Subgrup paral·lel') == 1
+        assert 'rowspan="4"' in html
+        assert 'colspan="2">Dilluns' in html
+        assert '08:30–10:30' in html
+
+    def test_proposta_defecte(self):
+        from pagines.part2 import proposta_per_defecte, RESULTATS
+        assert str(RESULTATS) == '/Users/bernatroca/Bernat/Hackathon/resultats/nivell2'
+        assert proposta_per_defecte(['Avui', '5.1', '5.2', '5.4']) == '5.2'
+        assert proposta_per_defecte(['Avui', '5.1']) == '5.1'
+        assert proposta_per_defecte(['Avui', '5.4']) == 'Avui'
+
+    def test_resum_grup(self):
+        from components.graella import resum_grup
+        base = crea_base()
+        avui = Proposta.de_base(base)
+        p = Proposta.de_base(base)
+        p.files['T'] = Assignacio('M', '15:00', 'Q9/5009')
+        p.files['P'] = Assignacio('L', '08:30', 'Q9/5009')
+        args = (date(2027, 3, 8), 'GED', '1r', '81')
+        actuals = celles_grup(base, avui, *args)
+        noves = celles_grup(base, p, *args)
+        resum = resum_grup(base, p, actuals, noves)
+        assert '1 classes canvien de dia o d’hora' in resum
+        assert '2 canvien d’aula' in resum
+        assert '1 canvien de torn' in resum
+        assert '1 avui → 2 a la proposta' in resum
+        p.files['T'].data = '2027-03-19'
+        assert '1 classes canvien de dia o d’hora' in resum_grup(base, p, actuals, celles_grup(base, p, *args))
+
+    def test_excepcio_calendari_escapada(self):
+        from tempfile import TemporaryDirectory
+        from pagines.part2 import carrega_excepcions
+        with TemporaryDirectory(dir=ARREL.parent) as carpeta:
+            path = Path(carpeta) / 'excepcions.csv'
+            path.write_text('id_sessio,data,minut_inici,motiu\nT,2027-03-08,510,Festiu <especial>\n')
+            motius = carrega_excepcions(str(path), 1)
+        base = crea_base()
+        dades = celles_grup(base, Proposta.de_base(base), date(2027, 3, 8), 'GED', '1r', '81', relaxacions=motius)
+        html = taula_html(dades)
+        assert 'classe relaxada' in html
+        assert 'title="Excepció de calendari' in html
+        assert 'Festiu &lt;especial&gt;' in html
