@@ -97,6 +97,9 @@
 36. [cap @ /] Mira el mateix bloc → poc marge a dalt i a baix; la línia petita del final queda just sota el text.
 37. [cap @ /] Mira la vora esquerra del bloc gran → és verda, com l'etiqueta «Hi cap».
 38. [cap @ /] Llegeix la línia petita del final del bloc gran → acaba amb «Validat amb l'horari proposat de la part 2 (verificador oficial)».
+39. [cap @ /] Mira la caixa «Un grau nou de 40 places» → etiqueta verda «Hi cap» i la frase «L'horari proposat hi col·loca 235 sessions sense moure cap classe (verificador oficial)».
+40. [cap @ /] Llegeix el «Proposem» de la mateixa caixa → «Incorporar-lo a l'horari proposat: ja hi cap».
+41. [cap @ /respostes] Mira l'ordre de «Totes les respostes» → «Un grau nou de 40 places» i «Si 1r i 2n fan classe al matí, hi cabem?» surten al final, amb les verdes.
 
 ## Part 2 · Proposta d'horari
 

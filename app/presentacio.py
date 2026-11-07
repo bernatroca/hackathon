@@ -182,10 +182,26 @@ def text(t, altres=None, *, setmana_triada=None):
             c['validat'] = True
             c['resposta'] = 'Sí, hi cap'
             resultat.update(etiqueta='Hi cap', estat='verd',
-                frase=c['torns'].split('.')[0] + '. L’horari proposat (part 2) ho confirma: el verificador oficial el dona per vàlid. '
-                      'Les úniques classes fora de torn són les que no es poden moure (fixades, dobles titulacions i setmana d’avaluació).')
-    if t.id == 'marge-grau-nou' and (t.extra.get('estat_provisional') or not t.extra.get('validat_part2', False)):
-        resultat.update(etiqueta='Pendent de validar', estat='ambre')
+                frase=c['torns'].split('.')[0] + '. Confirmat amb l’horari proposat i el verificador oficial: '
+                      'només queden fora de torn les classes que no es poden moure.')
+    if t.id == 'marge-grau-nou':
+        v = t.extra.get('validat_part2')
+        v = v if isinstance(v, dict) else {}
+        if v.get('valida') and v.get('resposta') == 1 and not c.get('falla'):
+            c['validat'] = True
+            mogudes = v.get('sessions_52_mogudes', 0)
+            n = v.get('sessions_grau_nou_collocades', v.get('sessions_grau_nou'))
+            resultat.update(etiqueta='Hi cap', estat='verd',
+                proposem='Incorporar-lo a l’horari proposat: ja hi cap.', frase=(
+                f"L’horari proposat hi col·loca {numero(n) + ' sessions' if n is not None else 'el grau nou'}"
+                + (' sense moure cap classe' if not mogudes else f' movent {numero(mogudes)} classes')
+                + ' (verificador oficial).'))
+        elif v.get('resposta') in (2, 4):
+            resultat.update(etiqueta='Cal actuar', estat='vermell', frase=(
+                'No hi cap sense tocar l’horari proposat.' if v['resposta'] == 2 else 'Hem demostrat que no hi cap.')
+                + ' Ho ha comprovat la part 2 amb el verificador oficial.')
+        else:
+            resultat.update(etiqueta='Pendent de validar', estat='ambre')
     resultat.update(c=c)
     return resultat
 

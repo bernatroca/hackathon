@@ -230,6 +230,20 @@ preguntes.mostra()
         t.extra['torns'] = pd.DataFrame({'torn':['mati','tarda'],'ocupacio_pct':[69.7,42.1]})
         self.assertIn('Matí 70 % · Tarda 42 %',text(t)['frase'])
 
+    def test_grau_nou_segons_el_5_4(self):
+        from presentacio import text
+        t = grau_inventat()
+        t.extra['validat_part2'] = None
+        self.assertEqual(text(t)['estat'],'ambre')
+        t.extra['validat_part2'] = dict(valida=True, resposta=1, sessions_grau_nou_collocades=478, sessions_52_mogudes=0)
+        info = text(t)
+        self.assertEqual((info['estat'],info['etiqueta']),('verd','Hi cap'))
+        self.assertIn('478 sessions sense moure cap classe',info['frase'])
+        t.extra['validat_part2'] = dict(valida=True, resposta=2)
+        self.assertEqual(text(t)['estat'],'vermell')
+        t.extra['validat_part2'] = dict(valida=False, resposta=1)
+        self.assertEqual(text(t)['estat'],'ambre')
+
     def test_hi_cap_mati_verd_quan_la_part2_ho_valida(self):
         from presentacio import text
         t = copy.deepcopy(una('hi-cap-mati'))

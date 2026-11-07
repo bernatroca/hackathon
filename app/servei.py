@@ -36,6 +36,9 @@ def una(id_, semestre, setmana, versio):
     # «Hi cap el matí?» es dona per validat quan la proposta de la part 2 (5.2) passa el verificador oficial.
     if t is not None and id_ == 'hi-cap-mati' and semestre == 2:
         t.extra = dict(t.extra or {}, validat_part2=validacio_part2('5.2'))
+    # El grau nou es dona per validat amb el 5.4 (proposta amb el grau nou que passa el verificador).
+    if t is not None and id_ == 'marge-grau-nou' and semestre == 2:
+        t.extra = dict(t.extra or {}, validat_part2=validacio_part2('5.4'))
     return t
 
 
@@ -56,8 +59,13 @@ def validacio_part2(apartat):
     except (OSError, KeyError, ValueError):
         return None
     incompliments = int(resum.get('incompliments_no_declarats', 0) or 0)
-    return dict(veredicte=veredicte, incompliments=incompliments,
-                valida=veredicte in VEREDICTES_VALIDS and incompliments == 0)
+    resultat = dict(veredicte=veredicte, incompliments=incompliments,
+                    valida=veredicte in VEREDICTES_VALIDS and incompliments == 0)
+    # Només recomptes: resposta del 5.4 (1 hi cap, 2 no sense tocar el 5.2, 3 no trobada, 4 demostrat que no).
+    for clau in ('resposta', 'sessions_grau_nou', 'sessions_grau_nou_collocades', 'sessions_52_mogudes'):
+        if clau in resum:
+            resultat[clau] = int(resum[clau])
+    return resultat
 
 
 @st.cache_data(ttl=None, show_spinner=False)

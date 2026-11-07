@@ -102,7 +102,7 @@ def targeta(t, posicio=0):
         st.markdown(f'<article class="targeta-cor">{estat(info)}<h2>{escape(info["titol"])}</h2>'
             f'{xifra}'
             f'<p class="desglos">{escape(detall_desglos)}</p>{metre}'
-            f'{"" if t.id == "marge-grau-nou" else "<p>" + escape(info["frase"]) + "</p>"}</article>',unsafe_allow_html=True)
+            f'{"" if t.id == "marge-grau-nou" and not info["c"].get("validat") else "<p>" + escape(info["frase"]) + "</p>"}</article>',unsafe_allow_html=True)
         # Un sol peu natiu: la proposta i el botó comparteixen l'alineació.
         with st.container(key='peu-targeta-'+t.id):
             st.markdown(f'<div class="proposem"><b>Proposem:</b> {escape(info["proposem"])}</div>',unsafe_allow_html=True)
