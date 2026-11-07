@@ -6,13 +6,13 @@ from html import escape
 
 import streamlit as st
 import pandas as pd
-from components.ajuda_part2 import mostra_guia, enfoca_pas
+from components.ajuda_part2 import mostra_guia, enfoca_pas, CSS_GUIA
 from components.taules import mostra_taula
 from components.vistes import estat
 from errors import mostra_error
 from nivell2.base import carrega_oficial, Proposta, PAQUET, GRAU_NOU
 from components.graella import (grups, setmana_tipica, dilluns, celles_grup,
-    celles_aula, taula_html, exporta_aula_html, resum_grup, canvis_grup, ESTATS, CSS as CSS_GRAELLA, recomptes_estat, nom_grup)
+    celles_aula, taula_html, exporta_aula_html, resum_grup, canvis_grup, ESTATS, CSS as CSS_GRAELLA, CSS_FILTRES, recomptes_estat, nom_grup)
 
 from nivell2.base import RESULTATS_PRINCIPAL; RESULTATS = RESULTATS_PRINCIPAL
 
@@ -108,21 +108,14 @@ CSS_PAGINA = """
 .st-key-p2-pagina .p2-xifres span{font-size:12px;color:var(--tinta-2);}
 .st-key-p2-pagina .st-key-p2-graelles{margin-top:24px;min-width:0;max-width:100%;}
 .st-key-p2-pagina h3{font-size:20px!important;padding:4px 0;}
-.st-key-p2-pagina .st-key-p2-filtres [data-testid="stHorizontalBlock"]{gap:8px;flex-wrap:wrap;}
-.st-key-p2-pagina .st-key-p2-filtres [data-testid="stColumn"]{width:auto!important;flex:0 1 auto!important;min-width:0!important;}
-.st-key-p2-pagina .st-key-p2-filtres button{border-radius:999px;font-size:13px;padding:4px 10px;min-height:32px;}
-.st-key-p2-pagina .st-key-p2-filtres button p{font-size:13px;}
-.st-key-p2-pagina .st-key-p2-filtres button[kind="primary"]{outline:2px solid currentColor;outline-offset:1px;}
 .st-key-p2-pagina .st-key-p2-vista-aula button{color:#256abf;}
-.st-key-p2-pagina .st-key-p2-obre-guia{position:fixed;left:18px;bottom:18px;width:auto;z-index:1000002;}
-.st-key-p2-pagina .st-key-p2-obre-guia button{background:var(--targeta,#fff);color:#256abf;border:1px solid var(--linia);border-radius:12px;box-shadow:0 2px 8px #0002;}
 .st-key-p2-pagina .st-key-p2-guia{position:fixed;left:18px;top:80px;width:350px;max-height:calc(100vh - 24px);overflow:auto;z-index:1000001;background:var(--targeta,#fff);border:2px solid var(--blau);border-radius:14px;padding:16px;box-shadow:0 6px 28px #0003;gap:8px;}
 .st-key-p2-pagina .st-key-p2-guia p{font-size:14px;}
 .st-key-p2-pagina .st-key-p2-guia button{color:#256abf;}
 .st-key-p2-pagina .st-key-p2-guia [data-testid="stHorizontalBlock"]{flex-wrap:nowrap;gap:6px;}
 .st-key-p2-pagina .st-key-p2-guia [data-testid="stColumn"]{min-width:0!important;flex:1 1 0!important;width:auto!important;}
 .st-key-p2-pagina .p2-pas-actiu{position:relative;z-index:1000000;background:var(--targeta,#fff);outline:3px solid var(--blau);outline-offset:5px;border-radius:10px;box-shadow:0 0 0 100vmax #10182070;scroll-margin-top:80px;}
-.st-key-p2-pagina .horari-scroll.p2-pas-actiu{max-height:48vh;}
+.st-key-p2-pagina .p2-horari.p2-pas-actiu{max-height:48vh;overflow-y:auto;}
 .st-key-p2-pagina .st-key-p2-vista-aula.p2-pas-actiu{max-height:48vh;overflow:auto;}
 @media(prefers-reduced-motion:reduce){.st-key-p2-pagina *{scroll-behavior:auto!important;transition:none!important;animation:none!important;}}
 @container contingut (max-width:680px){
@@ -131,16 +124,12 @@ CSS_PAGINA = """
  .st-key-p2-pagina .st-key-p2-controls [data-testid="stHorizontalBlock"]{flex-wrap:wrap;}
  .st-key-p2-pagina .st-key-p2-controls [data-testid="stColumn"]{flex:1 1 140px!important;width:auto!important;}
 }
-"""
+""" + CSS_GUIA
 
 
 def estil_pagina():
-    filtres = ''.join(
-        f'.st-key-p2-pagina .st-key-p2-filtre-{clau} button'
-        + '{color:' + text + ';background:' + fons + ';border-color:' + color + ';}'
-        for clau, (_, _, color, fons, text) in ESTATS.items())
-    st.markdown('<style>' + CSS_PAGINA + filtres
-        + CSS_GRAELLA.replace('.p2-horari', '.st-key-p2-pagina .p2-horari') + '</style>', unsafe_allow_html=True)
+    st.markdown('<style>' + CSS_PAGINA + CSS_FILTRES
+        + CSS_GRAELLA + '</style>', unsafe_allow_html=True)
 
 
 def selecciona_filtre(clau):
@@ -151,10 +140,10 @@ def mostra_filtres(celles):
     comptes = recomptes_estat(celles)
     actiu = st.session_state.get('p2-filtre', 'totes')
     with st.container(key='p2-filtres'):
-        for columna, (clau, (icona, nom, *_)) in zip(st.columns(len(ESTATS)), ESTATS.items()):
+        for columna, (clau, (_, nom, *_)) in zip(st.columns(len(ESTATS)), ESTATS.items()):
             with columna, st.container(key='p2-filtre-' + clau):
                 n = sum(comptes.values()) if clau == 'totes' else comptes[clau]
-                st.button(f'{icona} {nom} ({n})', key='p2-boto-' + clau,
+                st.button(f'{nom} ({n})', key='p2-boto-' + clau,
                     type='primary' if actiu == clau else 'secondary',
                     on_click=selecciona_filtre, args=(clau,))
     return actiu
@@ -221,7 +210,8 @@ def _mostra():
             with st.container(key='p2-seleccio-alumnat'):
                 a, b, c = st.columns([3, 1, 2])
                 tit = tria_si_cal('Estudis', sorted(arbre), format_func=lambda t: titulacions.get(t, t), key='p2-titulacio', contenidor=a)
-                curs = tria_si_cal('Curs', sorted(arbre[tit]), key='p2-curs', contenidor=b)
+                curs = tria_si_cal('Curs', sorted(arbre[tit], key=lambda c: (c == '?', c)),
+                    format_func=lambda c: 'Sense curs a les dades' if c == '?' else c, key='p2-curs', contenidor=b)
                 grup = tria_si_cal('Grup', sorted(arbre[tit][curs]), key='p2-grup',
                     format_func=lambda g: f'Grup {g}', contenidor=c)
         actuals = celles_grup(base, avui, setmana, tit, curs, grup, noms=noms)
@@ -234,8 +224,6 @@ def _mostra():
                 filtre = mostra_filtres(noves)
             titol = f'{"Proposta" if comparar else "Avui"} · Grup {grup} · {setmana:%d/%m} – {setmana + timedelta(days=4):%d/%m}'
             st.markdown(taula_html(noves, titol, originals=not comparar, filtre=filtre, estils=False), unsafe_allow_html=True)
-            if not noves:
-                st.info('No hi ha classes d’aquest grup a la setmana seleccionada.')
         with st.expander('Més informació', expanded=False):
             st.write('«Avui» és l’horari dels fitxers originals, no la data d’avui. La graella inclou la teoria i els subgrups de problemes i seminaris; els subgrups simultanis no impliquen que cada estudiant assisteixi a tots.')
             st.write('Setmana típica: una setmana representativa del segon semestre. Les setmanes del 8 i del 15 de març inclouen els imprevistos. El resum descriu canvis, no és un veredicte de validació.')
@@ -254,8 +242,6 @@ def _mostra():
                 aula = tria_si_cal('Aula', aules, key='p2-aula')
                 dades = celles_aula(base, proposta, setmana, aula, noms=noms, relaxacions=relaxacions)
                 st.markdown(taula_html(dades, 'Aula ' + aula, originals=not comparar, estils=False), unsafe_allow_html=True)
-                if not dades:
-                    st.info('Aquesta aula no té classes assignades aquesta setmana.')
                 st.download_button('Descarrega l’horari d’aquesta aula',
                     exporta_aula_html(base, proposta, setmana, aula, noms=noms, relaxacions=relaxacions),
                     file_name=f'horari-{aula.replace("/", "-")}-{setmana}.html', mime='text/html')
