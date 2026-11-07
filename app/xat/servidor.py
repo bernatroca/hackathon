@@ -597,12 +597,29 @@ _fil = None
 _pany = threading.Lock()
 
 
+def _respon_xat(url: str, timeout: float) -> bool:
+    """Comprova la salut d'un servidor local sense propagar errors de connexió."""
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resposta:
+            dada = json.load(resposta)
+        return isinstance(dada, dict) and dada.get("ok") is True
+    except (OSError, ValueError):
+        return False
+
+
 def arrenca(port: int = 8502) -> str:
     """Arrenca una sola instància local per procés, també amb crides concurrents."""
     global _servidor, _fil, _url_reutilitzada
     with _pany:
+        if _servidor is not None:
+            if _fil is not None and _fil.is_alive():
+                return f"http://127.0.0.1:{_servidor.server_address[1]}/api/xat"
+            _servidor.server_close()
+            _servidor, _fil = None, None
         if _url_reutilitzada is not None:
-            return _url_reutilitzada
+            if _respon_xat(_url_reutilitzada, timeout=0.5):
+                return _url_reutilitzada
+            _url_reutilitzada = None
         if _servidor is None:
             carrega_env()
             try:
@@ -611,12 +628,7 @@ def arrenca(port: int = 8502) -> str:
                 if exc.errno != errno.EADDRINUSE:
                     raise
                 url = f"http://127.0.0.1:{port}/api/xat"
-                try:
-                    with urllib.request.urlopen(url, timeout=2) as resposta:
-                        dada = json.load(resposta)
-                    if not isinstance(dada, dict) or dada.get("ok") is not True:
-                        raise ValueError("No és el servidor del xat")
-                except (OSError, ValueError):
+                if not _respon_xat(url, timeout=2):
                     raise RuntimeError(
                         f"El port {port} està ocupat i no respon com un servidor del xat. "
                         "Allibera el port o tria’n un altre."

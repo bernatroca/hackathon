@@ -206,16 +206,19 @@ def test_prova(monkeypatch):
 def test_arrenca_un_cop(monkeypatch):
     servidor = Mock(server_address=('127.0.0.1', 8502))
     constructor = Mock(return_value=servidor)
-    fil = Mock()
+    fil = Mock(is_alive=Mock(return_value=True))
     monkeypatch.setattr(s, '_servidor', None)
     monkeypatch.setattr(s, '_url_reutilitzada', None)
     monkeypatch.setattr(s, '_fil', None)
     monkeypatch.setattr(s, 'ThreadingHTTPServer', constructor)
     monkeypatch.setattr(s.threading, 'Thread', Mock(return_value=fil))
     monkeypatch.setattr(s, 'carrega_env', Mock())
+    obre = Mock(side_effect=AssertionError('El servidor propi viu no fa GET'))
+    monkeypatch.setattr(s.urllib.request, 'urlopen', obre)
     assert s.arrenca() == s.arrenca(9999) == 'http://127.0.0.1:8502/api/xat'
     constructor.assert_called_once()
     fil.start.assert_called_once()
+    obre.assert_not_called()
 
 
 def test_env(monkeypatch, tmp_path):
@@ -267,7 +270,7 @@ def test_arrenca_port_ocupat(monkeypatch, resposta):
     monkeypatch.setattr(s, 'carrega_env', Mock())
     constructor = Mock(side_effect=OSError(errno.EADDRINUSE, 'address in use'))
     monkeypatch.setattr(s, 'ThreadingHTTPServer', constructor)
-    obre = Mock(return_value=io.BytesIO(resposta)) if resposta is not None else Mock(side_effect=TimeoutError())
+    obre = Mock(side_effect=lambda *a, **kw: io.BytesIO(resposta)) if resposta is not None else Mock(side_effect=TimeoutError())
     monkeypatch.setattr(s.urllib.request, 'urlopen', obre)
     if resposta == b'{"ok":true}':
         assert s.arrenca(8502) == 'http://127.0.0.1:8502/api/xat'
@@ -276,7 +279,12 @@ def test_arrenca_port_ocupat(monkeypatch, resposta):
     else:
         with pytest.raises(RuntimeError, match='El port 8502 està ocupat'):
             s.arrenca(8502)
-    obre.assert_called_once_with('http://127.0.0.1:8502/api/xat', timeout=2)
+    if resposta == b'{"ok":true}':
+        assert obre.call_args_list == [
+            (('http://127.0.0.1:8502/api/xat',), {'timeout': 2}),
+            (('http://127.0.0.1:8502/api/xat',), {'timeout': 0.5})]
+    else:
+        obre.assert_called_once_with('http://127.0.0.1:8502/api/xat', timeout=2)
 
 
 def test_arrenca_altre_error_bind(monkeypatch):
@@ -542,3 +550,81 @@ def test_arguments_html_desescapats(monkeypatch, api):
     executa.assert_called_once_with('consulta_sql', esperats)
     assert resultat[-2]['consultes'][0]['args'] == esperats
     assert ''.join(e.get('tros', '') for e in resultat) == 'Text &gt; &amp; &quot; &#39; sense transformar'
+
+
+@pytest.mark.parametrize('resposta', [None, b'{"ok":false}', b'{"ok":1}', b'no JSON'])
+def test_arrenca_recupera_reutilitzat_caigut(monkeypatch, resposta):
+    url = 'http://127.0.0.1:8502/api/xat'
+    monkeypatch.setattr(s, '_servidor', None)
+    monkeypatch.setattr(s, '_fil', None)
+    monkeypatch.setattr(s, '_url_reutilitzada', url)
+    monkeypatch.setattr(s, 'carrega_env', Mock())
+    obre = Mock(side_effect=TimeoutError()) if resposta is None else Mock(return_value=io.BytesIO(resposta))
+    monkeypatch.setattr(s.urllib.request, 'urlopen', obre)
+    servidor = Mock(server_address=('127.0.0.1', 8502))
+    constructor = Mock(return_value=servidor)
+    monkeypatch.setattr(s, 'ThreadingHTTPServer', constructor)
+    fil = Mock(is_alive=Mock(return_value=True))
+    monkeypatch.setattr(s.threading, 'Thread', Mock(return_value=fil))
+    assert s.arrenca() == url
+    obre.assert_called_once_with(url, timeout=0.5)
+    constructor.assert_called_once_with(('127.0.0.1', 8502), s.Handler)
+    fil.start.assert_called_once()
+    assert s._url_reutilitzada is None
+    assert s.arrenca() == url
+    assert obre.call_count == 1  # Ara és el servidor propi, no cal GET.
+
+
+def test_arrenca_reutilitzat_caigut_port_encara_ocupat(monkeypatch):
+    import errno
+    monkeypatch.setattr(s, '_servidor', None)
+    monkeypatch.setattr(s, '_fil', None)
+    monkeypatch.setattr(s, '_url_reutilitzada', 'http://127.0.0.1:8502/api/xat')
+    monkeypatch.setattr(s, 'carrega_env', Mock())
+    obre = Mock(side_effect=lambda *a, **kw: io.BytesIO(b'{"ok":false}'))
+    monkeypatch.setattr(s.urllib.request, 'urlopen', obre)
+    monkeypatch.setattr(s, 'ThreadingHTTPServer', Mock(side_effect=OSError(errno.EADDRINUSE, 'occupied')))
+    with pytest.raises(RuntimeError, match='El port 8502 està ocupat'):
+        s.arrenca()
+    assert [c.kwargs['timeout'] for c in obre.call_args_list] == [0.5, 2]
+    assert s._url_reutilitzada is None
+
+
+def test_arrenca_concurrent_recupera_un_sol_servidor(monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    monkeypatch.setattr(s, '_servidor', None)
+    monkeypatch.setattr(s, '_fil', None)
+    monkeypatch.setattr(s, '_url_reutilitzada', 'http://127.0.0.1:8502/api/xat')
+    monkeypatch.setattr(s, 'carrega_env', Mock())
+    obre = Mock(side_effect=TimeoutError())
+    monkeypatch.setattr(s.urllib.request, 'urlopen', obre)
+    servidor = Mock(server_address=('127.0.0.1', 8502))
+    constructor = Mock(return_value=servidor)
+    monkeypatch.setattr(s, 'ThreadingHTTPServer', constructor)
+    # Simula només el fil del servidor; ThreadPoolExecutor fa servir fils reals.
+    fil = Mock(is_alive=Mock(return_value=True))
+    threading_simulat = SimpleNamespace(Thread=Mock(return_value=fil))
+    monkeypatch.setattr(s, 'threading', threading_simulat)
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        urls = list(pool.map(lambda _: s.arrenca(), range(8)))
+    assert urls == ['http://127.0.0.1:8502/api/xat'] * 8
+    constructor.assert_called_once()
+    obre.assert_called_once()
+    fil.start.assert_called_once()
+
+
+def test_arrenca_reinicia_fil_propi_mort(monkeypatch):
+    anterior = Mock(server_address=('127.0.0.1', 8502))
+    monkeypatch.setattr(s, '_servidor', anterior)
+    monkeypatch.setattr(s, '_fil', Mock(is_alive=Mock(return_value=False)))
+    monkeypatch.setattr(s, '_url_reutilitzada', None)
+    monkeypatch.setattr(s, 'carrega_env', Mock())
+    nou = Mock(server_address=('127.0.0.1', 8502))
+    monkeypatch.setattr(s, 'ThreadingHTTPServer', Mock(return_value=nou))
+    monkeypatch.setattr(s.threading, 'Thread', Mock(return_value=Mock()))
+    obre = Mock()
+    monkeypatch.setattr(s.urllib.request, 'urlopen', obre)
+    assert s.arrenca() == 'http://127.0.0.1:8502/api/xat'
+    anterior.server_close.assert_called_once()
+    assert s._servidor is nou
+    obre.assert_not_called()
