@@ -15,6 +15,20 @@
       "port": 8501
     },
     {
+      "name": "app-part2",
+      "runtimeExecutable": "/Users/bernatroca/Bernat/Hackathon/.venv/bin/streamlit",
+      "runtimeArgs": [
+        "run",
+        "app/app.py",
+        "--server.headless",
+        "true",
+        "--server.port",
+        "8503"
+      ],
+      "port": 8503,
+      "autoPort": false
+    },
+    {
       "name": "disseny",
       "runtimeExecutable": "python3",
       "runtimeArgs": [
@@ -22,7 +36,9 @@
         "http.server",
         "8600",
         "--directory",
-        "docs/disseny"
+        "docs/disseny",
+        "--bind",
+        "127.0.0.1"
       ],
       "port": 8600
     }

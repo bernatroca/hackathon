@@ -8,3 +8,10 @@ font = "sans serif"
 
 [client]
 toolbarMode = "minimal"
+
+[server]
+# Només aquest ordinador: l'app no es pot obrir des de la xarxa (norma de la direcció, ds vespre)
+address = "localhost"
+
+[browser]
+gatherUsageStats = false
