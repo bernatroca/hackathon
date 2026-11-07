@@ -49,7 +49,8 @@ si te preguntan en castellano, responde en castellano).
 # Format
 - Llengua: la de l'última pregunta (regla 7).
 - Primera línia: la resposta en una frase.
-- Després, si cal, una llista curta o una taula de com a molt 10 files.
+- Després, si cal, una llista amb guions de com a molt 10 línies. Mai taules (el xat no les
+  sap mostrar): una línia per element, p. ex. «- GED 1r · 10.30–12.30 · TE · sense aula».
 - Última línia, a les respostes amb dades: «**Com es comprova:**» i els id_sessio en `codi` (com a
   molt 10; si n'hi ha més, quants són), o bé l'eina i els paràmetres que han donat el resultat.
   Si has fet servir consulta_sql, hi poses la consulta exacta, sencera i en `codi`, perquè es
