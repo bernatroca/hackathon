@@ -38,7 +38,7 @@ def _referencia(s, referencia):
 def _candidats(base, s, referencia, fixes):
     if s.fixada:
         if s.id in fixes and fixes[s.id] != (s.data, s.ini):
-            raise ValueError(f'{s.id}: una fixada no es pot moure')
+            raise ValueError('Una sessió fixada no es pot moure')
         return [s.data.weekday() * 1440 + s.ini]
     refdata, refini = _referencia(s, referencia)
     torn = s.torn if s.torn in ('mati', 'tarda') else ('mati' if refini < MATI[1] else 'tarda')
@@ -73,12 +73,56 @@ def _regles(a, b):
     return rules
 
 
+def _prepara_dobles(base):
+    """Còpia de model amb unions físiques; no altera la base oficial."""
+    import copy
+    from nivell2.comprova_persones import parelles_dobles
+    pairs, unmatched = parelles_dobles(base)
+    model = copy.copy(base)
+    model.sessions = {sid:copy.copy(row) for sid,row in base.sessions.items()}
+    model._heretats = _solapaments_de_partida(base)
+    parent = {sid:sid for sid in base.sessions}
+    def root(sid):
+        while parent[sid] != sid:
+            parent[sid] = parent[parent[sid]]
+            sid = parent[sid]
+        return sid
+    physical = defaultdict(list)
+    for sid,row in base.sessions.items():
+        physical[row.unitat].append(sid)
+    for ids in list(physical.values()) + [[sid,*partners] for sid,partners in pairs.items()]:
+        for sid in ids[1:]:
+            parent[root(sid)] = root(ids[0])
+    components = defaultdict(list)
+    for sid in parent:
+        components[root(sid)].append(sid)
+    frozen = 0
+    model._dobles_unitats = {}
+    model._parelles = pairs
+    for key,ids in components.items():
+        rows = [model.sessions[sid] for sid in ids]
+        double = any(r.sense_espai for r in rows)
+        locked = any(r.fixada or r.tipus == 'PLAB' or (r.sense_espai and r.id not in pairs) for r in rows)
+        host = next((r for r in rows if not r.sense_espai),rows[0])
+        for row in rows:
+            model._dobles_unitats[row.unitat] = key
+            if double and locked:
+                row.fixada = row.fixada or 'vincle doble immobilitzat'
+            if row.sense_espai and not locked:
+                row.torn = host.torn
+        frozen += double and locked
+    return model, {'dobles_aparellades':len(pairs),'dobles_sense_parella':unmatched,
+                   'unitats_dobles_immobils':frozen}
+
+
 def _problema(base, referencia, fixes):
     """Precalcula parells físics per setmana, amb les exempcions oficials."""
     units, weeks = defaultdict(list), defaultdict(list)
     for s in base.sessions.values():
         units[s.unitat].append(s)
-    inherited = _solapaments_de_partida(base)
+    inherited = getattr(base,"_heretats",None)
+    if inherited is None:
+        inherited = _solapaments_de_partida(base)
     edges = []
     for u, rows in units.items():
         weeks[_setmana(rows[0])].append(u)
@@ -95,6 +139,9 @@ def _problema(base, referencia, fixes):
         for group in index.values():
             pairs.update(itertools.combinations(sorted(group), 2))
         for u, v in sorted(pairs):
+            links = getattr(base,'_dobles_unitats',{})
+            if links.get(u,u) == links.get(v,v):
+                continue
             if any(any((r, tuple(sorted((a.id, b.id)))) not in inherited
                        and not (a.fixada and b.fixada) for r in _regles(a, b))
                    for a in units[u] for b in units[v]):
@@ -109,6 +156,12 @@ def _problema(base, referencia, fixes):
     for rows in units.values():
         for s in rows[1:]:
             parent[root(s.activitat or s.id)] = root(rows[0].activitat or rows[0].id)
+    for sid,partners in getattr(base,'_parelles',{}).items():
+        if sid in base.sessions:
+            for partner in partners:
+                if partner in base.sessions:
+                    a,b = base.sessions[sid],base.sessions[partner]
+                    parent[root(a.activitat or a.id)] = root(b.activitat or b.id)
     groups = {u: root(rows[0].activitat or rows[0].id) for u, rows in units.items()}
     return units, weeks, edges, groups
 
@@ -144,27 +197,35 @@ def _colls_capacitat(base, units, weeks, selected, candidates):
 
 
 def _resol_torn(base, units, weeks, edges, groups, movibles, current, referencia,
-                fixes, shift, deadline, llavor, *, reparacio=False):
+                fixes, shift, deadline, llavor, *, reparacio=False, limits_capacitat=None, setmana_completa=False, torn_tou=False, ignora_calendari=False):
     """Un model compacte: només les activitats movibles tenen variables."""
     import time
     lo, hi = shift
+    limits_capacitat = limits_capacitat or {}
     m = cp_model.CpModel()
     candidates = defaultdict(set)
     selected = {}
+    links = getattr(base,'_dobles_unitats',{})
+    moving_links = {links.get(u,u) for u in movibles}
     for u, rows in units.items():
         s = rows[0]
         required = MATI if s.torn == 'mati' else TARDA
         mobile = groups[u] in movibles and not any(r.fixada for r in rows)
         if reparacio:
-            mobile = u in movibles and not any(r.fixada for r in rows)
-        if mobile and required != shift:
+            mobile = links.get(u,u) in moving_links and not any(r.fixada for r in rows)
+        if mobile and required != shift and not setmana_completa:
             continue
-        key = ('u', u) if reparacio else ('a', groups[u])
+        key = ('u', getattr(base,'_dobles_unitats',{}).get(u,u)) if reparacio else ('a', groups[u])
         if mobile:
             selected[u] = key
-            domain = set.intersection(*(set(_candidats(base, r, referencia, fixes)) for r in rows)) if reparacio else {
+            domain = set.intersection(*(set(_candidats(base, r, referencia, fixes)) for r in rows)) if reparacio and not ignora_calendari else {
                 d*1440+t for d in range(5) for t in range(lo, hi-max(r.durada for r in rows)+1,30)}
-            if not reparacio:
+            if torn_tou:
+                original = s.data.weekday()*1440+s.ini
+                from horaris.check import _dins_finestra
+                if _dins_finestra(s.ini,s.fi) and all(r.id not in fixes or fixes[r.id] == (r.data,r.ini) for r in rows):
+                    domain.add(original)
+            if not reparacio or ignora_calendari:
                 for r in rows:
                     original = r.data.weekday()*1440+r.ini
                     if lo <= r.ini and r.fi <= hi:
@@ -187,6 +248,7 @@ def _resol_torn(base, units, weeks, edges, groups, movibles, current, referencia
                 selected[u] = ('f', u)
                 candidates[('f', u)] = {date.weekday()*1440+minute}
     if any(not ds for ds in candidates.values()):
+        assigna_franges.estadistiques['causa'] = 'domini_buit'
         return None, 'INFEASIBLE'
     variables, durations, cost, dayscost = {}, {}, [], []
     for key, ds in candidates.items():
@@ -224,6 +286,7 @@ def _resol_torn(base, units, weeks, edges, groups, movibles, current, referencia
             continue
         seen.add(pair)
         if a == b:
+            assigna_franges.estadistiques['causa'] = 'conflicte_intern'
             return None, 'INFEASIBLE'
         before = m.new_bool_var('ordre')
         m.add(variables[a]+durations[u] <= variables[b]).only_enforce_if(before)
@@ -262,16 +325,61 @@ def _resol_torn(base, units, weeks, edges, groups, movibles, current, referencia
         for threshold in [-1]+sorted({a.capacitat for a in rooms}):
             relevant = [intervals[k] for k in entries if k[2]>threshold]
             available = max(0,len(rooms)-RESERVA) if threshold == -1 else sum(a.capacitat>threshold for a in rooms)
+            available = min(available, limits_capacitat.get(threshold, available))
             if relevant:
                 m.add_cumulative(relevant,[1]*len(relevant),available)
-    m.minimize(COST_CANVI*(len(dayscost)+1)*sum(cost)+sum(dayscost))
+    # Hall constraints for restricted equipment (e.g. only two computer rooms).
+    # Size-only cuts cannot see these bottlenecks. Include fixed sessions too.
+    from horaris.check import _espai_ok
+    eligible = {}
+    for u in selected:
+        rows = [r for r in units[u] if not r.sense_espai]
+        if not rows:
+            continue
+        allowed = set(base.aules)
+        for r in rows:
+            allowed &= {a for a in base.aules if _espai_ok(base,r,a)}
+        n = sum(r.alumnes for r in rows)
+        allowed = {a for a in allowed if base.aules[a].capacitat >= n}
+        fixed = {r.aula for r in rows if r.tipus == 'PLAB' or (r.fixada and r.aula)}
+        if fixed:
+            allowed = fixed
+        if allowed and '' not in allowed:
+            eligible[u] = frozenset(allowed)
+    resources = sorted(set(eligible.values()),key=lambda r:tuple(sorted(r)))
+    patterns = set()
+    for us in weeks.values():
+        for resource in resources:
+            relevant = [u for u in us if u in eligible and eligible[u] <= resource]
+            if len(relevant) <= len(resource):
+                continue
+            pattern = (resource,tuple(sorted((selected[u],durations[u]) for u in relevant)))
+            if pattern in patterns:
+                continue
+            patterns.add(pattern)
+            tasks = [m.new_fixed_size_interval_var(variables[selected[u]],durations[u],'equipament') for u in relevant]
+            m.add_cumulative(tasks,[1]*len(tasks),len(resource))
+    penalties = []
+    if torn_tou:
+        from horaris.check import _torn_ok
+        for u,key in selected.items():
+            rows = units[u]
+            if key[0] != 'f' and any(_torn_ok(r.torn,r.ini,r.fi) is False for r in rows):
+                original = rows[0].data.weekday()*1440+rows[0].ini
+                exc = m.new_bool_var('excepcio_R1')
+                m.add(variables[key] == original).only_enforce_if(exc)
+                m.add(variables[key] != original).only_enforce_if(exc.Not())
+                penalties.append(len(rows)*exc)
+    secondary_bound = COST_CANVI*(len(dayscost)+1)*len(cost)+len(dayscost)+1
+    m.minimize(secondary_bound*sum(penalties)+COST_CANVI*(len(dayscost)+1)*sum(cost)+sum(dayscost))
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = max(.001, deadline-time.monotonic())
     solver.parameters.num_workers = 2
     solver.parameters.random_seed = llavor
-    solver.parameters.stop_after_first_solution = True
+    solver.parameters.stop_after_first_solution = not torn_tou
     status = solver.solve(m)
     if status not in (cp_model.OPTIMAL,cp_model.FEASIBLE):
+        assigna_franges.estadistiques['causa'] = 'solver'
         return None, solver.status_name(status)
     out = dict(current)
     for u,key in selected.items():
@@ -281,9 +389,13 @@ def _resol_torn(base, units, weeks, edges, groups, movibles, current, referencia
     return out, solver.status_name(status)
 
 
-def assigna_franges(base, *, referencia, fixes=None, temps_s=300, llavor=0):
+def assigna_franges(base, *, referencia, fixes=None, temps_s=300, llavor=0, limits_capacitat=None, permet_excepcions_torn=False):
     """Primera passada per activitat/torn; reparació local de calendari després.
 
+    `permet_excepcions_torn` autoritza exclusivament W14/2027, després d'un
+    INFEASIBLE conjunt de tota la setmana: l'única alternativa fora de torn
+    és la franja original. `limits_capacitat` és llindar d'alumnes -> màxim
+    per cubell horari (-1: total). Les proves i el mínim trobat es registren.
     Contracte del mòdul. `assigna_franges.estadistiques` registra els temps i
     recomptes de l'última crida (ús seqüencial). La passada opcional d'hores
     mortes s'omet per prioritzar el lliurament de la primera solució vàlida.
@@ -298,7 +410,8 @@ def assigna_franges(base, *, referencia, fixes=None, temps_s=300, llavor=0):
     for sid, value in fixes.items():
         s = base.sessions[sid]
         if s.fixada and value != (s.data,s.ini):
-            raise ValueError(f'{sid}: una fixada no es pot moure')
+            raise ValueError('Una sessió fixada no es pot moure')
+    base, double_stats = _prepara_dobles(base)
     units,weeks,edges,groups = _problema(base,referencia,fixes)
     current = {s.id:_referencia(s,referencia) for s in base.sessions.values()}
     current.update(fixes)
@@ -308,12 +421,13 @@ def assigna_franges(base, *, referencia, fixes=None, temps_s=300, llavor=0):
     mobile = {groups[s.unitat] for s in base.sessions.values() if not s.fixada and
               (_torn_ok(s.torn,s.ini,s.fi) is False or not _dins_finestra(s.ini,s.fi))}
     stats = {'components_oberts':len(mobile),'passada1_s':0,'reparacio_s':0,'passada2_s':0}
+    stats.update(double_stats)
     assigna_franges.estadistiques = stats
     for shift in (MATI,TARDA):
         opened = set(mobile)
         for level in range(3):
             solution,state = _resol_torn(base,units,weeks,edges,groups,opened,current,referencia,
-                                         fixes,shift,deadline,llavor)
+                                         fixes,shift,deadline,llavor,limits_capacitat=limits_capacitat)
             if solution is not None:
                 current = solution
                 break
@@ -325,7 +439,21 @@ def assigna_franges(base, *, referencia, fixes=None, temps_s=300, llavor=0):
             opened.update(groups[s.unitat] for s in base.sessions.values()
                           if not s.fixada and (set(s.cohorts)&cohorts or (level == 0 and s.docents&docents)))
         else:
-            return {},'INFEASIBLE',stats.get('colls_capacitat',[])
+            # Routine is soft: retry independent weeks before declaring failure.
+            import copy
+            for week, us_list in sorted(weeks.items()):
+                us = set(us_list)
+                sub = copy.copy(base)
+                sub.sessions = {r.id:r for u in us for r in units[u]}
+                sub.ordre = list(sub.sessions)
+                repaired,state = _resol_torn(sub,{u:units[u] for u in us},{week:us_list},
+                    [(u,v) for u,v in edges if u in us and v in us],groups,us,current,
+                    referencia,fixes,shift,deadline,llavor,reparacio=True,
+                    limits_capacitat=limits_capacitat,ignora_calendari=True)
+                if repaired is None:
+                    return {},state,stats.get('colls_capacitat',[])
+                current = repaired
+            stats['rutina_reparada_per_setmanes'] = True
     stats['passada1_s'] = time.monotonic()-begin
     repair_begin = time.monotonic()
     invalid = set()
@@ -338,12 +466,66 @@ def assigna_franges(base, *, referencia, fixes=None, temps_s=300, llavor=0):
     for shift in (MATI,TARDA):
         if invalid:
             solution,state = _resol_torn(base,units,weeks,edges,groups,invalid,current,referencia,
-                                         fixes,shift,deadline,llavor,reparacio=True)
+                                         fixes,shift,deadline,llavor,reparacio=True,limits_capacitat=limits_capacitat)
+            if solution is None and state == 'INFEASIBLE':
+                affected_weeks = {_setmana(units[u][0]) for u in invalid}
+                expanded = set(invalid)
+                for u,v in edges:
+                    if u in invalid or v in invalid:
+                        expanded.update((u,v))
+                types = {base.aules[s.aula].tipus for u in invalid for s in units[u]
+                         if s.aula in base.aules and base.aules[s.aula].tipus == 'Aules informàtiques'}
+                expanded.update(u for u,rows in units.items() if _setmana(rows[0]) in affected_weeks
+                                and any(s.aula in base.aules and base.aules[s.aula].tipus in types for s in rows))
+                solution,state = _resol_torn(base,units,weeks,edges,groups,expanded,current,referencia,
+                    fixes,shift,deadline,llavor,reparacio=True,limits_capacitat=limits_capacitat)
+            if solution is None and state == 'INFEASIBLE':
+                # Last local circle: solve affected real weeks independently.
+                # Avoid reopening the whole semester in one large model.
+                import copy
+                solution = dict(current)
+                for week in sorted({_setmana(units[u][0]) for u in invalid
+                                    if (MATI if units[u][0].torn == 'mati' else TARDA) == shift}):
+                    us = set(weeks[week])
+                    sub = copy.copy(base)
+                    sub.sessions = {s.id:s for u in us for s in units[u]}
+                    sub.ordre = list(sub.sessions)
+                    repaired,state = _resol_torn(sub,{u:units[u] for u in us}, {week:weeks[week]},
+                        [(u,v) for u,v in edges if u in us and v in us], groups, us,
+                        solution,referencia,fixes,shift,deadline,llavor,reparacio=True,
+                        limits_capacitat=limits_capacitat)
+                    if repaired is None and state == 'INFEASIBLE' and permet_excepcions_torn and week == dt.date(2027,4,5):
+                        hard_begin = time.monotonic()
+                        repaired,hard_state = _resol_torn(sub,{u:units[u] for u in us}, {week:weeks[week]},
+                            [(u,v) for u,v in edges if u in us and v in us], groups, us,
+                            solution,referencia,fixes,(MATI[0],TARDA[1]),deadline,llavor,
+                            reparacio=True,limits_capacitat=limits_capacitat,setmana_completa=True)
+                        proof = {'setmana':week.isoformat(),'dur':hard_state,'dur_s':time.monotonic()-hard_begin}
+                        if repaired is None and hard_state == 'INFEASIBLE':
+                            soft_begin = time.monotonic()
+                            repaired,state = _resol_torn(sub,{u:units[u] for u in us}, {week:weeks[week]},
+                                [(u,v) for u,v in edges if u in us and v in us], groups, us,
+                                solution,referencia,fixes,(MATI[0],TARDA[1]),min(deadline,soft_begin+90),llavor,
+                                reparacio=True,limits_capacitat=limits_capacitat,setmana_completa=True,torn_tou=True)
+                            proof.update(tou=state,tou_s=time.monotonic()-soft_begin)
+                            if repaired is not None:
+                                from horaris.check import _torn_ok
+                                proof['sessions'] = [s.id for s in sub.sessions.values() if not s.fixada and
+                                    _torn_ok(s.torn,repaired[s.id][1],repaired[s.id][1]+s.durada) is False]
+                                proof['nombre'] = len(proof['sessions'])
+                                invalid.difference_update(us)
+                        stats.setdefault('proves_torn',[]).append(proof)
+                    if repaired is None:
+                        stats['setmana_reparacio_fallida'] = week.isoformat()
+                        stats['torn_reparacio_fallit'] = shift
+                        solution = None
+                        break
+                    solution = repaired
             if solution is None:
                 return {},state,[]
             current = solution
     notes = [{'id_sessio':s.id,'data':current[s.id][0].isoformat(),'minut_inici':current[s.id][1],
-              'motiu':'calendari: festiu, no lectiu o aturada'}
+              'motiu':('calendari: festiu, no lectiu o aturada' if s.unitat in invalid else 'reparació local de la setmana per fer lloc a una excepció de calendari')}
              for s in base.sessions.values() if current[s.id] != routine[s.id]]
     stats['reparacio_s'] = time.monotonic()-repair_begin
     stats['total_s'] = time.monotonic()-begin
@@ -481,10 +663,21 @@ def main():
     if result:
         proposta_franges(base, ref, result).escriu(args.sortida)
         print('Canvis de franja:', sum(result[s.id] != (s.data, s.ini) for s in base.sessions.values()))
-    print('Estadístiques:', assigna_franges.estadistiques)
-    print('Excepcions:', notes)
+    import json
+    detail = Path(__file__).resolve().parents[1]/'resultats/nivell2/5.2/franges-detall.json'
+    detail.parent.mkdir(parents=True,exist_ok=True)
+    detail.write_text(json.dumps({'estadistiques':assigna_franges.estadistiques,'excepcions':notes},ensure_ascii=False,indent=2))
+    print('Excepcions:', len(notes))
     return 0 if result else 1
 
 
 if __name__ == '__main__':
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except Exception:
+        import traceback
+        target = Path(__file__).resolve().parents[1]/'resultats/nivell2/5.2'
+        target.mkdir(parents=True,exist_ok=True)
+        (target/'error-franges.txt').write_text(traceback.format_exc(),encoding='utf-8')
+        print('Errors d’execució: 1; detall desat fora de git')
+        raise SystemExit(2)
