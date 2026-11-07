@@ -84,6 +84,58 @@ def test_closure_forces_routine_exception():
     assert rooms['a'] == 'Q9/5002' and rooms['b'] == 'Q9/5001'
 
 
+def test_student_home_beats_original_rooms_and_uses_hint():
+    a = session('a', room='Q9/5001')
+    b = session('b', room='Q9/5002', start=570)
+    c = session('c', room='Q9/5007', start=630)
+    c.tipus = 'PAUL'
+    c.grup = 'PAUL/900'
+    for s in (a, b, c):
+        s.cohorts = ('G:1r',)
+    data = base(a, b, c)
+    data.aules['Q9/5007'] = Aula('Q9/5007', 'Q2', 'Aules docents', 30)
+    hint = Proposta.de_base(data)
+    incumbents = []
+    rooms, status = solve(data, pista=hint, en_solucio=lambda r, st: incumbents.append((r, st)))
+    assert status in ('OPTIMAL', 'FEASIBLE')
+    assert rooms['a'] == rooms['b'] == rooms['c']
+    # Parallel LNS can return a different tied optimum than its last callback.
+    assert incumbents and any(len(set(r.values())) == 1 for r, _ in incumbents)
+
+
+def test_fixed_te_prevents_impossible_home_but_stays_valid():
+    a = session('a', room='Q9/5001')
+    b = session('b', start=570)
+    a.fixada = 'R1: fixed'
+    a.cohorts = b.cohorts = ('G:1r',)
+    rooms, _ = solve(base(a, b))
+    assert rooms['a'] == rooms['b'] == 'Q9/5001'
+
+
+def test_concentration_retries_if_global_conflict():
+    a, b, c, d = (session('a'), session('b', start=570),
+                   session('c', start=570), session('d', start=630))
+    a.cohorts = b.cohorts = ('A:1r',)
+    c.cohorts = d.cohorts = ('B:1r',)
+    a.aula = d.aula = 'Q9/5001'
+    a.fixada = d.fixada = 'R1: fixed'
+    # Each group alone can use that room, but b/c coincide. Global unions
+    # are infeasible, so the ordinary activity model must repair one group.
+    rooms, status = solve(base(a, b, c, d), agrupa_te=True)
+    assert status in ('OPTIMAL', 'FEASIBLE')
+    assert rooms['a'] == rooms['d'] == 'Q9/5001'
+    assert rooms['b'] != rooms['c']
+
+
+def test_hint_from_old_slots_can_be_repaired():
+    b = base(session('a'), session('b'))
+    hint = Proposta.de_base(b)
+    hint.files['a'].aula = hint.files['b'].aula = 'Q9/5001'
+    rooms, status = solve(b, pista=hint)
+    assert status in ('OPTIMAL', 'FEASIBLE')
+    assert rooms['a'] != rooms['b']
+
+
 if __name__ == '__main__':
     import time
     start = time.monotonic()
