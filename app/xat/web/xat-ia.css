@@ -192,3 +192,5 @@
    Reservem també espai al contingut per arribar als darrers controls. */
 .xatia-boto { bottom: max(64px, calc(env(safe-area-inset-bottom) + 48px)); }
 [data-testid="stMainBlockContainer"] { padding-bottom: 132px; }
+/* L'app amaga tots els <footer> (estil.css); el peu del xat és un <footer> i s'ha de veure. */
+.xatia footer.xatia-peu { display: block !important; }
