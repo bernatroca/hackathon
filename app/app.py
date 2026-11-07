@@ -7,7 +7,7 @@ for carpeta in (ARREL.parent,ARREL):
         sys.path.insert(0,str(carpeta))
 
 import streamlit as st
-from pagines import portada, preguntes, part2
+from pagines import portada, preguntes, part2, junta
 from servei import setmanes, versio_registre
 from components.vistes import franja_context
 from errors import mostra_error
@@ -33,6 +33,7 @@ pagina = st.navigation([
     st.Page(portada.mostra,title='Com estem avui',url_path='avui',default=True),
     st.Page(preguntes.mostra,title='Totes les respostes',url_path='respostes'),
     st.Page(part2.mostra,title='Part 2 · Proposta d’horari',url_path='part2'),
+    st.Page(junta.mostra,title='Resum per a la Junta',url_path='junta'),
     st.Page(imprevistos,title='Imprevistos · aviat'),
     st.Page(pregunta,title='Pregunta-ho · aviat'),
 ])
