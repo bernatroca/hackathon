@@ -6,7 +6,7 @@ WITH dies AS (
         list(DISTINCT s.id_sessio ORDER BY s.id_sessio) AS exemples
  FROM sessions s JOIN sessio_blocs sb USING(id_sessio)
  WHERE sem=$semestre AND ($setmana IS NULL OR setmana=$setmana) AND demanda_aulari
-   AND regexp_matches(titulacions_curs, ':(1r|2n)(\||$)')
+   AND torn_requerit='mati'
  GROUP BY s.data, sb.bloc
 )
 SELECT d.data, d.dia, b.bloc, b.etiqueta, coalesce(n.classes,0) AS classes,
