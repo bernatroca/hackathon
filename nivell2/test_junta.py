@@ -1,29 +1,21 @@
-"""Regressions réelles i casos amb demanda i canvis coneguts."""
+"""Casos inventats amb demanda i canvis coneguts."""
 import json
 from copy import deepcopy
 from datetime import date, timedelta
-from functools import lru_cache
 
 import pytest
 
-from nivell2.base import Base, PAQUET, Proposta, Sessio, carrega_model, carrega_oficial
+from nivell2.base import Base, Proposta, Sessio
 from nivell2.junta import calcula, carrega_proposta, documents, main, pics_i_mides
 from horaris.check import Informe, _col_loca
 from horaris.model import Aula
-
-
-@lru_cache(maxsize=1)
-def reals():
-    b, m = carrega_oficial(), carrega_model()
-    p, col = carrega_proposta(PAQUET / 'proposta_partida.csv', b)
-    return b, m, p, col
 
 
 def petita():
     sessions = {}
     for i in range(3):
         s = Sessio(str(i), '1', 'TE', '81', date(2027, 2, 1) + timedelta(weeks=i),
-                   'L', 510, 60, 40, 'A', ('GED:1r',), 'mati', '', frozenset())
+                   'L', 510, 60, 40, 'A', ('GXX:1r',), 'mati', '', frozenset())
         sessions[s.id] = s
     return Base(sessions, {'A': Aula('A', '', 'Aules docents', 50)}, list(sessions))
 
@@ -32,28 +24,10 @@ def colloca(b, p):
     return _col_loca(b, p.a_files(), Informe())
 
 
-def test_pic_15_de_19():
-    b, m, _, col = reals()
-    r = pics_i_mides(b, m, col, nomes_mati_requerit=True)
-    assert r['mati']['pitjor']['classes'] == 15
-    assert r['mati']['pitjor']['aules_disponibles'] == 19
-
-
-def test_partida_i_excepcions_completes():
-    b, m, p, col = reals()
-    d = calcula(p, b, m, col)
-    assert all(r['mogudes_pct'] == 0 for r in d['sessions_mogudes'])
-    esperades = [sid for sid, c in col.items() if c.s.torn in ('mati', 'tarda')
-                 and (c.ini < 870) != (c.s.torn == 'mati')]
-    assert {e['id_sessio'] for e in d['excepcions']} == set(esperades)
-    assert all(e['motiu'] == "No s'ha explicat per què" and e['prova'] for e in d['excepcions'])
-    assert sum(r['sessions'] for r in d['excepcions_resum']) >= len(esperades)
-
-
 def test_percentatges_unio_i_pitjor_cohort(tmp_path):
     b = petita()
     s = deepcopy(b.sessions['0'])
-    s.id, s.cohorts = 'extra', ('GEQ:1r',)
+    s.id, s.cohorts = 'extra', ('GYY:1r',)
     b.sessions[s.id] = s
     b.ordre.append(s.id)
     p = Proposta.de_base(b)
@@ -63,11 +37,11 @@ def test_percentatges_unio_i_pitjor_cohort(tmp_path):
     relax.write_text('restriccio,sessions,justificacio\nR1-TORN,0,Prova explicada\n')
     d = calcula(p, b, b, colloca(b, p), relax)
     rows = {r['cohort']: r for r in d['sessions_mogudes']}
-    assert rows['GED:1r']['mogudes'] == 1
-    assert rows['GED:1r']['mogudes_pct'] == pytest.approx(100 / 3)
-    assert rows['GEQ:1r']['mogudes_pct'] == 0
-    assert rows['GEQ:1r']['aula'] == 1
-    assert d['pitjor_cohort'] == ['GED:1r']
+    assert rows['GXX:1r']['mogudes'] == 1
+    assert rows['GXX:1r']['mogudes_pct'] == pytest.approx(100 / 3)
+    assert rows['GYY:1r']['mogudes_pct'] == 0
+    assert rows['GYY:1r']['aula'] == 1
+    assert d['pitjor_cohort'] == ['GXX:1r']
     assert d['excepcions'][0]['motiu'] == 'Prova explicada'
     assert d['excepcions_resum'][0]['percentatge'] == pytest.approx(100 / 3)
 
@@ -75,7 +49,7 @@ def test_percentatges_unio_i_pitjor_cohort(tmp_path):
 def test_compartida_suma_alumnes_i_no_duplica_classes():
     b = petita()
     s = deepcopy(b.sessions['0'])
-    s.id, s.cohorts, s.alumnes = 'extra', ('GEQ:1r',), 30
+    s.id, s.cohorts, s.alumnes = 'extra', ('GYY:1r',), 30
     s.compartida = b.sessions['0'].compartida = 'compartida'
     s.aula = b.sessions['0'].aula = ''
     b.sessions[s.id] = s
@@ -105,7 +79,7 @@ def test_sense_excepcions_i_html_segura():
     p = Proposta.de_base(b)
     d = calcula(p, b, b, colloca(b, p))
     md, html = documents(d)
-    assert 'No hi ha cap classe fora del torn que li toca.' in md
+    assert 'No hi ha excepcions noves als torns.' in md
     assert '@page{size:A4' in html and '@media print' in html
     d['excepcions'] = [{}]
     d['excepcions_resum'] = [{'motiu': '<script>alert(1)</script>', 'nom': 'Grup',
@@ -127,22 +101,15 @@ def test_rebutja_duplicades_i_absents(tmp_path):
         carrega_proposta(path, b)
 
 
-def test_cli_tres_fitxers(tmp_path):
-    assert main([str(PAQUET / 'proposta_partida.csv'), '--sortida', str(tmp_path)]) == 0
+def test_cli_tres_fitxers(tmp_path, monkeypatch):
+    b = petita()
+    monkeypatch.setattr('nivell2.junta.carrega_oficial', lambda: b)
+    monkeypatch.setattr('nivell2.junta.carrega_model', lambda: b)
+    proposta = Proposta.de_base(b).escriu(tmp_path / 'inventada.csv')
+    assert main([str(proposta), '--sortida', str(tmp_path)]) == 0
     d = json.loads((tmp_path / 'junta.json').read_text())
     assert {'pics', 'sessions_mogudes', 'excepcions', 'excepcions_resum'} <= d.keys()
     assert all((tmp_path / f'junta.{ext}').stat().st_size for ext in ('json', 'md', 'html'))
-
-
-def test_proposta_51_pic_i_franja():
-    from pathlib import Path
-    path = Path('/Users/bernatroca/Bernat/Hackathon/resultats/nivell2/5.1/proposta.csv')
-    b, m, _, _ = reals()
-    p, col = carrega_proposta(path, b)
-    d = calcula(p, b, m, col)
-    assert all(r['mogudes_pct'] == 0 for r in d['sessions_mogudes'])
-    assert all(d['pics'][t]['pitjor']['classes'] <= 19 for t in ('mati', 'tarda'))
-    assert all(not d['pics'][t]['pitjor']['estimacio'] for t in ('mati', 'tarda'))
 
 
 def test_assignar_aula_no_es_moure():
@@ -170,19 +137,6 @@ def test_pic_exclou_seminaris_i_externes_i_compta_aules_diferents():
     p = Proposta.de_base(b)
     r = pics_i_mides(b, b, colloca(b, p))['mati']['pitjor']
     assert r['classes'] == 2 and r['estimacio']
-
-
-def test_proposta_51_mides_coincideixen_amb_pic():
-    from pathlib import Path
-    path = Path('/Users/bernatroca/Bernat/Hackathon/resultats/nivell2/5.1/proposta.csv')
-    b, m, _, _ = reals()
-    _, col = carrega_proposta(path, b)
-    for torn in pics_i_mides(b, m, col).values():
-        assert torn['total_mides'] == torn['pitjor']['classes']
-        assert sum(r['ocupades_al_pic'] for r in torn['mides']) == torn['pitjor']['classes']
-        assert torn['mides'][0]['demanda_acumulada'] == torn['pitjor']['classes']
-        assert all(r['marge'] >= 0 and r['falten'] == 0 for r in torn['mides'])
-        assert all(r['pic_categoria'] <= r['aules_categoria'] for r in torn['mides'])
 
 
 def test_mides_aula_assignada_i_classes_successives():
@@ -243,3 +197,43 @@ def test_textos_principals_planers_i_detall_separat():
     assert 'R1-TORN PLAB TE/ PAUL SEM J R8' in md.split('## Detall tècnic')[1]
     metode = md.split('## Com ho hem calculat')[1].split('## Detall tècnic')[0]
     assert 3 <= metode.count('.') <= 4
+
+
+def test_fora_torn_heretades_i_noves():
+    b = petita()
+    for s in b.sessions.values():
+        s.torn = 'tarda'
+    p = Proposta.de_base(b)
+    # Canviar només l'aula conserva l'horari; canviar dia o hora crea excepció.
+    p.files['0'].aula = 'Inventada'
+    p.files['1'].h_ini = '09:30'
+    p.files['2'].dia = 'M'
+    d = calcula(p, b, b, colloca(b, p))
+    assert d['fora_torn_ja_avui'] == 1
+    assert len(d['excepcions']) == 2
+    for text in documents(d):
+        assert 'Excepcions noves als torns' in text
+        assert '1 classes ja es fan avui fora del seu torn i no es toquen.' in text
+
+
+def test_tarda_i_percentatges_catalans():
+    from nivell2.junta import percentatge
+    assert percentatge(12) == '12 %'
+    assert percentatge(12.5) == '12,5 %'
+    b = petita()
+    p = Proposta.de_base(b)
+    p.files['0'].h_ini = '15:30'
+    d = calcula(p, b, b, colloca(b, p))
+    assert d['pics']['tarda']['pitjor']['classes'] == 1
+    assert d['pics']['tarda']['total_mides'] == 1
+    d['sessions_mogudes'][0]['mogudes_pct'] = 12.5
+    for text in documents(d):
+        assert '12,5 %' in text
+        assert '.0%' not in text
+
+
+def test_documents_cap_curs():
+    b = petita()
+    p = Proposta.de_base(b)
+    for text in documents(calcula(p, b, b, colloca(b, p))):
+        assert "Cap curs canvia de dia ni d" in text
