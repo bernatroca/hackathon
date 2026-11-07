@@ -124,3 +124,16 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - Textos planers a «Com ho hem calculat», gràfics fixos (sense zoom ni arrossegament), alçades iguals i % escrit al plànol.
 - PROBLEMA resolt: la portada quedava en blanc uns 15 s. Les hores mortes trigaven 14 s; amb SQL de finestra, 0,08 s. A més, el menú surt primer i la portada només calcula les seves 5 xifres.
 - 25/25 comprovacions; tests de l'app OK. VALIDATION.md amb 17 passos marcats per reprovar.
+
+### [ds 17:40] DADA · Alumnes reals dels 14 grups sense dada (2n semestre, 276 sessions)
+- El paquet hi posa 0. El portal públic SIQ de la UAB dona els matriculats per assignatura i any: Assignatura Inventada A (GEQ 4t) 16–24 (16 el 2025), Assignatura Inventada B (GED 4t) 14–18 (18 el 2025). Font: [enllaç retirat] i …/900003/
+- Les places previstes de Sigma (30 i 40) gairebé doblaven els alumnes reals.
+- Les dues de GIA 3r (900005, 900006) són obligatòries i noves el 2026-27: sense històric. Estimació: 45, la promoció de GIA 3r al paquet (42–49).
+- Assignatura Inventada C (4 PAUL) ja té alumnes: és la mateixa classe que Assignatura Inventada D (43, 44, 39, 44).
+
+### [ds 17:40] DECISIÓ · El model de la part 2 fa servir aquestes xifres
+- Fitxer `dades/alumnes_sense_dada.json` (xifra, font i nota per grup). Especificació i tasca 0.3 actualitzades.
+- El verificador oficial hi continua veient 0: la xifra només serveix perquè triem una aula on hi càpiguen.
+
+### [ds 17:40] IA · Recerca de dades amb Claude
+- Claude (orquestrador) va buscar al paquet, l'enunciat, l'ordinador i el Drive (no hi era). Després, al web: va trobar el SIQ i les guies docents i en va llegir les taules.

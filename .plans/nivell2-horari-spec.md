@@ -82,7 +82,7 @@ Les regles són per ordre de prioritat. Quan dues xoquen, guanya la primera.
 | 64–90 | 7: Q9/5024, Q9/5025 (88) i cinc de 90 | 51 | 4 | 0 |
 | 91–160 | 7: dues de 100, dues de 117, dues de 130 i Q9/5006 (160) | 14 | 1 | 0 |
 
-(Hi ha 14 grups sense dada d'alumnes. Comptem els grups del 2n semestre un cop cadascun, sense PLAB ni dobles.)
+(Hi ha 14 grups sense dada d'alumnes al paquet; ara tenen xifra, vegeu «Grups sense dada d'alumnes». Comptem els grups del 2n semestre un cop cadascun, sense PLAB ni dobles.)
 
 **Per què ho fem:** hi ha 101 grups de problemes de 35 a 50 alumnes, i només 4 aules d'aquesta mida. Avui ocupen aules de 63 o de 90 places, que són les que necessita la teoria. Partits en meitats, caben en un seminari i alliberen les aules mitjanes. Cada desdoblament compta com a canvi a la taula de xifres, i la Junta veu quants n'hem fet i quantes hores d'aula mitjana alliberen.
 
@@ -187,6 +187,7 @@ El veredicte es llegeix del JSON del verificador, no del codi de sortida: el cod
 - **Calendari:** els candidats de dia i hora es generen per **data real**: festius, no lectius, aturades, setmanes d'avaluació i dies sense classes a la partida. Totes les sessions d'una activitat es comproven, no només la primera.
 - **Reserva R8:** el verificador compta les **aules diferents ocupades dins de cada franja d'una hora** (8.30, 9.30… 20.30). No n'hi ha prou de limitar a 19 classes simultànies cada mitja hora. Cal reproduir aquest recompte exacte.
 - **Sessions compartides** (`id_compartida`): són una sola classe física. Es mouen juntes, a la mateixa aula, amb els alumnes **sumats** i tots els docents i cohorts.
+- **Grups sense dada d'alumnes** (decisió ds 7-11): al 2n semestre, 14 grups (276 sessions, sense PLAB ni dobles) tenen `alumnes = 0`. El model llegeix `dades/alumnes_sense_dada.json` i posa aquella xifra a totes les sessions del grup (codi + grup): matriculats reals del portal públic SIQ de la UAB (Assignatura Inventada A GEQ 20, Assignatura Inventada B 18) o estimació amb el mateix paquet (GIA 3r: 45 a la teoria; Assignatura Inventada D PAUL/901: 43). Els 4 PAUL de 900001 es queden a 0: són la mateixa classe que els de 900004, que ja porten els alumnes, i les compartides sumen. El verificador oficial continua veient-hi 0, i per tant no hi comprova l'aforament: la xifra només serveix perquè el nostre model triï una aula on hi càpiguen.
 - **Sense espai** (dobles, `sense_espai = 1`): no necessiten aula, però sí que compten per al torn, el docent i l'alumnat.
 - **R4-PLAB:** els PLAB són obstacles fixos. Una TE o un PAUL de la mateixa assignatura no hi pot coincidir.
 - **Heretats:** els conflictes que ja hi són avui i que el verificador marca com a heretats no s'han de prohibir al model, perquè llavors no hi hauria solució. Cal distingir-los dels nous.
