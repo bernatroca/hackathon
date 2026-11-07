@@ -79,6 +79,12 @@
 18. [cap @ /respostes] Prem Tab fins arribar a una aula del plànol → l'aula queda marcada amb un contorn blau.
 19. [cap @ /] Canvia el semestre a «Opcions» → mentre calcula, el contingut es veu atenuat (no desapareix) i surt «Calculant…».
 20. [cap @ /] Fes la finestra de mòbil (390 px) → una sola columna, sense espais buits grans sota «Proposem».
+21. [cap @ /] Obre l'app en una pantalla ampla (més de 1.600 px) → el contingut queda centrat, amb el mateix marge a cada costat.
+22. [cap @ /respostes] Canvia a «Totes les respostes» en la mateixa pantalla ampla → també queda centrada, com la portada.
+23. [cap @ /] Mira les quatre caixes de sota la resposta gran → són més baixes que abans, amb la xifra i els textos una mica més petits.
+24. [cap @ /respostes] Mira el filtre «Estat» → «Cal actuar» en vermell amb la creu, «Vigilar» en groc amb el signe d'admiració i «Hi cap» en verd amb el check, com les etiquetes de les targetes.
+25. [cap @ /respostes] Desmarca «Vigilar» → la pastilla queda blanca amb la icona grisa, i torna a tenir color en marcar-la.
+26. [cap @ /respostes] Mira la pastilla «Hi cap» del filtre → el verd és més apagat que abans i es llegeix bé.
 
 ## Part 2 · Proposta d'horari
 
@@ -116,3 +122,11 @@
 4. [cap @ http://127.0.0.1:8600/part2-opcio-a.html] Mira la barra de l'esquerra a qualsevol opció → menú agrupat en «Com està l'horari», «La proposta» i «Ajuda», amb «aviat» en petit al costat del que encara no hi és.
 5. [cap @ http://127.0.0.1:8600/part2-opcio-a.html] Clica «Guia pas a pas» a baix a l'esquerra → s'obre un panell fosc de 4 passos que ressalta cada apartat; la dreta queda lliure per a l'assistent de la part 3.
 6. [cap @ http://127.0.0.1:8600/part2-opcio-b.html] Compara les tres opcions → digues quina t'agrada més (o què agafaries de cadascuna) per passar-la a l'app.
+
+## Resum per a la Junta · tria A, B o C
+
+1. [cap @ http://127.0.0.1:8600/junta-opcio-a.html] Obre la versió A (cal la configuració «disseny» engegada) → dos semàfors grans, matí i tarda, amb quadrets: el matí 19 de 19 surt taronja («Hi cap, just») i la tarda 13 de 19, verd suau; a sota, barres per curs i una línia d'excepcions.
+2. [cap @ http://127.0.0.1:8600/junta-opcio-b.html] Obre la versió B → quatre preguntes amb la resposta en una frase gran i una pastilla de color; cap taula.
+3. [cap @ http://127.0.0.1:8600/junta-opcio-c.html] Obre la versió C → quatre fitxes petites a dalt, i a sota les barres per curs i una taula curta d'aules per mida.
+4. [cap @ http://127.0.0.1:8600/junta-opcio-a.html] Mira els colors a les tres versions → verd suau només si sobra marge, taronja si va just i vermell si calen més aules de les que hi ha; el verd no destaca massa.
+5. [cap @ http://127.0.0.1:8600/junta-opcio-b.html] Compara-les → digues quina vols a l'app (les xifres són inventades, només per triar el disseny).
