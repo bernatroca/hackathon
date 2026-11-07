@@ -18,7 +18,7 @@ from ortools.sat.python import cp_model
 from nivell2.base import Base, Proposta, fmt
 from nivell2.franges import _referencia, _regles
 from nivell2.comprova_persones import parelles_dobles
-from horaris.check import _espai_ok, _solapaments_de_partida, passadis, FRANGES, RESERVA_MIN
+from horaris.check import _espai_ok, passadis, FRANGES, RESERVA_MIN
 from horaris.model import DIES, MATI, TARDA
 
 MOTIU_AULA_FIXADA = ('L’aula de la sessió fixada està tancada per una contingència; '
@@ -88,6 +88,24 @@ def _fixada_tancada(base, s, ref):
         for t in base.tancaments)
 
 
+def _heretats(base, ref):
+    """Parells crus del 5.2: no reutilitza conflictes de la partida ni deduplica compartides."""
+    days = defaultdict(list)
+    for s in base.sessions.values():
+        date, ini = _referencia(s, ref)
+        days[date].append((ini, s.id, s))
+    out = set()
+    for rows in days.values():
+        rows.sort(key=lambda row: row[:2])
+        for i, (ini, _, a) in enumerate(rows):
+            for start, _, b in rows[i+1:]:
+                if start >= ini+a.durada:
+                    break
+                pair = tuple(sorted((a.id, b.id)))
+                out.update((rule, pair) for rule in _regles(a, b))
+    return out
+
+
 def _franges(base, rows, ref, amplia, recuperades=()):
     """Només la recuperació canvia de dia; la resta, com a màxim d'hora."""
     original = {_referencia(s, ref) for s in rows}
@@ -126,7 +144,8 @@ def _franges(base, rows, ref, amplia, recuperades=()):
     return out
 
 
-def _resol(base, units, links, opened, ref, inherited, deadline, seed, amplia):
+def _resol(base, units, links, opened, ref, inherited, deadline, seed, amplia, pressupost):
+    begin = time.monotonic()
     _resol.diagnostic = {}
     model = cp_model.CpModel()
     current = {sid: _referencia(s, ref) for sid, s in base.sessions.items()}
@@ -154,7 +173,8 @@ def _resol(base, units, links, opened, ref, inherited, deadline, seed, amplia):
         if a.unitat == b.unitat or links[a.unitat] == links[b.unitat]:
             return False
         pair = tuple(sorted((a.id, b.id)))
-        return any((rule, pair) not in inherited for rule in _regles(a, b))
+        return any((rule, pair) not in inherited or a.id in base.cancellades
+                   or b.id in base.cancellades for rule in _regles(a, b))
 
     costs_time, costs_room, costs_corridor = [], [], []
     acts = defaultdict(list)
@@ -166,16 +186,19 @@ def _resol(base, units, links, opened, ref, inherited, deadline, seed, amplia):
         duration = max(s.durada for s in rows)
         allowed = (set(base.aules) | {s.aula for s in physical if s.aula == 'B3/0021'}) if physical else {''}
         for s in physical:
-            allowed &= {r for r in base.aules if _espai_ok(base, s, r) or r == s.aula} | {s.aula}
-            if (s.tipus == 'PLAB' or (s.fixada and s.aula)) and not _fixada_tancada(base, s, ref):
-                allowed = {ref.files[s.id].aula} if len(physical) == 1 else allowed & {ref.files[s.id].aula}
+            compatible_rooms = {r for r in base.aules if _espai_ok(base, s, r)}
+            if s.aula == 'B3/0021':
+                compatible_rooms.add(s.aula)
+            allowed &= compatible_rooms
+            if ((s.tipus == 'PLAB' or (s.fixada and s.aula))
+                    and s.id not in base.cancellades and not _fixada_tancada(base, s, ref)):
+                allowed &= {ref.files[s.id].aula}
             # No es porta cap classe nova a una aula externa.
             if s.aula == 'B3/0021':
                 allowed &= {ref.files[s.id].aula}
         n = sum(s.alumnes for s in physical)
         compatible = len(allowed)
-        allowed = {r for r in allowed if r not in base.aules or base.aules[r].capacitat >= n
-                   or all(s.fixada and r == s.aula for s in physical)}
+        allowed = {r for r in allowed if r not in base.aules or base.aules[r].capacitat >= n}
         candidates = []
         recovered = [s for v in opened if links[v] == links[u] for s in units[v]
                      if s.id in base.cancellades]
@@ -184,7 +207,6 @@ def _resol(base, units, links, opened, ref, inherited, deadline, seed, amplia):
         for date, ini in slots:
             obstacles = fixed[date]
             if any(_solapa(s, (date, ini), t, current[t.id]) and blocked(s, t)
-                   and (date, ini) != current[s.id]
                    for s in rows for t in obstacles):
                 blocked_people += 1
                 continue
@@ -222,7 +244,9 @@ def _resol(base, units, links, opened, ref, inherited, deadline, seed, amplia):
             diff = model.new_bool_var('canvi_aula')
             model.add(r != rid[ref.files[s.id].aula]).only_enforce_if(diff)
             model.add(r == rid[ref.files[s.id].aula]).only_enforce_if(diff.Not())
-            costs_room.append(diff)
+            # El verificador no compta el canvi d'aula de les recuperades.
+            if s.id not in base.cancellades:
+                costs_room.append(diff)
             if not s.sense_espai:
                 acts[s.activitat or s.id].append(u)
         # Cada opció activa exactament una aula i els cubells R8 corresponents.
@@ -255,19 +279,7 @@ def _resol(base, units, links, opened, ref, inherited, deadline, seed, amplia):
             if links[u] == links[v]:
                 model.add(starts[u] == starts[v])
             elif any(blocked(a, b) for a in units[u] for b in units[v]):
-                a, b = units[u][0], units[v][0]
-                if _solapa(a, current[a.id], b, current[b.id]):
-                    # La referència ja està validada. El verificador deduplica
-                    # parells de compartides; el parell de files cru pot diferir.
-                    keep = model.new_bool_var('solapament_de_referencia')
-                    for unit, row in ((u, a), (v, b)):
-                        d, ini = current[row.id]
-                        model.add(starts[unit] == d.toordinal()*1440+ini).only_enforce_if(keep)
-                    order = model.new_bool_var('ordre')
-                    model.add(starts[u]+max(s.durada for s in units[u]) <= starts[v]).only_enforce_if([keep.Not(), order])
-                    model.add(starts[v]+max(s.durada for s in units[v]) <= starts[u]).only_enforce_if([keep.Not(), order.Not()])
-                else:
-                    model.add_no_overlap([intervals[u], intervals[v]])
+                model.add_no_overlap([intervals[u], intervals[v]])
     for key, xs in list(reserve.items()):
         if key[0] == 'interval':
             model.add_no_overlap(xs)
@@ -296,22 +308,46 @@ def _resol(base, units, links, opened, ref, inherited, deadline, seed, amplia):
     if len(ordinaries) >= RESERVA_MIN:
         for key, xs in bucket_uses.items():
             model.add(sum(xs)+len(fixed_occupied[key]) <= len(ordinaries)-RESERVA_MIN)
+    # La rutina inclou les setmanes congelades de les activitats obertes.
+    for u, rows in units.items():
+        if u not in opened:
+            for s in rows:
+                if not s.sense_espai and (s.activitat or s.id) in acts:
+                    acts[s.activitat or s.id].append(u)
     routine = []
     for members in acts.values():
-        members = sorted(set(members))
+        members = sorted(set(members), key=lambda u: (current[units[u][0].id], u))
         for u, v in zip(members, members[1:]):
+            if u not in opened and v not in opened:
+                continue
             diff = model.new_bool_var('excepcio_rutina')
-            model.add(roomvars[u] != roomvars[v]).only_enforce_if(diff)
-            model.add(roomvars[u] == roomvars[v]).only_enforce_if(diff.Not())
+            a = roomvars[u] if u in opened else rid[ref.files[units[u][0].id].aula]
+            b = roomvars[v] if v in opened else rid[ref.files[units[v][0].id].aula]
+            model.add(a != b).only_enforce_if(diff)
+            model.add(a == b).only_enforce_if(diff.Not())
             routine.append(diff)
-    bound = len(base.sessions)+1
-    # Lexicogràfic: franges, aules, passadís, rutina com a desempat.
-    model.minimize(bound**3*sum(costs_time)+bound**2*sum(costs_room)
-                   +bound*sum(costs_corridor)+sum(routine))
+    gaps = _hores_mortes(model, base, units, starts, options, current, opened)
+    # Lexicogràfic: canvis oficials, passadís, hores mortes i rutina.
+    quality = sum(routine)
+    weight = len(routine)+1
+    quality += weight*sum(gaps)
+    weight *= 1440*len(gaps)+1
+    quality += weight*sum(costs_corridor)
+    weight *= len(costs_corridor)+1
+    quality += weight*sum(costs_room)
+    weight *= len(costs_room)+1
+    model.minimize(weight*sum(costs_time)+quality)
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = max(.001, deadline-time.monotonic())
-    solver.parameters.num_search_workers = 2
+    solver.parameters.num_search_workers = 1
+    # Límit de feina reproduïble, amb el rellotge només com a salvaguarda.
+    solver.parameters.max_deterministic_time = max(.01, pressupost/2)
     solver.parameters.random_seed = seed
+    _resol.diagnostic = {'construccio_ms': round(1000*(time.monotonic()-begin)),
+                        'variables': len(model.proto.variables),
+                        'restriccions': len(model.proto.constraints)}
+    # solve optimitza fins a OPTIMAL o fins a consumir el pressupost; no hi ha
+    # cap callback que aturi la cerca en trobar el primer FEASIBLE.
     status = solver.solve(model)
     state = solver.status_name(status)
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
@@ -327,6 +363,120 @@ def _resol(base, units, links, opened, ref, inherited, deadline, seed, amplia):
     return proposal, state
 
 
+def _hores_mortes(m, base, units, starts, options, current, opened):
+    """Minuts entre sessions consecutives, amb els subgrups del verificador.
+
+    L'ordre és per inici i id, també quan hi ha solapaments heretats.
+    No compta el migdia ni replica una teoria per subgrups absents aquell dia.
+    """
+    # Només les dates possibles i les agendes que poden canviar. Inclou totes
+    # les classes congelades d'aquells dies i la recuperació entre setmanes.
+    moving = {u for u, values in options.items() if len({stamp for stamp, _ in values}) > 1}
+    if not moving:
+        return []
+    dates = {stamp//1440 for u in moving for stamp, _ in options[u]}
+    origin = min(dates)*1440
+    horizon = max(dates)-min(dates)+2
+    sentinel = horizon*1440
+    relevant = {u: rows for u, rows in units.items()
+                if u in moving or current[rows[0].id][0].toordinal() in dates}
+    starts = {u: starts[u]-origin if u in opened else
+              current[rows[0].id][0].toordinal()*1440+current[rows[0].id][1]-origin
+              for u, rows in relevant.items()}
+    units = relevant
+    weeks = {0: sorted(units)}
+    costs = []
+    days, minutes = {}, {}
+    for u, x in starts.items():
+        days[u] = m.new_int_var(0, horizon, 'dia_agenda')
+        minutes[u] = m.new_int_var(0, 1439, 'minut_agenda')
+        m.add_division_equality(days[u], x, 1440)
+        m.add_modulo_equality(minutes[u], x, 1440)
+    same_days, later_starts = {}, {}
+
+    def same_day(u, v):
+        key = tuple(sorted((u, v)))
+        if key not in same_days:
+            eq = m.new_bool_var('mateix_dia')
+            m.add(days[u] == days[v]).only_enforce_if(eq)
+            m.add(days[u] != days[v]).only_enforce_if(eq.Not())
+            same_days[key] = eq
+        return same_days[key]
+
+    def later_start(u, v):
+        key = (u, v)
+        if key not in later_starts:
+            later = m.new_bool_var('posterior')
+            tie = min(s.id for s in units[u]) < min(s.id for s in units[v])
+            m.add(starts[v] >= starts[u] + (0 if tie else 1)).only_enforce_if(later)
+            m.add(starts[v] < starts[u] + (0 if tie else 1)).only_enforce_if(later.Not())
+            value = m.new_int_var(0, sentinel, 'candidat_seguent')
+            m.add(value == starts[v]).only_enforce_if(later)
+            m.add(value == sentinel).only_enforce_if(later.Not())
+            later_starts[key] = value
+        return later_starts[key]
+
+    for week, us in weeks.items():
+        theory, groups = defaultdict(set), defaultdict(set)
+        for u in us:
+            for row in units[u]:
+                for coh in row.cohorts:
+                    key = (coh, row.linia)
+                    if row.tipus == 'TE':
+                        theory[key].add(u)
+                    else:
+                        groups[key + (row.num_grup,)].add(u)
+        # '*' handles days with theory but no actual subgroup present.
+        for key in theory:
+            groups[key + ('*',)] = set()
+        for key, practice in groups.items():
+            members = practice | theory[key[:2]]
+            if len(members) < 2 or not members & moving:
+                continue
+            all_practice = set().union(*(v for k, v in groups.items() if k[:2] == key[:2]))
+            for u in sorted(members):
+                following = m.new_int_var(0, sentinel, 'seguent')
+                m.add_min_equality(following, [later_start(u, v) for v in sorted(members) if v != u])
+                nextday = m.new_int_var(0, horizon, 'dia_seguent')
+                nextminute = m.new_int_var(0, 1439, 'minut_seguent')
+                m.add_division_equality(nextday, following, 1440)
+                m.add_modulo_equality(nextminute, following, 1440)
+                same = m.new_bool_var('seguent_mateix_dia')
+                m.add(nextday == days[u]).only_enforce_if(same)
+                m.add(nextday != days[u]).only_enforce_if(same.Not())
+                am = m.new_bool_var('final_mati')
+                bm = m.new_bool_var('seguent_mati')
+                duration = max(row.durada for row in units[u])
+                m.add(minutes[u] + duration <= MATI[1]).only_enforce_if(am)
+                m.add(minutes[u] + duration > MATI[1]).only_enforce_if(am.Not())
+                m.add(nextminute < MATI[1]).only_enforce_if(bm)
+                m.add(nextminute >= MATI[1]).only_enforce_if(bm.Not())
+                shift = m.new_bool_var('mateix_torn')
+                m.add(am == bm).only_enforce_if(shift)
+                m.add(am != bm).only_enforce_if(shift.Not())
+                active = m.new_bool_var('subgrup_present')
+                if u in practice:
+                    m.add(active == 1)
+                else:
+                    present = [same_day(u, v) for v in sorted(all_practice if key[2] == '*' else practice)]
+                    if present:
+                        any_present = m.new_bool_var('practiques_aquell_dia')
+                        m.add_max_equality(any_present, present)
+                        m.add(active == (1 - any_present if key[2] == '*' else any_present))
+                    else:
+                        m.add(active == (1 if key[2] == '*' else 0))
+                count = m.new_bool_var('compta_buit')
+                m.add_bool_and([same, shift, active]).only_enforce_if(count)
+                m.add_bool_or([same.Not(), shift.Not(), active.Not()]).only_enforce_if(count.Not())
+                gap = m.new_int_var(0, sentinel, 'buit_positiu')
+                m.add_max_equality(gap, [0, following-starts[u]-duration])
+                cost = m.new_int_var(0, 1440, 'minuts_morts')
+                m.add(cost == gap).only_enforce_if(count)
+                m.add(cost == 0).only_enforce_if(count.Not())
+                costs.append(cost)
+    return costs
+
+
 def repara(proposta: Proposta, canvi: Canvi) -> Reparacio:
     """Fixa la referència i obre afectades, veïnes, dia i setmana, per aquest ordre.
 
@@ -340,19 +490,19 @@ def repara(proposta: Proposta, canvi: Canvi) -> Reparacio:
     reasons = afectades(proposta, canvi)
     affected = set().union(*reasons.values())
     stats = {'sessions_afectades_per_imprevist': {k: len(v) for k, v in reasons.items()},
-             'sessions_afectades': len(affected), 'intents': []}
+             'sessions_afectades': len(affected), 'intents': [], 'sessions_obertes': 0,
+             'canvis_franja_vs_referencia': 0, 'canvis_aula_vs_referencia': 0}
     if not affected:
         return Reparacio(copy.deepcopy(proposta), 'OPTIMAL', {**stats, 'temps_s': time.monotonic()-start})
     units, links = _unitats(base)
-    inherited = _solapaments_de_partida(base)
+    inherited = _heretats(base, proposta)
     opened = {base.sessions[sid].unitat for sid in affected}
     reference = {sid: _referencia(s, proposta) for sid, s in base.sessions.items()}
     for level in range(5):
         components = {links[u] for u in opened}
         opened |= {u for u in units if links[u] in components}
         proposal, state = _resol(base, units, links, opened, proposta, inherited,
-            min(start+canvi.temps_s, time.monotonic()+max(.01, (start+canvi.temps_s-time.monotonic())/(5-level))),
-            canvi.llavor, amplia=level >= 2)
+            start+canvi.temps_s, canvi.llavor, amplia=level >= 2, pressupost=canvi.temps_s)
         stats['intents'].append({'nivell': level, 'estat': state,
                                'sessions_obertes': sum(len(units[u]) for u in opened),
                                'diagnostic': dict(_resol.diagnostic)})

@@ -1,10 +1,13 @@
 """5.3: quatre contingències simultànies sobre el 5.2 congelat."""
 from __future__ import annotations
-from nivell2.readmes import actualitza
+from nivell2.readmes import normalitza
 
 import argparse
 import json
 import shlex
+import re
+import tempfile
+from pathlib import Path
 import time
 from collections import Counter
 
@@ -28,18 +31,52 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--temps', type=float, default=40)
     ap.add_argument('--llavor', type=int, default=0)
+    ap.add_argument('--comprova-determinisme', action='store_true',
+                    help='genera dues vegades i exigeix CSV idèntics abans de publicar')
     args = ap.parse_args(argv)
     if not 0 < args.temps <= 45:
         ap.error('El pressupost ha de ser superior a zero i com a màxim de 45 segons')
     start = time.monotonic()
-    out = RESULTATS/'5.3'
+    RESULTATS.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='.5.3-', dir=RESULTATS) as temporary:
+        stage = Path(temporary)/'5.3'
+        status = _genera(args, stage, start)
+        if status:
+            return status
+        if args.comprova_determinisme:
+            repeat = Path(temporary)/'repeticio'
+            status = _genera(args, repeat, time.monotonic())
+            if status:
+                return status
+            if (stage/'proposta.csv').read_bytes() != (repeat/'proposta.csv').read_bytes():
+                print('Determinisme: ERROR; les dues execucions produeixen CSV diferents')
+                return 1
+            print('Determinisme: CORRECTE; CSV idèntic en dues execucions seguides')
+        # Es publica tota la carpeta validada. Si falla el segon rename,
+        # es restaura íntegrament el lliurament anterior.
+        destination = RESULTATS/'5.3'
+        backup = Path(temporary)/'anterior'
+        if destination.exists():
+            destination.rename(backup)
+        try:
+            stage.rename(destination)
+        except Exception:
+            if backup.exists():
+                backup.rename(destination)
+            raise
+    return 0
+
+
+def _genera(args, out, start):
     out.mkdir(parents=True, exist_ok=True)
-    refpath = RESULTATS_PRINCIPAL/'5.2'/'proposta.csv'
+    refpath = RESULTATS/'5.2'/'proposta.csv'
+    if not refpath.is_file():
+        refpath = RESULTATS_PRINCIPAL/'5.2'/'proposta.csv'
     relaxpath = refpath.parent/'relaxacions.csv'
     # Llegeixen les dades només el model i la reparació; cap fila va a stdout.
     reference = Proposta.llegeix(refpath)
     inherited = [{'restriccio': r.restriccio, 'sessions': '|'.join(sorted(r.sessions)),
-                  'justificacio': r.justificacio} for r in llegeix_relaxacions(relaxpath)]
+                  'justificacio': re.sub(r'(?<![\w/])diagnostic\.md', '../5.2/diagnostic.md', r.justificacio)} for r in llegeix_relaxacions(relaxpath)]
     before_report = verifica(refpath, relaxacions=relaxpath)
     if before_report.veredicte not in ('VALIDA', 'VALIDA AMB RELAXACIONS DECLARADES'):
         raise ValueError('Cal una referència 5.2 validada abans de reparar-la')
@@ -79,10 +116,11 @@ def main(argv=None):
                                   'despres': v} for k, v in report.objectius.items()],
                ['xifra', 'abans', 'despres'])
     command = shlex.join([str(PYTHON), '-m', 'nivell2.s53', '--temps', str(args.temps), '--llavor', str(args.llavor)])
-    checking = shlex.join([str(PYTHON), '-m', 'horaris', 'check', str(path.resolve()),
+    final = RESULTATS/'5.3'
+    checking = shlex.join([str(PYTHON), '-m', 'horaris', 'check', str((final/'proposta.csv').resolve()),
         '--semestre', '2', '--escenari', str(CONTINGENCIES), '--referencia', str(refpath.resolve()),
-        '--relaxacions', str(relax.resolve()), '--json', str((out/'informe.json').resolve()),
-        '--violacions', str((out/'violacions.csv').resolve())])
+        '--relaxacions', str((final/'relaxacions.csv').resolve()), '--json', str((final/'informe.json').resolve()),
+        '--violacions', str((final/'violacions.csv').resolve())])
     (out/'README.md').write_text(f'''# 5.3 Imprevistos
 
 Veredicte oficial: **{report.veredicte}**. Incompliments no declarats: {summary['incompliments_no_declarats']}.
@@ -107,17 +145,24 @@ RESULTATS_DIR=$PWD/resultats/nivell2 {shlex.quote(str(PYTHON))} -m nivell2.compr
 La referència i les relaxacions del 5.2 es conserven. Primer només s'obren les sessions
 afectades, incloses les classes vinculades dels dobles. Si cal, s'obren veïnes,
 el dia i la setmana. Cap sessió canvia de torn; només la cancel·lada canvia de dia.
-Es prioritza conservar franges i aules; per recol·locar, es prefereix el mateix passadís.
+Es prioritzen els canvis de franja i d'aula oficials; després, el passadís,
+les hores mortes i la rutina d'aula, incloses les setmanes congelades. La cancel·lada
+no compta en els canvis d'aula oficials; el recompte del CSV sí que la inclou.
 Només es declara R1-FIXADA o R7-PLAB quan una aula tancada obliga a canviar
 l'aula d'una sessió fixada, sense moure'n el dia ni l'hora. Els desdoblaments exigirien reservar
 i comprovar també la segona meitat: aquesta reparació no els simula amb una relaxació buida.
 L'estat òptim, si n'hi ha, correspon al veïnat obert, no al problema global.
 `resum.json` conté només recomptes; `execucio.json` els intents i pressupostos.
 ''', encoding='utf-8')
-    actualitza(out, '5.3')
+    readme = out/'README.md'
+    readme.write_text(normalitza(readme.read_text(encoding='utf-8'), '5.3', RESULTATS), encoding='utf-8')
     print(report.veredicte)
     print('Canvis de franja:', summary['canvis_franja_vs_referencia'])
-    print('Canvis d’aula:', summary['canvis_aula_vs_referencia'])
+    print('Canvis d’aula oficials:', summary['canvis_aula_vs_referencia'])
+    print('Canvis d’aula al CSV:', summary['canvis_aula_model'])
+    print('Estat solver:', result.estat)
+    for key in ('desplacaments_aula', 'r6_aules_te_extra_per_grup', 'hores_mortes_min'):
+        print(key+':', before_report.objectius.get(key, 0), '→', report.objectius.get(key, 0))
     print('Sessions afectades:', summary['sessions_afectades'])
     for reason, n in summary['sessions_afectades_per_imprevist'].items():
         print(reason+':', n)
@@ -134,8 +179,7 @@ if __name__ == '__main__':
         raise SystemExit(main())
     except Exception:
         import traceback
-        out = RESULTATS/'5.3'
-        out.mkdir(parents=True, exist_ok=True)
-        (out/'error-s53.txt').write_text(traceback.format_exc(), encoding='utf-8')
+        RESULTATS.mkdir(parents=True, exist_ok=True)
+        (RESULTATS/'error-s53.txt').write_text(traceback.format_exc(), encoding='utf-8')
         print('Errors d’execució: 1; detall desat fora de git')
         raise SystemExit(2)
