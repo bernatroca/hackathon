@@ -138,7 +138,7 @@ async function flux(fi) {
   const missatge = {role: 'assistant', content: r.text, consultes: r.consultes};
   const html = p.htmlMissatge(missatge);
   assert.ok(html.includes('<details class="xatia-consultes" open>'));
-  assert.ok(html.includes('Com es comprova · 1 consultes'));
+  assert.ok(html.includes('Com es comprova · 1 consulta'));
   assert.ok(html.includes('i 13 més'));
   assert.ok(html.includes('SELECT *\nFROM inventat WHERE x &lt; 4;'));
   assert.ok(html.includes('xatia-consulta-error'));
@@ -147,6 +147,25 @@ async function flux(fi) {
   assert.ok(!html.includes('<code>S9</code>'));
   assert.ok(!html.includes('x'.repeat(120)));
   assert.ok(!p.htmlMissatge({role:'assistant', content:'Antiga'}).includes('<details'));
+  const sql = 'SELECT * FROM inventat';
+  const original = {eina:'consulta_sql', args:{sql, proposta:'avui', filtre:{b:2, a:1}}, consulta:sql};
+  const duplicada = {eina:'consulta_sql', args:{filtre:{a:1, b:2}, proposta:'avui', sql}, consulta:sql};
+  const render = (consultes) => p.htmlMissatge({role:'assistant', content:'Prova', consultes});
+  const unica = render([original, duplicada]);
+  assert.ok(unica.includes('Com es comprova · 1 consulta</summary>'));
+  assert.equal((unica.match(/class="xatia-consulta"/g) || []).length, 1);
+  assert.equal(unica.split(sql).length - 1, 1);
+  assert.ok(!unica.includes('sql='));
+  assert.ok(unica.includes('proposta=avui'));
+  assert.ok(render([{...original, consulta:''}]).includes('sql='));
+  // Només es deduplica quan coincideixen tots tres camps, sense escurçar-los.
+  for (const diferent of [
+    {...original, eina:'altra_eina'},
+    {...original, args:{...original.args, proposta:'5.2'}},
+    {...original, consulta:sql + ' LIMIT 1'},
+  ]) {
+    assert.ok(render([original, duplicada, diferent]).includes('Com es comprova · 2 consultes</summary>'));
+  }
   p.estat.missatges = [missatge];
   p.desa();
   p.estat.missatges = [];

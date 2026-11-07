@@ -495,10 +495,23 @@
 
   function htmlConsultes(consultes) {
     if (!Array.isArray(consultes) || !consultes.length) return '';
-    const files = consultes.map((c) => {
-      if (!c || typeof c !== 'object') return '';
+    // L'ordre de les claus d'un objecte no canvia els arguments de l'eina.
+    const ordena = (valor) => Array.isArray(valor) ? valor.map(ordena)
+      : valor && typeof valor === 'object'
+        ? Object.fromEntries(Object.keys(valor).sort().map((clau) => [clau, ordena(valor[clau])]))
+        : valor;
+    const vistes = new Set();
+    const uniques = consultes.filter((c) => {
+      if (!c || typeof c !== 'object') return false;
+      const clau = JSON.stringify(ordena([c.eina, c.args || {}, c.consulta]));
+      if (vistes.has(clau)) return false;
+      vistes.add(clau);
+      return true;
+    });
+    if (!uniques.length) return '';
+    const files = uniques.map((c) => {
       const args = c.args && typeof c.args === 'object' && !Array.isArray(c.args) ? c.args : {};
-      const argumentsCurts = Object.entries(args).map(([clau, valor]) => {
+      const argumentsCurts = Object.entries(args).filter(([clau]) => clau !== 'sql' || !c.consulta).map(([clau, valor]) => {
         const text = typeof valor === 'string' ? valor : JSON.stringify(valor);
         const curt = String(text).length > 80 ? String(text).slice(0, 77) + '…' : String(text);
         return escapa(clau) + '=' + escapa(curt);
@@ -510,7 +523,7 @@
       const error = c.ok === false ? `<div class="xatia-consulta-error">error: ${escapa(String(c.error || 'No s’ha pogut comprovar.'))}</div>` : '';
       return `<div class="xatia-consulta"><div><strong>${escapa(String(c.eina || 'Consulta'))}</strong>${argumentsCurts ? ' · ' + argumentsCurts : ''}</div>${consulta}${identificadors}${error}</div>`;
     }).join('');
-    return `<details class="xatia-consultes" open><summary>Com es comprova · ${escapa(String(consultes.length))} consultes</summary>${files}</details>`;
+    return `<details class="xatia-consultes" open><summary>Com es comprova · ${escapa(String(uniques.length))} ${uniques.length === 1 ? 'consulta' : 'consultes'}</summary>${files}</details>`;
   }
 
   function htmlMissatge(m) {
