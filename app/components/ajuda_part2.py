@@ -3,6 +3,7 @@ import json
 
 import streamlit as st
 import streamlit.components.v1 as components
+from components.graella import LINIES_JS
 
 
 PASSOS = (
@@ -18,9 +19,9 @@ PASSOS = (
     ('.st-key-p2-clau-colors', 'Filtra per color',
      'Blau: sense canvis. Verd: aula assignada. Taronja: canvia. Vermell: cas especial. '
      'Tria una pastilla per apagar la resta de classes; «Totes» les torna a mostrar.'),
-    ('.st-key-p2-graelles .horari-scroll', 'Llegeix la setmana',
+    ('.st-key-p2-graelles .p2-horari', 'Llegeix la setmana',
      'Cada bloc és una classe. Les compartides apareixen juntes. Passa-hi el ratolí o obre el bloc '
-     'amb clic o teclat per llegir què hi havia abans. Si no hi cap, desplaça la graella lateralment.'),
+     'amb clic o teclat per llegir què hi havia abans. Si no hi cap, la setmana es reparteix en blocs un sota l’altre.'),
     ('.st-key-p2-vista-aula', 'Consulta i comparteix una aula',
      'Mostra totes les classes de l’aula, amb la mateixa setmana i proposta. '
      'Descarrega l’HTML per compartir-lo o imprimir-lo sense connexió.'),
@@ -41,6 +42,73 @@ function posicioPanell(rect, ample, alt, vw, vh) {
     top:limita(sota?rect.bottom+marge:rect.top-alt-marge), width:ample};
 }
 """
+
+
+# El popover manual posa el botó a la capa superior del navegador, per damunt
+# de la barra lateral i fora del context de container-type del contingut.
+CSS_GUIA = """
+.st-key-p2-pagina .st-key-p2-obre-guia{position:fixed;left:18px;bottom:18px;right:auto;top:auto;width:max-content;max-width:calc(100vw - 36px);margin:0;padding:0;border:0;background:transparent;overflow:visible;z-index:2147483646;}
+.st-key-p2-pagina .st-key-p2-obre-guia button{background:#fff;color:#1d5fae;border:1px solid #d4d3cd;border-radius:12px;padding:10px 14px;min-height:44px;box-shadow:0 2px 8px #0002;cursor:pointer;}
+.st-key-p2-pagina .st-key-p2-obre-guia::backdrop{background:transparent;pointer-events:none;}
+"""
+
+LLANCADOR_JS = """
+      if(window.__p2GuiaLlançadorNeteja)window.__p2GuiaLlançadorNeteja();
+      const obre=pagina.querySelector('.st-key-p2-obre-guia');
+      if(obre&&typeof obre.showPopover==='function'){
+        obre.setAttribute('popover','manual');
+        if(!obre.matches(':popover-open'))obre.showPopover();
+      }
+      let frameObre;
+      const situaObre=()=>{
+        if(!obre?.isConnected){window.__p2GuiaLlançadorNeteja?.();return;}
+        const r=origen(obre);
+        obre.style.bottom='auto';obre.style.left=(18-r.left)+'px';
+        obre.style.top=(window.innerHeight-obre.offsetHeight-18-r.top)+'px';
+      };
+      const programaObre=()=>{window.cancelAnimationFrame(frameObre);frameObre=window.requestAnimationFrame(situaObre);};
+      window.addEventListener('resize',programaObre);document.addEventListener('scroll',programaObre,true);
+      const resizeObre=new window.ResizeObserver(programaObre);
+      if(obre)resizeObre.observe(obre);
+      resizeObre.observe(pagina);
+      const netejaObre=()=>{
+        resizeObre.disconnect();window.cancelAnimationFrame(frameObre);window.removeEventListener('resize',programaObre);
+        document.removeEventListener('scroll',programaObre,true);
+      };
+      window.__p2GuiaLlançadorNeteja=netejaObre;
+      globalThis.addEventListener('pagehide',()=>{
+        if(window.__p2GuiaLlançadorNeteja===netejaObre)netejaObre();
+      },{once:true});
+      situaObre();
+"""
+
+
+def prova_guia_html():
+    """Llançador real en un marc inventat amb menú plegable per a la prova."""
+    return """<div class="prova-menu" data-testid="stSidebar">Menú inventat</div>
+<button class="prova-obre-menu" aria-expanded="true" aria-controls="prova-contingut">Plega el menú</button>
+<div class="st-key-p2-obre-guia"><button type="button" aria-expanded="false" aria-controls="prova-guia">Com funciona? Guia pas a pas</button></div>
+<div id="prova-guia" class="prova-panell" hidden role="status">Guia oberta · prova inventada</div>
+<script>((window)=>{
+ const document=window.document, pagina=document.querySelector('.st-key-p2-pagina');
+ const origen=e=>{
+   const p=e.offsetParent,r=p?.getBoundingClientRect()||{left:0,top:0};
+   return {left:r.left-(p?.scrollLeft||0),top:r.top-(p?.scrollTop||0)};
+ };
+ LLANCADOR
+ const boto=pagina.querySelector('.st-key-p2-obre-guia button');
+ boto.onclick=()=>{
+   const p=document.getElementById('prova-guia');
+   const obert=boto.getAttribute('aria-expanded')!=='true';
+   if(typeof p.showPopover==='function'){
+     p.hidden=false;p.setAttribute('popover','manual');
+     if(obert)p.showPopover();else p.hidePopover();
+   }else p.hidden=!obert;
+   boto.setAttribute('aria-expanded',String(obert));
+ };
+ const menu=document.querySelector('.prova-obre-menu');
+ menu.onclick=()=>{const plegat=document.body.classList.toggle('menu-plegat');menu.setAttribute('aria-expanded',String(!plegat));menu.textContent=plegat?'Obre el menú':'Plega el menú';};
+})(window)</script>""".replace('LLANCADOR', LLANCADOR_JS)
 
 
 def _pas(valor):
@@ -75,6 +143,13 @@ def enfoca_pas():
       if(window.__p2GuiaNeteja)window.__p2GuiaNeteja();
       const pagina=document.querySelector('.st-key-p2-pagina');
       if(!pagina)return;
+      LINIES
+      window.__p2LiniesNeteja?.();
+      const netejaLinies=preparaLiniesHorari(pagina,window);
+      window.__p2LiniesNeteja=netejaLinies;
+      globalThis.addEventListener('pagehide',()=>{
+        if(window.__p2LiniesNeteja===netejaLinies)netejaLinies();
+      },{once:true});
       // El CSS comú usa container-type: el bloc pot ser el containing block
       // dels elements fixed. Compensem-ne l'origen per mantenir coordenades de viewport.
       const origen=e=>{
@@ -82,26 +157,7 @@ def enfoca_pas():
         const r=parent?.getBoundingClientRect()||{left:0,top:0};
         return {left:r.left-(parent?.scrollLeft||0),top:r.top-(parent?.scrollTop||0)};
       };
-      if(window.__p2GuiaLlançadorNeteja)window.__p2GuiaLlançadorNeteja();
-      const obre=pagina.querySelector('.st-key-p2-obre-guia');
-      let frameObre;
-      const situaObre=()=>{
-        if(!obre?.isConnected){window.__p2GuiaLlançadorNeteja?.();return;}
-        const r=origen(obre);
-        obre.style.bottom='auto';obre.style.left=(18-r.left)+'px';
-        obre.style.top=(window.innerHeight-obre.offsetHeight-18-r.top)+'px';
-      };
-      const programaObre=()=>{window.cancelAnimationFrame(frameObre);frameObre=window.requestAnimationFrame(situaObre);};
-      window.addEventListener('resize',programaObre);document.addEventListener('scroll',programaObre,true);
-      const netejaObre=()=>{
-        window.cancelAnimationFrame(frameObre);window.removeEventListener('resize',programaObre);
-        document.removeEventListener('scroll',programaObre,true);
-      };
-      window.__p2GuiaLlançadorNeteja=netejaObre;
-      globalThis.addEventListener('pagehide',()=>{
-        if(window.__p2GuiaLlançadorNeteja===netejaObre)netejaObre();
-      },{once:true});
-      situaObre();
+      LLANCADOR
       const selector=SELECTOR, pas=PAS;
       pagina.querySelectorAll('.p2-pas-actiu').forEach(e=>e.classList.remove('p2-pas-actiu'));
       if(!selector){window.__p2GuiaPas=null;return;}
@@ -165,4 +221,4 @@ def enfoca_pas():
       },{once:true});
     })(window.parent)</script>"""
     components.html(script.replace('SELECTOR', json.dumps(selector)).replace('PAS;', json.dumps(pas) + ';')
-        .replace('POSICIO', POSICIO_JS), height=0, scrolling=False, tab_index=-1)
+        .replace('POSICIO', POSICIO_JS).replace('LLANCADOR', LLANCADOR_JS).replace('LINIES', LINIES_JS), height=0, scrolling=False, tab_index=-1)

@@ -142,11 +142,11 @@ def nom_grup(grup, tipus):
 
 # Un únic estat per bloc: els casos especials prevalen sobre els altres canvis.
 ESTATS = {
-    'totes': ('▦', 'Totes', 'var(--blau,#2a78d6)', 'var(--blau-fons,#eef5fd)', 'var(--blau-text,#205c9e)'),
-    'aula-nova': ('✓', 'Aula assignada', 'var(--verd,#2f8f46)', 'var(--verd-fons,#e9f4ec)', 'var(--verd-text,#1f6b33)'),
-    'canvi': ('!', 'Canvia', 'var(--p2-taronja,#e8820c)', 'var(--p2-taronja-fons,#fff1e0)', 'var(--p2-taronja-text,#9a5200)'),
-    'relaxada': ('×', 'Cas especial', 'var(--vermell,#d03b3b)', 'var(--vermell-fons,#fbe9e9)', 'var(--vermell-text,#a12c2c)'),
-    'igual': ('●', 'Sense canvis', 'var(--blau,#2a78d6)', 'var(--blau-fons,#eef5fd)', 'var(--blau-text,#205c9e)'),
+    'totes': ('▦', 'Totes', '#2a78d6', '#e8f1fc', '#1d5fae'),
+    'aula-nova': ('✓', 'Aula assignada', '#2f8f46', '#e9f4ec', '#1f6b33'),
+    'canvi': ('!', 'Canvia', '#e8820c', '#fff1e0', '#9a5200'),
+    'relaxada': ('×', 'Cas especial', '#d03b3b', '#fbe9e9', '#a12c2c'),
+    'igual': ('●', 'Sense canvis', '#2a78d6', '#e8f1fc', '#1d5fae'),
 }
 
 
@@ -186,32 +186,123 @@ def llegenda_html():
         for clau, (icona, nom, color, fons, text) in ESTATS.items() if clau != 'totes') + '</ul>'
 
 
+# Estils compartits entre els botons Streamlit i la prova HTML inventada.
+CSS_FILTRES = """
+:is(.st-key-p2-filtres,.p2-filtres){display:flex;flex-wrap:wrap;gap:8px;min-width:0;}
+.st-key-p2-filtres [data-testid="stHorizontalBlock"]{gap:8px;flex-wrap:wrap;}
+.st-key-p2-filtres [data-testid="stColumn"]{width:auto!important;flex:0 0 auto!important;min-width:0!important;}
+:is(.st-key-p2-filtres,.p2-filtres) button{display:inline-flex;align-items:center;gap:8px;background:#fff;color:#1a1a18;border:1px solid #d4d3cd;border-radius:999px;padding:5px 10px;min-height:32px;font:14px/1.35 system-ui;box-shadow:none;}
+:is(.st-key-p2-filtres,.p2-filtres) button p{font-size:14px;white-space:nowrap;font-weight:inherit;}
+:is(.st-key-p2-filtres,.p2-filtres) button::before{content:"";display:block;flex:none;width:10px;height:10px;border-radius:3px;background:var(--p2-filtre-color);}
+:is(.st-key-p2-filtres,.p2-filtres) button:is([kind="primary"],[aria-pressed="true"]){background:#fff;color:#1a1a18;border-color:#1a1a18;font-weight:700;outline:none;}
+:is(.st-key-p2-filtres,.p2-filtres) button:hover{background:#f7f7f4;color:#1a1a18;border-color:#1a1a18;}
+:is(.st-key-p2-filtres,.p2-filtres) button:focus-visible{outline:2px solid #1a1a18;outline-offset:2px;}
+""" + ''.join(
+    f'.st-key-p2-filtre-{clau},.p2-filtre-{clau}' + '{--p2-filtre-color:' + color + ';}'
+    for clau, (_, _, color, _, _) in ESTATS.items())
+
+
+def filtres_html(celles, actiu='totes'):
+    """Mateixes etiquetes i estils que els widgets, per a la prova inventada."""
+    comptes = recomptes_estat(celles)
+    return '<div class="p2-filtres" role="group" aria-label="Quines classes vols veure">' + ''.join(
+        f'<button class="p2-filtre-{clau}" data-filtre="{clau}" aria-pressed="{str(clau == actiu).lower()}">'
+        f'{nom} ({sum(comptes.values()) if clau == "totes" else comptes[clau]})</button>'
+        for clau, (_, nom, *_) in ESTATS.items()) + '</div>'
+
+
 # El prefix evita que l'HTML exportat alteri altres components de l'app.
 CSS = """
-.p2-horari{width:100%;max-width:100%;min-width:0;color:var(--tinta,#1a1a18);font:13px/1.35 system-ui}
-.p2-horari .horari-scroll{overflow:auto;width:100%;max-width:100%;min-width:0;contain:inline-size;border:1px solid var(--linia,#e6e5e0);border-radius:14px;background:var(--targeta,#fff)}
-.p2-horari .horari{border-collapse:collapse;table-layout:fixed;width:100%;background:var(--targeta,#fff)}
-.p2-horari .horari th,.p2-horari .horari td{border:1px solid var(--linia,#e6e5e0);padding:4px;vertical-align:top}
-.p2-horari .horari th{background:var(--fons,#f4f3ef);font-weight:600}
-.p2-horari .horari tbody tr{height:32px}
-.p2-horari .horari .hora{width:72px}
-.p2-horari .horari caption{text-align:left;font-size:16px;font-weight:600;padding:10px 12px}
-.p2-horari .classe{background:var(--targeta,#fff);border:1px solid var(--linia,#e6e5e0);border-left:5px solid var(--blau,#2a78d6);border-radius:8px;padding:6px;min-width:0;height:100%;box-sizing:border-box;word-break:normal;overflow-wrap:normal;hyphens:auto}
-.p2-horari .classe.aula-nova{border-left-color:var(--verd,#2f8f46)}
-.p2-horari .classe.canvi{border-left-color:var(--p2-taronja,#e8820c)}
-.p2-horari .classe.relaxada{border-left-color:var(--vermell,#d03b3b)}
-.p2-horari .classe small{display:block;margin-top:3px}
-.p2-horari .classe .estat{display:inline-flex;align-items:center;gap:4px;white-space:normal;hyphens:manual;overflow-wrap:normal;font-size:12px;line-height:1.25;font-weight:600;border-radius:999px;padding:2px 7px;margin-top:5px}
-.p2-horari .classe.aula-nova .estat{background:var(--verd-fons,#e9f4ec);color:var(--verd-text,#1f6b33)}
-.p2-horari .classe.canvi .estat{background:var(--p2-taronja-fons,#fff1e0);color:var(--p2-taronja-text,#9a5200)}
-.p2-horari .classe.relaxada .estat{background:var(--vermell-fons,#fbe9e9);color:var(--vermell-text,#a12c2c)}
-.p2-horari .classe .estat svg{width:14px;height:14px;flex:none}
-.p2-horari .classe.apagada{opacity:.25}
-.p2-horari .classe summary:focus-visible{outline:3px solid var(--blau,#2a78d6);outline-offset:2px}
-.p2-horari .classe summary{cursor:pointer;list-style:none}
-.p2-horari .classe summary::-webkit-details-marker{display:none}
-.p2-horari .classe .detall{padding-top:6px;border-top:1px solid var(--linia,#e6e5e0);margin-top:6px}
+.p2-horari{container:p2-graella / inline-size;width:100%;max-width:100%;min-width:0;color:#1a1a18;font:13px/1.35 system-ui}
+.p2-horari .p2-layout{display:none;}
+.p2-horari .p2-dies{display:grid;gap:18px;}
+.p2-horari .horari-scroll{width:100%;max-width:100%;min-width:0;border-radius:14px;background:#fff;}
+.p2-horari .horari{position:relative;isolation:isolate;border-collapse:separate;border-spacing:0;table-layout:fixed;width:100%;background:#fff;}
+.p2-horari .horari th,.p2-horari .horari td{box-sizing:border-box;border:1px solid #e6e5e0;border-width:0 1px 0 0;padding:4px;vertical-align:top;}
+.p2-horari .horari th{background:#f4f3ef;font-weight:600;}
+.p2-horari .horari tbody{background-color:#fff;background-repeat:no-repeat;}
+.p2-horari .horari tbody tr{height:32px;}
+.p2-horari .horari tbody tr.mitja-hora{background-image:linear-gradient(#e6e5e0,#e6e5e0);background-size:100% 1px;background-repeat:no-repeat;}
+.p2-horari .horari tbody tr.hora-plena{background-image:linear-gradient(#c9c8c2,#c9c8c2);background-size:100% 2px;background-repeat:no-repeat;}
+.p2-horari .horari tbody th{background:transparent;}
+.p2-horari .horari thead th{border-bottom:1px solid #e6e5e0;}
+
+.p2-horari .horari .hora{width:72px;}
+.p2-horari .horari tbody th{font-size:11px;color:#52514e;font-weight:400;}
+.p2-horari .horari caption{text-align:left;font-size:16px;font-weight:600;padding:10px 12px;}
+.p2-horari .classe{position:relative;z-index:1;color:#1a1a18;background:#fff;border:1px solid #e6e5e0;border-left:5px solid #2a78d6;border-radius:8px;padding:6px;min-width:0;height:100%;box-sizing:border-box;word-break:normal;overflow-wrap:normal;hyphens:none;}
+.p2-horari .classe.aula-nova{border-left-color:#2f8f46;}
+.p2-horari .classe.canvi{border-left-color:#e8820c;}
+.p2-horari .classe.relaxada{border-left-color:#d03b3b;}
+.p2-horari .classe b{display:block;color:#1a1a18;font-size:14px;font-weight:700;white-space:normal;word-break:normal;overflow-wrap:normal;hyphens:none;font-family:system-ui,sans-serif;font-variant-ligatures:none;letter-spacing:normal;word-spacing:normal;text-transform:none;}
+.p2-horari .classe small{display:block;margin-top:3px;color:#52514e;font-size:12px;}
+.p2-horari .classe .estat{display:inline-flex;align-items:center;gap:4px;white-space:normal;font-size:12px;line-height:1.25;font-weight:600;border-radius:999px;padding:2px 7px;margin-top:5px;background:#e8f1fc;color:#1d5fae;}
+.p2-horari .classe.aula-nova .estat{background:#e9f4ec;color:#1f6b33;}
+.p2-horari .classe.canvi .estat{background:#fff1e0;color:#9a5200;}
+.p2-horari .classe.relaxada .estat{background:#fbe9e9;color:#a12c2c;}
+.p2-horari .classe .estat svg{width:14px;height:14px;flex:none;}
+.p2-horari .classe.apagada{opacity:.25;}
+.p2-horari .classe summary:focus-visible{outline:3px solid #2a78d6;outline-offset:2px;}
+.p2-horari .classe summary{cursor:pointer;list-style:none;}
+.p2-horari .classe summary::-webkit-details-marker{display:none;}
+.p2-horari .classe .detall{padding-top:6px;border-top:1px solid #e6e5e0;margin-top:6px;}
+.p2-horari .p2-carrils{display:grid;gap:12px;}
 """
+
+# El fons del tbody travessa també les cel·les amb rowspan. Mesurem les files
+# perquè un nom llarg o un límit parcial pot alterar-ne l'alçada. No s'afegeix
+# cap element (ni pseudo-element) al model de columnes de la taula.
+LINIES_JS = """
+function preparaLiniesHorari(arrel, host) {
+  const cossos=[...arrel.querySelectorAll('table.horari tbody')].filter(c=>c.rows);
+  if(!cossos.length)return ()=>{};
+  let frame,acabat=false;
+  const dibuixa=()=>{
+    if(acabat)return;
+    for(const cos of cossos){
+      const rect=cos.getBoundingClientRect();
+      if(!rect.height)continue;
+      const imatges=[],mides=[],posicions=[];
+      const linia=(y,color,gruix)=>{
+        imatges.push(`linear-gradient(${color},${color})`);
+        mides.push(`100% ${gruix}px`);posicions.push(`0 ${y}px`);
+      };
+      for(const fila of cos.rows){
+        const plena=fila.classList.contains('hora-plena');
+        if(plena||fila.classList.contains('mitja-hora')){
+          linia(fila.getBoundingClientRect().top-rect.top,
+                plena?'#c9c8c2':'#e6e5e0',plena?2:1);
+        }
+      }
+      linia(rect.height-1,'#e6e5e0',1);
+      cos.style.backgroundImage=imatges.join(',');
+      cos.style.backgroundSize=mides.join(',');
+      cos.style.backgroundPosition=posicions.join(',');
+    }
+  };
+  const programa=()=>{
+    if(acabat)return;
+    host.cancelAnimationFrame(frame);frame=host.requestAnimationFrame(dibuixa);
+  };
+  const observer=new host.ResizeObserver(programa);
+  cossos.forEach(cos=>observer.observe(cos));
+  host.document.fonts?.ready.then(programa);
+  programa();
+  return ()=>{acabat=true;observer.disconnect();host.cancelAnimationFrame(frame);};
+}
+"""
+
+
+def script_linies_html():
+    return '<script>' + LINIES_JS + 'preparaLiniesHorari(document,window);</script>'
+
+
+MIN_CARRIL = 150
+AMPLE_HORES = 72
+
+
+def amplada_bloc(carrils, dies):
+    return AMPLE_HORES + MIN_CARRIL * sum(carrils[d][0] for d in dies)
 
 
 def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='totes', estils=True):
@@ -220,25 +311,24 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
     Les files parcials respecten els minuts exactes: dues classes consecutives
     no creen carrils perquè comparteixin una mitja hora visual.
     """
-    from components.vistes import estat as pastilla_estat
-
     celles = agrupa_compartides(celles)
-    # Conservem el dia sencer si hi ha matí i tarda; un únic torn comença
-    # a la primera mitja hora ocupada, mantenint sempre el final a les 21 h.
-    torns = {c.ini < 870 for c in celles}
-    inici_dia = max(510, min((c.ini for c in celles), default=510) // 30 * 30) if len(torns) == 1 else 510
-    franges = tuple(range(inici_dia, 1260, 30))
-    # Afegim límits exactes a les mitges hores, sense alterar-ne els rètols.
-    limits = sorted({*franges, 1260} | {
-        max(inici_dia, min(1260, minut)) for c in celles for minut in (c.ini, c.fi)})
+    if not celles:
+        return (f'<style>{CSS}</style>' if estils else '') + '<div class="p2-horari"><p class="p2-buit" role="status">No hi ha classes aquesta setmana.</p></div>'
+    # El rang pertany a tota la setmana visible i es conserva en cada bloc.
+    inici_dia = min(c.ini for c in celles) // 30 * 30
+    final_dia = (max(c.fi for c in celles) + 29) // 30 * 30
+    franges = tuple(range(inici_dia, final_dia, 30))
+    # Els límits exactes eviten solapaments inventats per l'arrodoniment.
+    limits = sorted({*franges, final_dia} | {
+        minut for c in celles for minut in (c.ini, c.fi)})
     files = {minut: i for i, minut in enumerate(limits)}
     carrils = {}
     for dia in DIES:
         ocupats = []
         entrades = []
         for c in sorted((c for c in celles if c.dia == dia), key=lambda c: (c.ini, c.fi, c.id_sessio)):
-            inici = files[max(inici_dia, min(1260, c.ini))]
-            final = files[max(inici_dia, min(1260, c.fi))]
+            inici = files[c.ini]
+            final = files[c.fi]
             if final <= inici:
                 continue
             carril = next((i for i, fi in enumerate(ocupats) if fi <= inici), len(ocupats))
@@ -265,66 +355,110 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
             for fila in range(primera, final):
                 for columna in range(carril, carril + ample):
                     cobertes[dia, fila, columna] = True
-    # Cada carril té com a mínim 96 px; si hi ha lloc, la taula s'estira fins a l'amplada disponible.
-    total = sum(n for n, _ in carrils.values())
-    amplada = 72 + 96 * total
-    html = (f'<style>{CSS}</style>' if estils else '') + f'<div class="p2-horari"><div class="horari-scroll" tabindex="0" role="region" aria-label="{escape(titol, quote=True)}"><table class="horari"><caption>{escape(titol)}</caption><colgroup><col class="hora">'
-    for dia in DIES:
-        n, _ = carrils[dia]
-        html += ''.join('<col class="carril">' for _ in range(n))
-    html = html.replace('<table class="horari">', f'<table class="horari" style="min-width:{amplada}px">')
-    html += '</colgroup><thead><tr><th scope="col">Hora</th>'
-    html += ''.join(f'<th scope="col" colspan="{carrils[d][0]}">{nom}</th>' for d, nom in zip(DIES, NOMS_DIES)) + '</tr></thead><tbody>'
-    for fila, inici in enumerate(limits[:-1]):
-        alt = (limits[fila + 1] - inici) / 30 * 32
-        html += f'<tr style="height:{alt:g}px">'
-        if inici in franges:
-            html += f'<th scope="row" rowspan="{files[min(inici+30, 1260)]-fila}">{fmt(inici)}–{fmt(inici+30)}</th>'
-        for dia in DIES:
-            n, entrades = carrils[dia]
-            carril = 0
-            while carril < n:
-                entrada = inicis.get((dia, fila, carril))
-                if entrada is None:
-                    if (dia, fila, carril) in cobertes:
-                        carril += 1
+    def bloc(dies, *, carril_unic=None):
+        # En una pantalla més estreta que un dia, els subgrups també s'apilen.
+        # Cada classe ampla es mostra només al primer dels seus carrils.
+        ample_bloc = (AMPLE_HORES + MIN_CARRIL if carril_unic is not None
+                      else amplada_bloc(carrils, dies))
+        noms = ' – '.join(NOMS_DIES[DIES.index(d)] for d in (dies[0], dies[-1])) if len(dies) > 1 else NOMS_DIES[DIES.index(dies[0])]
+        etiqueta = f'{titol} · {noms}'
+        if carril_unic is not None:
+            etiqueta += f' · Carril {carril_unic + 1}'
+        html = (f'<div class="horari-scroll" tabindex="0" role="region" aria-label="{escape(etiqueta, quote=True)}">'
+                f'<table class="horari" style="min-width:{ample_bloc}px"><caption>{escape(etiqueta)}</caption>'
+                '<colgroup><col class="hora">')
+        for dia in dies:
+            n = 1 if carril_unic is not None else carrils[dia][0]
+            html += '<col class="carril">' * n
+        html += '</colgroup><thead><tr><th scope="col">Hora</th>'
+        html += ''.join(f'<th scope="col" colspan="{1 if carril_unic is not None else carrils[d][0]}">{NOMS_DIES[DIES.index(d)]}</th>' for d in dies)
+        html += '</tr></thead><tbody>'
+        for fila, inici in enumerate(limits[:-1]):
+            alt = (limits[fila + 1] - inici) / 30 * 32
+            linia = 'hora-plena' if inici % 60 == 0 else 'mitja-hora' if inici % 30 == 0 else 'fraccio'
+            html += f'<tr class="{linia}" data-minut="{inici}" style="height:{alt:g}px">'
+            if inici in franges:
+                html += f'<th scope="row" rowspan="{files[min(inici+30, final_dia)]-fila}">{fmt(inici)}–{fmt(inici+30)}</th>'
+            for dia in dies:
+                n = carrils[dia][0] if carril_unic is None else carril_unic + 1
+                carril = 0 if carril_unic is None else carril_unic
+                while carril < n:
+                    entrada = inicis.get((dia, fila, carril))
+                    if entrada is None:
+                        coberta = (dia, fila, carril) in cobertes
+                        if carril_unic is not None:
+                            # Només ometem els rowspans que comencen en aquest carril.
+                            coberta = any(d == dia and k == carril and primera < fila < final
+                                          for (d, primera, k), (final, _, _) in inicis.items())
+                        if coberta:
+                            carril += 1
+                            continue
+                        ample_buit = 1
+                        while (carril + ample_buit < n
+                               and (dia, fila, carril + ample_buit) not in cobertes):
+                            ample_buit += 1
+                        html += f'<td colspan="{ample_buit}"></td>'
+                        carril += ample_buit
                         continue
-                    ample_buit = 1
-                    while (carril + ample_buit < n
-                           and (dia, fila, carril + ample_buit) not in cobertes):
-                        ample_buit += 1
-                    html += f'<td colspan="{ample_buit}"></td>'
-                    carril += ample_buit
-                    continue
-                final, ample, c = entrada
-                estat = estat_cella(c)
-                marques = (' ' + estat if estat != 'igual' else '')
-                if filtre != 'totes' and filtre != estat:
-                    marques += ' apagada'
-                ubicacio = c.aula or ('Aula no indicada a les dades' if originals else 'Pendent d’assignar aula')
-                grup = ' / '.join(c.grups_compartits) or nom_grup(c.grup, c.tipus)
-                detall = f'{fmt(c.ini)}–{fmt(c.fi)} · {grup} · {ubicacio}'
-                avis = ' '.join(c.relaxacions)
-                if c.setmana_diferent:
-                    avis = 'Setmana diferent. ' + avis
-                if c.canvi or c.aula_assignada:
-                    abans = c.abans or ('Aula assignada.' if c.aula_assignada else 'Canvi de dia, hora o aula.')
-                    avis = abans + (' · ' + avis if avis else '')
-                icona, nom, *_ = ESTATS[estat]
-                color_estat = {'aula-nova': 'verd', 'canvi': 'ambre', 'relaxada': 'vermell'}.get(estat)
-                pastilla = pastilla_estat({'estat': color_estat, 'etiqueta': nom}) if color_estat else ''
-                compartida = '<small>Classe compartida</small>' if c.compartida else ''
-                contingut = f'<b>{escape(c.assignatura)}</b><small>{escape(detall)}</small>{compartida}{pastilla}'
-                # Details ofereix el mateix detall amb clic, teclat o en passar el ratolí.
-                classe = (f'<details class="classe{marques}" data-estat="{estat}" title="{escape(avis, quote=True)}">'
-                    f'<summary>{contingut}</summary><small class="detall">{escape(avis or "Es manté la classe de les dades originals.")}</small></details>')
-                html += f'<td rowspan="{final-fila}" colspan="{ample}">{classe}</td>'
-                carril += ample
-        html += '</tr>'
-    return html + '</tbody></table></div></div>'
+                    final, ample, c = entrada
+                    if carril_unic is not None:
+                        ample = 1
+                    estat = estat_cella(c)
+                    marques = (' ' + estat if estat != 'igual' else '')
+                    if filtre != 'totes' and filtre != estat:
+                        marques += ' apagada'
+                    ubicacio = c.aula or ('Aula no indicada a les dades' if originals else 'Pendent d’assignar aula')
+                    grup = ' / '.join(c.grups_compartits) or nom_grup(c.grup, c.tipus)
+                    detall = f'{fmt(c.ini)}–{fmt(c.fi)} · {grup} · {ubicacio}'
+                    avis = ' '.join(c.relaxacions)
+                    if c.setmana_diferent:
+                        avis = 'Setmana diferent. ' + avis
+                    if c.canvi or c.aula_assignada:
+                        abans = c.abans or ('Aula assignada.' if c.aula_assignada else 'Canvi de dia, hora o aula.')
+                        avis = abans + (' · ' + avis if avis else '')
+                    icona, nom, *_ = ESTATS[estat]
+                    pastilla = f'<span class="estat"><span aria-hidden="true">{icona}</span>{nom}</span>'
+                    compartida = '<small>Classe compartida</small>' if c.compartida else ''
+                    nom_assignatura = escape(c.assignatura).replace('’', '&#8217;').replace('‘', '&#8216;')
+                    contingut = f'<b>{nom_assignatura}</b><small>{escape(detall)}</small>{compartida}{pastilla}'
+                    classe = (f'<details class="classe{marques}" data-estat="{estat}" title="{escape(avis, quote=True)}">'
+                        f'<summary>{contingut}</summary><small class="detall">{escape(avis or "Es manté la classe de les dades originals.")}</small></details>')
+                    html += f'<td rowspan="{final-fila}" colspan="{ample}">{classe}</td>'
+                    carril += ample
+            html += '</tr>'
+        return html + '</tbody></table></div>'
+
+    # Els llindars depenen dels carrils reals de la vista, no del viewport.
+    clau = 'p2-c' + ''.join(str(carrils[d][0]) + '-' for d in DIES).rstrip('-')
+    dos_blocs = (DIES[:3], DIES[3:])
+    ample_setmana = amplada_bloc(carrils, DIES)
+    ample_dos = max(amplada_bloc(carrils, dies) for dies in dos_blocs)
+    selector = f'.p2-horari.{clau}'
+    responsive = ''
+    for dia in DIES:
+        ample_dia = amplada_bloc(carrils, (dia,))
+        responsive += (f'{selector} .p2-dia-{dia}>.horari-scroll' + '{display:none;}'
+            + f'@container p2-graella (min-width:{ample_dia}px)' + '{'
+            + f'{selector} .p2-dia-{dia}>.horari-scroll' + '{display:block;}'
+            + f'{selector} .p2-dia-{dia}>.p2-carrils' + '{display:none;}}')
+    responsive += (f'@container p2-graella (min-width:{ample_dos}px)' + '{'
+        + f'{selector} .p2-dies' + '{display:none;}'
+        + f'{selector} .p2-dos-blocs' + '{display:grid;gap:18px;}}'
+        + f'@container p2-graella (min-width:{ample_setmana}px)' + '{'
+        + f'{selector} .p2-dos-blocs' + '{display:none;}'
+        + f'{selector} .p2-setmana' + '{display:block;}}')
+    html = f'<style>{CSS if estils else ""}{responsive}</style><div class="p2-horari {clau}">'
+    html += '<div class="p2-layout p2-setmana">' + bloc(DIES) + '</div>'
+    html += '<div class="p2-layout p2-dos-blocs">' + ''.join(bloc(dies) for dies in dos_blocs) + '</div>'
+    html += '<div class="p2-layout p2-dies">'
+    for dia in DIES:
+        html += f'<div class="p2-dia-{dia}">' + bloc((dia,))
+        html += '<div class="p2-carrils">' + ''.join(
+            bloc((dia,), carril_unic=i) for i in range(carrils[dia][0])) + '</div></div>'
+    return html + '</div></div>'
 
 
 def exporta_aula_html(base, proposta, setmana, aula, **kwargs):
     titol = f'Aula {aula} · setmana del {dilluns(setmana):%d/%m/%Y}'
     contingut = taula_html(celles_aula(base, proposta, setmana, aula, **kwargs), titol)
-    return '<!doctype html><html lang="ca"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' + escape(titol) + '</title><body><h1>' + escape(titol) + '</h1>' + llegenda_html() + contingut + '</body></html>'
+    return '<!doctype html><html lang="ca"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' + escape(titol) + '</title><body><h1>' + escape(titol) + '</h1>' + llegenda_html() + contingut + script_linies_html() + '</body></html>'
