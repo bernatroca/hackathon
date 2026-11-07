@@ -58,7 +58,11 @@ def genera(nom, versio, versio_relax):
 def carrega(nom):
     path = ruta_resum(nom)
     if path.is_file():
-        return llegeix(str(path), path.stat().st_mtime_ns)
+        dades = llegeix(str(path), path.stat().st_mtime_ns)
+        if (all('estimacio' in dades['pics'][t]['pitjor'] for t in ('mati', 'tarda'))
+                and all('aules_assignades' in r for r in dades['sessions_mogudes'])):
+            return dades
+        # Les dades antigues comptaven assignacions com a moviments: recalcula-les.
     proposta = RESULTATS / nom / 'proposta.csv'
     relax = proposta.with_name('relaxacions.csv')
     return genera(nom, proposta.stat().st_mtime_ns if proposta.is_file() else 0,
@@ -66,14 +70,14 @@ def carrega(nom):
 
 
 def grafic_mogudes(files):
-    files = sorted(files, key=lambda r: (-r['mogudes_pct'], r['nom']))
-    fig = go.Figure(go.Bar(y=[r['nom'] for r in files], x=[r['mogudes_pct'] for r in files],
+    files = sorted(files, key=lambda r: (-r['franja_pct'], r['nom']))
+    fig = go.Figure(go.Bar(y=[r['nom'] for r in files], x=[r['franja_pct'] for r in files],
         orientation='h', marker_color='#2a78d6',
-        text=[f"{r['mogudes_pct']:.1f} % · {r['mogudes']}/{r['sessions']} sessions" for r in files],
+        text=[f"{r['franja_pct']:.1f} % · {r['franja']}/{r['sessions']} sessions" for r in files],
         textposition='outside', cliponaxis=False,
         hovertemplate='%{y}: %{text}<extra></extra>'))
     fig.update_layout(height=max(260, 38 * len(files) + 80),
-        xaxis=dict(title='Sessions mogudes (%)', range=[0, 130], ticksuffix=' %'),
+        xaxis=dict(title='Sessions que canvien de franja (%)', range=[0, 130], ticksuffix=' %'),
         yaxis=dict(autorange='reversed'), margin=dict(l=0, r=120, t=10, b=45))
     return fig
 
@@ -87,7 +91,7 @@ def mostra():
     try:
         d = carrega(triada)
         st.caption(f"Resum calculat: {d['data']} · {triada}")
-        st.subheader('Pic de classes alhora')
+        st.subheader('Pic d’aules ordinàries ocupades')
         st.caption('21 aules ordinàries menys 2 de reserva: 19 disponibles. Pitjor moment de cada torn al llarg del semestre.')
         for columna, torn, nom in zip(st.columns(2), ('mati', 'tarda'), ('Matí', 'Tarda')):
             p = d['pics'][torn]['pitjor']
@@ -95,6 +99,8 @@ def mostra():
             with columna, st.container(border=True):
                 st.markdown(estat({'estat': 'verd' if cap else 'vermell', 'etiqueta': nom + (' · Hi cap' if cap else ' · Falten aules')}), unsafe_allow_html=True)
                 st.markdown(f'<div class="xifra-targeta" style="color:var(--{"verd" if cap else "vermell"}-text)">{p["classes"]} / {p["aules_disponibles"]} aules</div>', unsafe_allow_html=True)
+                st.caption('Estimació de demanda d’aules ordinàries' if p['estimacio']
+                           else 'Aules ordinàries diferents ocupades en una franja d’una hora')
                 st.caption(f"{p['data'] or 'Sense classes'} · {p['hora']}")
         st.subheader('Aules que falten o sobren per mida')
         files = []
@@ -104,13 +110,21 @@ def mostra():
         mostra_taula(pd.DataFrame(files))
         st.caption('Llindars acumulats: les aules grans també poden acollir grups petits. No sumis els marges. La reserva de dues aules és flexible; aquest recompte no garanteix que l’horari encaixi.')
         st.subheader('Sessions mogudes per titulació i curs')
-        st.write('Percentatge de les seves sessions que canvien de dia, hora o aula; cada sessió compta un sol cop.')
-        if all(r['mogudes_pct'] == 0 for r in d['sessions_mogudes']):
+        st.write('Percentatge de les seves sessions que canvien de dia o d’hora (franja); cada sessió compta un sol cop.')
+        if all(r['franja_pct'] == 0 for r in d['sessions_mogudes']):
             st.write('Cap sessió moguda: totes les titulacions i cursos empaten al 0 %.')
         else:
             st.plotly_chart(grafic_mogudes(d['sessions_mogudes']), width='stretch')
             pitjors = [r for r in d['sessions_mogudes'] if r['cohort'] in d['pitjor_cohort']]
-            st.write('Percentatge més alt: ' + '; '.join(f"{r['nom']}: {r['mogudes_pct']:.1f} % ({r['mogudes']} sessions)" for r in pitjors))
+            st.write('Percentatge més alt: ' + '; '.join(f"{r['nom']}: {r['franja_pct']:.1f} % ({r['franja']} sessions)" for r in pitjors))
+        mostra_taula(pd.DataFrame([{
+            'Titulació i curs': r['nom'],
+            'Canvien de franja (%)': r['franja_pct'],
+            'Canvien d’aula (%)': r['aula_pct'],
+            'Canvis d’aula': r['aula'],
+            'Aules assignades': r['aules_assignades'],
+        } for r in d['sessions_mogudes']]))
+        st.caption('Assignar aula a una sessió que no en tenia no és un canvi d’aula.')
         st.subheader('Excepcions a la regla 1: torn requerit')
         if not d['excepcions']:
             st.write('No hi ha cap sessió fora del torn requerit.')

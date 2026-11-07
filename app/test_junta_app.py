@@ -16,13 +16,13 @@ from pagines import junta
 def dades():
     # Dades sintètiques: cap resultat privat s'incorpora al repositori.
     pic = {'classes': 15, 'aules_disponibles': 19, 'data': '2027-03-08',
-           'hora': '10:30', 'setmana': '2027-W10'}
+           'estimacio': False, 'hora': '10:30', 'setmana': '2027-W10'}
     torn = {'pitjor': pic, 'tipica': pic, 'mides': [
         {'minim_places': 0, 'marge': 4, 'aules_categoria': 19,
          'pic_categoria': 15, 'demanda_acumulada': 15, 'oferta_acumulada': 19}] * 5}
     fila = {'cohort': 'GED:1r', 'nom': 'Enginyeria de Dades, 1r', 'sessions': 10,
             'mogudes': 0, 'mogudes_pct': 0, 'franja': 0, 'franja_pct': 0,
-            'aula': 0, 'aula_pct': 0, 'torn': 0, 'torn_pct': 0}
+            'aules_assignades': 0, 'aula': 0, 'aula_pct': 0, 'torn': 0, 'torn_pct': 0}
     return {'data': '2026-11-07', 'pics': {'mati': torn, 'tarda': copy.deepcopy(torn)},
             'sessions_mogudes': [fila], 'pitjor_cohort': ['GED:1r'],
             'excepcions': [], 'excepcions_resum': [], 'torn_no_avaluable': 0,
@@ -60,8 +60,8 @@ def test_sense_52():
 def test_percentatges_ordenats_i_absoluts_al_costat():
     d = dades()
     a = d['sessions_mogudes'][0]
-    a.update(mogudes=2, mogudes_pct=20)
-    b = dict(a, nom='Titulació petita', sessions=2, mogudes=1, mogudes_pct=50)
+    a.update(mogudes=10, mogudes_pct=100, franja=2, franja_pct=20)
+    b = dict(a, nom='Titulació petita', sessions=2, mogudes=2, mogudes_pct=100, franja=1, franja_pct=50)
     fig = junta.grafic_mogudes([a, b])
     assert list(fig.data[0].x) == [50, 20]
     assert '1/2 sessions' in fig.data[0].text[0]
@@ -95,5 +95,27 @@ def test_excepcions_agrupades_i_pic_vermell():
     app = obre(d, ['Avui'])
     assert any('estat vermell' in m.value for m in app.markdown)
     assert any(e.label == 'Veure les dades' for e in app.expander)
-    assert app.dataframe[1].value.iloc[0]['Sessions'] == 2
-    assert len(app.dataframe[2].value) == 2
+    assert app.dataframe[2].value.iloc[0]['Sessions'] == 2
+    assert len(app.dataframe[3].value) == 2
+
+
+def test_assignacions_no_generen_grafic_i_estimacio_visible():
+    d = dades()
+    d['sessions_mogudes'][0].update(aules_assignades=10)
+    d['pics']['mati']['pitjor']['estimacio'] = True
+    app = obre(d, ['Avui', '5.1'])
+    assert not app.get('plotly_chart')
+    assert any('Estimació' in c.value for c in app.caption)
+    assert app.dataframe[1].value.iloc[0]['Aules assignades'] == 10
+
+
+def test_resum_antic_es_regenera(tmp_path):
+    desti = tmp_path / 'junta'
+    desti.mkdir()
+    d = dades()
+    del d['pics']['mati']['pitjor']['estimacio']
+    (desti / 'junta.json').write_text(json.dumps(d))
+    with patch.object(junta, 'RESULTATS', tmp_path), patch.object(junta, 'SORTIDA', tmp_path):
+        with patch.object(junta, 'genera', return_value=dades()) as genera:
+            assert junta.carrega('Avui') == dades()
+        genera.assert_called_once()
