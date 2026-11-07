@@ -251,3 +251,8 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - PROBLEMA: dues vegades s'ha unit a main una branca amb una prova vermella, perquè l'ordre de les proves anava amb un pipe que n'amagava la fallada. Solució: proves primer, i el merge en una ordre a part. La prova fallava pels números inventats de la reescriptura de l'historial.
 - Pendent de corregir (n2-frontend-6): la guia pas a pas no s'obre (st.html no executa el JavaScript), el camp «Grup» es trepitja, un títol numerat sobrant i dies partits en carrils sense que calgui.
 - Junta: l'equip tria la versió C (tauler compacte). Ho fa n2-frontend-5.
+
+### [ds 20:17] SOLUCIÓ · Guia pas a pas, graella i Junta C acabades
+- n2-frontend-6 (Codex gpt-6.1-sol high): la guia ja funciona (ressalta l'apartat, enfosqueix la resta, el panell va al costat, Esc la tanca, també al mòbil); el camp «Grup» ja no es trepitja; carrils només on hi ha classes alhora.
+- n2-frontend-7 (Codex gpt-6.1-sol medium): a la Junta, l'estat per mida és exacte, selector Matí/Tarda, «Cap» quan cap curs canvia, percentatges en català, i les excepcions noves als torns se separen de les classes que avui ja són fora del seu torn i no es toquen.
+- Integració (Claude): la setmana sencera no hi cabia a 1280 px i el botó de la guia quedava sota la barra lateral; corregit. El resum antic de la Junta es torna a generar sol.
