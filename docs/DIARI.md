@@ -213,7 +213,7 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - Verificació funcional: 39 proves passen i 1 queda omesa en els tests de part 2, app i Junta. Comprovació al Chrome dels filtres, la consulta única i el recorregut de l'ajuda; revisada també la disposició a 390 px.
 
 ### [ds 19:09] DECISIÓ · Norma nova de la direcció: els agents ja no llegeixen dades
-- Fins ara, amb el permís de l'organització, Claude i Codex treballaven amb el paquet de dades. Des d'ara, per precaució i per indicació de la direcció, cap agent llegeix dades reals: només recomptes, errors o el veredicte.
+- Fins ara, amb el permís que segons l'equip havia donat l'organització (no l'hem verificat pel nostre compte), Claude i Codex treballaven amb el paquet de dades i en llegien fitxers i sortides. Des d'ara, per precaució i per indicació de la direcció, cap agent llegeix dades reals: només recomptes, errors o el veredicte.
 - Barreres: .claude/settings.json (Claude Code no pot llegir repte/, resultats/ ni dades/), AGENTS.md (la norma per a Codex, repetida a cada encàrrec) i .gitignore.
 - L'app només s'obre des d'aquest ordinador: server.address = localhost, i el servidor de disseny lligat a 127.0.0.1.
 - No separem l'app de les dades: les parts 2 i 3 en necessiten (graella i assistent). Sí que traiem de les taules que es mostren les columnes que no calen (identificadors de docent i codis).
