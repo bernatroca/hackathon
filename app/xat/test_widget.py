@@ -98,7 +98,8 @@ const vm = require('node:vm');
 const assert = require('node:assert/strict');
 let desat;
 const sandbox = {
-  window: {}, TextDecoder, AbortSignal, performance: { now: () => 0 },
+  window: {}, TextDecoder, AbortSignal, Event: class { constructor(type) { this.type = type; } },
+  performance: { now: () => 0 },
   localStorage: {
     setItem: (k, v) => { if (k === 'prova') desat = v; },
     getItem: (k) => k === 'prova' ? desat : null,
@@ -106,7 +107,7 @@ const sandbox = {
 };
 const source = fs.readFileSync(process.argv[1], 'utf8').replace('  window.XatIA = {', `
   window.prova = { markdown, htmlMissatge, llegeixFlux, perAlServidor, desa, llegeixMemoria, estat,
-    sincronitzaPlafó, teclaPlafó, clicFons,
+    sincronitzaPlafó, acabaTransicio, teclaPlafó, clicFons,
     preparaInteraccio() {
       el = {fons: {}, lupa: {hidden:true},
         plafo: {contains: (node) => node === 'dins'}, boto: {focus() {}}};
@@ -127,6 +128,19 @@ const p = sandbox.window.prova;
 p.prepara();
 let mobil = false;
 const classes = new Set();
+const resizes = [];
+const timers = new Map();
+let timerId = 0;
+sandbox.window.dispatchEvent = (e) => {
+  assert.equal(e.type, 'resize');
+  resizes.push(classes.has('xatia-obert'));
+};
+sandbox.window.setTimeout = (callback, ms) => {
+  assert.ok(ms >= 220);
+  timers.set(++timerId, callback);
+  return timerId;
+};
+sandbox.window.clearTimeout = (id) => timers.delete(id);
 sandbox.window.matchMedia = () => ({matches: mobil});
 sandbox.document = {activeElement:'fora', documentElement:{classList:{toggle(nom, activa) {
   if (activa) classes.add(nom); else classes.delete(nom);
@@ -136,6 +150,15 @@ p.estat.obert = true;
 p.sincronitzaPlafó();
 assert.ok(classes.has('xatia-obert'));
 assert.equal(elements.fons.hidden, true);
+assert.deepEqual(resizes, [true]); // Resize després d'aplicar la classe.
+assert.equal(timers.size, 1);
+p.sincronitzaPlafó(); // SSE/context no han de generar resizes repetits.
+assert.equal(resizes.length, 1);
+p.acabaTransicio({target: elements.plafo, propertyName: 'opacity'});
+assert.equal(resizes.length, 1);
+p.acabaTransicio({target: elements.plafo, propertyName: 'transform'});
+assert.equal(resizes.length, 2);
+assert.equal(timers.size, 0);
 p.clicFons();
 assert.equal(p.estat.obert, true);
 p.teclaPlafó({key:'Escape'});
@@ -147,6 +170,12 @@ p.teclaPlafó({key:'Escape'});
 assert.equal(p.estat.obert, false);
 p.sincronitzaPlafó();
 assert.ok(!classes.has('xatia-obert'));
+assert.equal(resizes.at(-1), false);
+assert.equal(timers.size, 1);
+const app = {matches: (selector) => selector === '.stApp'};
+p.acabaTransicio({target: app, propertyName: 'width'});
+assert.equal(timers.size, 0);
+const abansModes = resizes.length;
 for (const mode of ['gran', 'mobil']) {
   p.estat.obert = true;
   p.estat.gran = mode === 'gran';
@@ -161,8 +190,18 @@ for (const mode of ['gran', 'mobil']) {
   p.clicFons();
   assert.equal(p.estat.obert, false);
 }
+assert.equal(resizes.length, abansModes + 2);
 mobil = false;
 p.estat.gran = false;
+p.estat.obert = true;
+p.sincronitzaPlafó(); // Gran/mòbil -> petit d'ordinador.
+assert.equal(resizes.at(-1), true);
+assert.equal(timers.size, 1); // Les accions ràpides cancel·len el respatller antic.
+const abansFinal = resizes.length;
+for (const [id, callback] of timers) { timers.delete(id); callback(); }
+assert.equal(resizes.length, abansFinal + 1); // També sense transitionend.
+p.sincronitzaPlafó();
+assert.equal(resizes.length, abansFinal + 1);
 const entitats = 'inici &gt; 15.00 &lt; 20.00 &amp; &quot;hora&quot; &#39;dia&#39; &#x27;aula&#x27;';
 const esperat = '<p>inici &gt; 15.00 &lt; 20.00 &amp; &quot;hora&quot; &#39;dia&#39; &#39;aula&#39;</p>';
 assert.equal(p.markdown(entitats), esperat);
@@ -260,11 +299,23 @@ async function flux(fi) {
 
 def test_css_plafó_acoblat_i_compactacio():
     css = (widget.WEB / 'xat-ia.css').read_text()
+    assert 'html.xatia-obert .stApp' in css
+    assert 'width: calc(100% - var(--xatia-amplada)) !important' in css
+    assert 'transform: translateZ(0)' in css
+    assert 'html.xatia-obert [data-testid="stAppViewContainer"]' in css
     assert 'html.xatia-obert [data-testid="stMain"]' in css
-    assert 'margin-right: var(--xatia-amplada)' in css
+    assert 'margin-right: var(--xatia-amplada)' not in css
+    assert 'html.xatia-obert [data-testid="stMainBlockContainer"]' in css
+    assert 'max-width: min(1240px, 100%) !important' in css
+    assert 'html.xatia-obert [data-testid="stHeader"]' in css
+    assert 'html.xatia-obert .st-key-p2-pagina .st-key-p2-guia' in css
+    assert 'html.xatia-obert .st-key-p2-pagina .st-key-p2-obre-guia' in css
+    assert 'max-width: calc(100vw - var(--xatia-amplada) - 36px) !important' in css
+    assert 'overflow-x: clip' in css
+    assert 'stSidebar' not in css
     assert '.xatia:not(.xatia--gran) .xatia-fons { pointer-events: none; }' in css
     assert '(min-width: 700px) and (max-width: 1099px)' in css
     assert 'flex-wrap: wrap' in css
     assert '[data-testid="stColumn"]' in css
-    assert 'transition: margin-right' in css
+    assert 'transition: width 0.22s ease' in css
     assert 'prefers-reduced-motion' in css
