@@ -17,13 +17,17 @@ def calcula(semestre=2, setmana=None):
     marge_semestre = resum[(~resum.seminaris) & (resum.llindar == 0)].iloc[0].marge_hores
     marge = f'{marge_semestre:,.1f}'.translate(str.maketrans({',': '.', '.': ','}))
     return Troballa(ID, 'Marge per al grau nou', f'{marge} h',
-        f'{marge} h d’aula ordinària queden al semestre després de reservar matins per a 1r i 2n, abans del grau nou.',
-        'La xifra és el marge total del semestre, amb 30 hores per aula i setmana amb sessions; el detall per mida és setmanal; comparem les hores de totes les sessions de 1r i 2n, encara que avui siguin a la tarda, i del grau nou amb 30 hores setmanals per aula: excloem PLAB i dobles, i agrupem compartides amb la matrícula màxima coneguda. Per cada llindar estricte de places oferim com a màxim 19 aules ordinàries (reserva de les dues més petites), també amb la variant de seminaris; superar el balanç és necessari però no garanteix un horari viable.',
+        f'Necessita {global_.nou_hores:g} h d’aula a la setmana; a la setmana de referència ({setmana}) en queden {global_.marge_hores:g} de lliures al matí, abans del grau nou. La xifra gran és el marge del semestre.',
+        'La xifra gran suma el marge de les setmanes amb sessions del semestre; el detall mostra la setmana més plena per defecte, o la seleccionada, descomptant les aturades del calendari dels matins feiners. Comptem sessions amb torn requerit de matí, també amb zero alumnes, excloent PLAB i dobles; les compartides ocupen una sola aula i sumen alumnes, amb fins a 19 aules per llindar i la variant de seminaris: és un balanç necessari, pendent de validar amb un horari.',
         sql_resum + '\n-- Detall setmanal\n' + sql,
         df, sessions.id_sessio.head(5).tolist(), 'taula',
-        extra={'setmana': setmana, 'cap_per_mida': cap, 'hores_noves_aulari': float(global_.nou_hores), 'sql_exemples': sql_sessions})
+        extra={'setmana': setmana, 'demanda_h_setmana': float(global_.nou_hores), 'lliures_h_setmana': float(global_.marge_hores), 'estat_provisional': True, 'nota': "Balanç d'hores: falta que la part 2 ho validi amb un horari", 'cap_per_mida': cap, 'hores_noves_aulari': float(global_.nou_hores), 'sql_exemples': sql_sessions})
 
 
 def comprova():
     df, _ = consulta('marge_grau_nou_sessions', semestre=2, setmana=None)
-    return [('sessions del grau nou al 2n semestre', 235, len(df))]
+    detall, _ = consulta('marge_grau_nou', semestre=2, setmana=setmana_pitjor(2))
+    total = detall[(~detall.seminaris) & (detall.llindar == 0)].iloc[0]
+    return [('sessions del grau nou al 2n semestre', 235, len(df)),
+            ('demanda del grau nou a la pitjor setmana (hores)', 26.0, float(total.nou_hores)),
+            ('marge abans del grau nou a la pitjor setmana (hores)', 181.0, float(total.marge_hores))]
