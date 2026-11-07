@@ -1,6 +1,7 @@
 import streamlit as st
 from components.vistes import detall_obert, targeta
 from servei import totes
+from errors import mostra_error
 
 
 def mostra():
@@ -8,7 +9,7 @@ def mostra():
         resultat = totes(st.session_state.semestre, st.session_state.setmana, st.session_state.versio)
         st.session_state.resultats = {t.id:t for t in resultat}
     except Exception as exc:
-        st.error(f'No s’han pogut carregar les respostes: {exc}')
+        mostra_error()
         return
     if detall_obert():
         return
