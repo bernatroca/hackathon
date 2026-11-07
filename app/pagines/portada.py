@@ -1,12 +1,12 @@
 import streamlit as st
 from nivell1.troballes import PORTADA
-from components.vistes import carrega, detall_obert, heroi, targeta
+from components.vistes import carrega, carrega_grup, detall_obert, heroi, targeta
 
 
 def mostra():
+    carrega_grup(PORTADA)
     if detall_obert():
         return
-    st.title('Com estem avui')
     semestre = '2n' if st.session_state.semestre == 2 else '1r'
     st.write(f'{semestre} semestre · ✓ Verd: tot bé. ! Groc: vigilar. ✕ Vermell: cal actuar.')
     st.caption('Classes fora de torn, sense aula i altres problemes: tot el semestre. El matí i el grau nou: la setmana indicada a cada detall. Pots canviar-la a «Opcions».')

@@ -8,48 +8,25 @@ for carpeta in (ARREL.parent,ARREL):
 
 import streamlit as st
 from pagines import portada, preguntes
-from servei import setmanes, totes, versio_registre
+from servei import setmanes, versio_registre
 
 st.set_page_config(page_title="Espais de l’Escola",page_icon='▦',layout='wide')
 st.markdown('<style>'+ (ARREL/'estil.css').read_text() +'</style>',unsafe_allow_html=True)
-with st.sidebar:
-    st.title('Espais de l’Escola')
-    with st.expander('Opcions',expanded=False):
-        semestre = st.selectbox('Semestre',[2,1],format_func=lambda s:'2n' if s == 2 else '1r',key='semestre')
-        try:
-            disponibles = setmanes(semestre)
-        except Exception as exc:
-            disponibles = []
-            st.error(f'No s’han pogut llegir les setmanes: {exc}')
-        setmana = st.selectbox('Setmana',[None]+disponibles,format_func=lambda s:'Típica' if s is None else str(s),key=f'setmana-{semestre}')
-        st.session_state.setmana = setmana
-        st.caption('Setmana típica: la que té un nombre de classes normal. «Hi cap el matí?» fa servir la setmana més plena si no en tries cap.')
-        if st.button('Actualitza les dades'):
-            st.cache_data.clear()
-            st.rerun()
-    st.caption('Ús local · Les dades no es publiquen')
-st.session_state.versio = versio_registre()
-
-
-def canvia_pagina():
-    st.session_state.detall_id = None
 
 
 def proposta():
-    st.title('Proposta d’horari')
     st.info('Aviat · Una proposta per repartir les classes i assignar les aules.')
 
 
 def imprevistos():
-    st.title('Imprevistos')
     st.info('Aviat · Reorganitza les classes quan hi hagi un canvi d’última hora.')
 
 
 def pregunta():
-    st.title('Pregunta-ho')
     st.info('Aviat · Fes preguntes sobre les aules i els horaris amb les teves paraules.')
 
 
+# La navegació i la capçalera s'envien abans de qualsevol lectura de dades.
 pagina = st.navigation([
     st.Page(portada.mostra,title='Com estem avui',url_path='avui',default=True),
     st.Page(preguntes.mostra,title='Totes les respostes',url_path='respostes'),
@@ -57,19 +34,33 @@ pagina = st.navigation([
     st.Page(imprevistos,title='Imprevistos · aviat'),
     st.Page(pregunta,title='Pregunta-ho · aviat'),
 ])
-# En canviar de secció del menú es torna a la llista corresponent.
+with st.sidebar:
+    st.title('Espais de l’Escola')
+st.title(pagina.title)
 if st.session_state.get('pagina_anterior') != pagina.url_path:
-    canvia_pagina()
+    st.session_state.detall_id = None
 st.session_state.pagina_anterior = pagina.url_path
-# El mateix espai es buida abans de consultar per evitar mostrar resultats anteriors.
+st.session_state.versio = versio_registre()
+# Les còpies de session_state només pertanyen a aquest renderitzat. La memòria
+# cau de cada troballa és qui reutilitza els resultats entre visites i filtres.
+st.session_state.resultats = {}
 zona = st.empty()
 zona.empty()
 with zona.container():
-    with st.spinner('Calculant…'):
-        try:
-            resultat = totes(semestre,setmana,st.session_state.versio)
-            st.session_state.resultats = {t.id:t for t in resultat}
-        except Exception as exc:
-            st.session_state.resultats = {}
-            st.error(f'No s’han pogut carregar les respostes: {exc}')
-    pagina.run()
+    with st.spinner('Calculant les xifres del semestre…'):
+        with st.sidebar:
+            with st.expander('Opcions',expanded=False):
+                semestre = st.selectbox('Semestre',[2,1],format_func=lambda s:'2n' if s == 2 else '1r',key='semestre')
+                try:
+                    disponibles = setmanes(semestre)
+                except Exception as exc:
+                    disponibles = []
+                    st.error(f'No s’han pogut llegir les setmanes: {exc}')
+                setmana = st.selectbox('Setmana',[None]+disponibles,format_func=lambda s:'Típica' if s is None else str(s),key=f'setmana-{semestre}')
+                st.session_state.setmana = setmana
+                st.caption('Setmana típica: la que té un nombre de classes normal. «Hi cap el matí?» fa servir la setmana més plena si no en tries cap.')
+                if st.button('Actualitza les dades'):
+                    st.cache_data.clear()
+                    st.rerun()
+            st.caption('Ús local · Les dades no es publiquen')
+        pagina.run()

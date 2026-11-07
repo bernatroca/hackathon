@@ -45,10 +45,15 @@ def coll_ampolla(extra):
     mida = primer(r, 'llindar', 'places', 'capacitat', 'k')
     torn = primer(r, 'torn', 'franja')
     setmana = primer(r, 'setmana')
-    if mida is None or torn is None or setmana is None:
+    if torn is None or setmana is None:
         return ''
     torn = {'mati': 'al matí', 'matí': 'al matí', 'tarda': 'a la tarda'}.get(str(torn), str(torn))
-    return f'El més ajustat: aules de més de {numero(mida)} places, {torn}, la setmana {setmana}.'
+    if mida is None or pd.isna(mida) or str(mida).strip() == '' or float(mida) <= 0:
+        pct = primer(r, 'ocupacio_pct', 'percentatge', 'percent')
+        ocupacio = f' ({numero(round(float(pct)))} % ocupat)' if pct is not None and not pd.isna(pct) else ''
+        nom = 'el matí' if torn == 'al matí' else 'la tarda' if torn == 'a la tarda' else torn
+        return f'El més ajustat: {nom} en conjunt, la setmana {setmana}{ocupacio}.'
+    return f'El més ajustat: les aules de més de {numero(mida)} places, {torn}, la setmana {setmana}.'
 
 
 def desglos(extra):
@@ -82,12 +87,12 @@ def context(t, altres=None):
         mida = pd.DataFrame(extra.get('per_mida', []))
         c['falla'] = ('falla' in mida and bool(mida.falla.any())) or c.get('pic_n', 0) > AULES_DISPONIBLES
         c['resposta'] = 'Hi ha marge d’hores'
-        c['torns'] = f"Matí {c['ocupacio']} % ocupat. Que l’horari encaixi de debò ho valida la part 2."
+        c['torns'] = f"Matí {c['ocupacio']} %. Que l’horari encaixi de debò ho valida la part 2."
         torns = taula_extra(extra.get('torns', []))
         if {'torn', 'ocupacio_pct'}.issubset(torns.columns):
             noms = torns.torn.astype(str).str.lower().str.replace('í', 'i', regex=False)
             valors = dict(zip(noms, torns.ocupacio_pct))
-            parts = [f"{nom} {numero(round(float(valors[torn]), 1))} % {acord}" for torn, nom, acord in
+            parts = [f"{nom} {numero(round(float(valors[torn])))} %" for torn, nom, acord in
                      [('mati', 'Matí', 'ocupat'), ('tarda', 'Tarda', 'ocupada')] if torn in valors]
             if parts:
                 c['torns'] = ' · '.join(parts) + '. Que l’horari encaixi de debò ho valida la part 2.'

@@ -14,7 +14,7 @@ sys.path.insert(0,str(ARREL.parent))
 sys.path.insert(0,str(ARREL))
 from nivell1.troballes import PORTADA, una
 from components.grafics import grafics
-from presentacio import context, proporcio, text
+from presentacio import context, proporcio, text, coll_ampolla
 from servei import AULES_DISPONIBLES, AULES_RESERVA, inventari
 
 
@@ -104,12 +104,12 @@ preguntes.mostra()
             coll_ampolla={'llindar':88,'torn':'mati','setmana':'2027-W05'})
         mapa['hores-aula'].extra['desglos'] = {'per_assignar':4541,'laboratoris':919,'dobles':262}
         mapa['marge-grau-nou'].extra.update(estat_provisional=True,validat_part2=True)
-        with patch('servei.totes',return_value=resultat):
+        with patch('components.vistes.una',side_effect=lambda id_, *args: mapa[id_]):
             app = self.carrega()
         self.comprova(app)
         html = '\n'.join(m.value for m in app.markdown)
-        self.assertIn('Matí 67,5 % ocupat · Tarda 81,2 % ocupada',html)
-        self.assertIn('El més ajustat: aules de més de 88 places, al matí, la setmana 2027-W05',html)
+        self.assertIn('Matí 68 % · Tarda 81 %',html)
+        self.assertIn('El més ajustat: les aules de més de 88 places, al matí, la setmana 2027-W05',html)
         self.assertIn('4.541 per assignar de debò',html)
         self.assertIn('919 laboratoris (no es toquen)',html)
         self.assertIn('262 dobles (sense aula pròpia)',html)
@@ -159,6 +159,52 @@ preguntes.mostra()
     @unittest.skip('AppTest no disposa de navegador ni d’una API d’amplada o viewport; no executa el CSS adaptable.')
     def test_renderitzat_estret(self):
         pass
+
+    def test_portada_carrega_nomes_portada_i_reutilitza_cache(self):
+        import servei
+        import nivell1.troballes as registre
+        servei.una.clear()
+        esdeveniments = []
+        calcula = registre.una
+        titol = st.title
+        navegacio = st.navigation
+
+        def mostra_titol(*args, **kwargs):
+            if args[0] == 'Com estem avui':
+                esdeveniments.append('titol')
+            return titol(*args, **kwargs)
+
+        def mostra_menu(*args, **kwargs):
+            esdeveniments.append('menu')
+            return navegacio(*args, **kwargs)
+
+        def pregunta(id_, *args):
+            self.assertIn('menu', esdeveniments)
+            self.assertIn('titol', esdeveniments)
+            self.assertIn(id_, PORTADA)
+            return calcula(id_, *args)
+
+        with patch('streamlit.title',side_effect=mostra_titol), patch('streamlit.navigation',side_effect=mostra_menu), \
+                patch('nivell1.troballes.una',side_effect=pregunta) as consultes, \
+                patch('streamlit.spinner',wraps=st.spinner) as spinner:
+            app = self.carrega()
+            self.comprova(app)
+            self.assertEqual([c.args[0] for c in consultes.call_args_list],list(PORTADA))
+            spinner.assert_any_call('Calculant les xifres del semestre…')
+            app.run(timeout=90)
+            self.comprova(app)
+            self.assertEqual(consultes.call_count,len(PORTADA))
+
+    def test_coll_ampolla_general_i_percentatges_enters(self):
+        for mida in (0, None, '', float('nan')):
+            frase = coll_ampolla({'coll_ampolla': {'llindar':mida,'torn':'mati','setmana':'2027-W06','ocupacio_pct':69.7}})
+            self.assertEqual(frase,'El més ajustat: el matí en conjunt, la setmana 2027-W06 (70 % ocupat).')
+            self.assertNotIn('places',frase)
+        frase = coll_ampolla({'coll_ampolla': {'llindar':88,'torn':'mati','setmana':'2027-W06','ocupacio_pct':69.7}})
+        self.assertIn('les aules de més de 88 places',frase)
+        t = copy.deepcopy(una('hi-cap-mati'))
+        t.extra['torns'] = pd.DataFrame({'torn':['mati','tarda'],'ocupacio_pct':[69.7,42.1]})
+        self.assertIn('Matí 70 % · Tarda 42 %',text(t)['frase'])
 
     def test_canvi_semestre(self):
         app = self.carrega()
