@@ -1,4 +1,5 @@
 """Millora 5.1 amb aula base; conserva cada millora vàlida en disc."""
+from nivell2.readmes import actualitza
 import argparse
 import json
 import time
@@ -68,6 +69,8 @@ def main():
     best.escriu(path)
     report = verifica(path, nomes_aules=True, json_path=out/'informe.json', violacions_path=out/'violacions.csv')
     comparison = compara(best, official, nomes_aules=True, proposta_path=path)
+    from nivell2.comprova import escriu_csv
+    escriu_csv(out/'xifres.csv', comparison.files)
     metrics = {r['xifra']: (r['abans'], r['despres']) for r in comparison.files}
     selected = [*report.objectius, 'aules_grup_setmana_mitjana', 'aules_grup_setmana_maxim', 'excepcions_rutina']
     from collections import defaultdict
@@ -126,6 +129,7 @@ les regles. GIA 3r línia 71 i MEBA línia 1 tenen TE simultànies: no poden
 aconseguir una sola aula TE amb les franges fixes (cota inferior global: 2 extra).
 
 ''')
+    actualitza(out, '5.1')
     print(report.veredicte, status, f'{elapsed:.3f} s', flush=True)
     print(f"Sessions: {len(best.files)}", flush=True)
     if not report.valida:

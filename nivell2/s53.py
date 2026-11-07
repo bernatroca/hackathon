@@ -1,5 +1,6 @@
 """5.3: quatre contingències simultànies sobre el 5.2 congelat."""
 from __future__ import annotations
+from nivell2.readmes import actualitza
 
 import argparse
 import json
@@ -113,6 +114,7 @@ i comprovar també la segona meitat: aquesta reparació no els simula amb una re
 L'estat òptim, si n'hi ha, correspon al veïnat obert, no al problema global.
 `resum.json` conté només recomptes; `execucio.json` els intents i pressupostos.
 ''', encoding='utf-8')
+    actualitza(out, '5.3')
     print(report.veredicte)
     print('Canvis de franja:', summary['canvis_franja_vs_referencia'])
     print('Canvis d’aula:', summary['canvis_aula_vs_referencia'])

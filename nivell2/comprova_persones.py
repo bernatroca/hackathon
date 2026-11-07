@@ -130,21 +130,22 @@ def resum_conflictes(conf):
     return f'{len(conf)} ({rep} de la mateixa assignatura repetida, {len(conf) - rep} de dues assignatures diferents)'
 
 
-def escenaris():
+def escenaris(resultats=None):
+    resultats = RESULTATS_PRINCIPAL if resultats is None else Path(resultats)
     yield 'avui', None, None
-    if RESULTATS_PRINCIPAL.is_dir():
-        for path in sorted(RESULTATS_PRINCIPAL.glob('*/proposta.csv')):
+    if resultats.is_dir():
+        for path in sorted(resultats.glob('*/proposta.csv')):
             nom = path.parent.name
             yield nom, path, (CONTINGENCIES if nom == '5.3' else
                              GRAU_NOU if nom.startswith('5.4') else None)
 
 
-def comprova(detall: Path | None = None) -> bool:
+def comprova(detall: Path | None = None, *, resultats=None) -> bool:
     from nivell2.junta import carrega_proposta
 
     bases, avui, dobles_base = {}, {}, {}
     correcte, informe = True, {}
-    for nom, path, escenari in escenaris():
+    for nom, path, escenari in escenaris(resultats):
         clau = str(escenari)
         if clau not in bases:
             bases[clau] = carrega_oficial(escenari)
@@ -198,8 +199,9 @@ def comprova(detall: Path | None = None) -> bool:
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument('--detall', type=Path, help='fitxer JSON per al detall amb identificadors (fora de git)')
+    ap.add_argument('--resultats', type=Path, help='carpeta de propostes a comprovar')
     args = ap.parse_args(argv)
-    sys.exit(0 if comprova(args.detall) else 1)
+    sys.exit(0 if comprova(args.detall, resultats=args.resultats) else 1)
 
 
 if __name__ == '__main__':
