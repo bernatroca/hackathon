@@ -145,3 +145,8 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - De nit, el càlcul llarg; de dia, un canvi petit triga menys d'1 minut amb reparació local (`repara`, per al 5.3 i el nivell 3).
 - Les propostes de resultats/nivell2/ van a git amb una excepció del .gitignore. Quan acabi la part 2, revisarem com complim la norma de no publicar les dades.
 - PROBLEMA resolt: el commit abe83e1 va tallar l'especificació de 233 a 50 línies; restaurada a 9c3488b.
+
+### [ds 17:52] IA · Part 2: fase 0 feta i 4 subagents de Codex llançats
+- Fase 0 (Claude, integració): especificació restaurada i completada, esquelet `nivell2/base.py` (el verificador hi dona les xifres de l'enunciat: 2.008, 13, 43, 54 i 4.541), excepció del .gitignore per a les propostes i worktrees antics de la part 1 tret.
+- Fase 1 en paral·lel, `gpt-6.1-sol` medium, sense xarxa, un worktree per tasca (../hack-n2-*): n2-backend-1 (aules del 5.1), n2-backend-2 (franges del 5.2), n2-dades-1 (taula de xifres) i n2-frontend-1 (graella de la part 2).
+- Aquesta sessió orquestra la part 2; la sessió Part 1 no hi llança subagents.
