@@ -29,12 +29,6 @@ with st.sidebar:
             st.rerun()
     st.caption('Ús local · Les dades no es publiquen')
 st.session_state.versio = versio_registre()
-try:
-    resultat = totes(semestre,setmana,st.session_state.versio)
-    st.session_state.resultats = {t.id:t for t in resultat}
-except Exception as exc:
-    st.session_state.resultats = {}
-    st.error(f'No s’han pogut carregar les respostes: {exc}')
 
 
 def canvia_pagina():
@@ -67,4 +61,15 @@ pagina = st.navigation([
 if st.session_state.get('pagina_anterior') != pagina.url_path:
     canvia_pagina()
 st.session_state.pagina_anterior = pagina.url_path
-pagina.run()
+# El mateix espai es buida abans de consultar per evitar mostrar resultats anteriors.
+zona = st.empty()
+zona.empty()
+with zona.container():
+    with st.spinner('Calculant…'):
+        try:
+            resultat = totes(semestre,setmana,st.session_state.versio)
+            st.session_state.resultats = {t.id:t for t in resultat}
+        except Exception as exc:
+            st.session_state.resultats = {}
+            st.error(f'No s’han pogut carregar les respostes: {exc}')
+    pagina.run()

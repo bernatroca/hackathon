@@ -1,5 +1,4 @@
 """Adapta dades ja calculades a textos i representacions senzilles."""
-from fractions import Fraction
 import re
 import pandas as pd
 from servei import AULES_DISPONIBLES, PLACES_GRAU_NOU
@@ -15,12 +14,54 @@ def valor(text):
 
 
 def proporcio(n, total):
+    """Una expressió que no arrodoneix mai una proporció petita a zero."""
     if not total or n is None:
-        return 'una part de les'
-    fraccio = Fraction(float(n) / float(total)).limit_denominator(10)
-    if not fraccio.numerator:
-        return 'cap de les'
-    return f'{numero(fraccio.numerator)} de cada {numero(fraccio.denominator)}'
+        return 'una part de les classes'
+    pct = float(n) / float(total) * 100
+    percent = numero(round(pct, 1)) if pct == 0 or pct >= .1 else 'menys del 0,1'
+    if pct < 5:
+        return f'gairebé cap ({percent} %)'
+    inversa = float(total) / float(n)
+    if inversa >= 2 and abs(inversa - round(inversa)) / inversa < .1:
+        return f'1 de cada {numero(round(inversa))} classes'
+    return f'el {percent} % de les classes'
+
+
+def taula_extra(dades):
+    if isinstance(dades, dict) and dades and all(pd.api.types.is_scalar(v) for v in dades.values()):
+        return pd.DataFrame([dades])
+    return pd.DataFrame(dades)
+
+
+def primer(dades, *noms):
+    return next((dades[nom] for nom in noms if nom in dades and dades[nom] is not None), None)
+
+
+def coll_ampolla(extra):
+    df = taula_extra(extra.get('coll_ampolla', []))
+    if df.empty:
+        return ''
+    r = df.iloc[0].to_dict()
+    mida = primer(r, 'llindar', 'places', 'capacitat', 'k')
+    torn = primer(r, 'torn', 'franja')
+    setmana = primer(r, 'setmana')
+    if mida is None or torn is None or setmana is None:
+        return ''
+    torn = {'mati': 'al matí', 'matí': 'al matí', 'tarda': 'a la tarda'}.get(str(torn), str(torn))
+    return f'El més ajustat: aules de més de {numero(mida)} places, {torn}, la setmana {setmana}.'
+
+
+def desglos(extra):
+    df = taula_extra(extra.get('desglos', []))
+    if df.empty:
+        return ''
+    r = df.iloc[0].to_dict()
+    pendents = primer(r, 'per_assignar', 'per_assignar_de_debo', 'pendents', 'sense_aula_real', 'aulari', 'demanda_aulari')
+    laboratoris = primer(r, 'laboratoris', 'plab', 'PLAB')
+    dobles = primer(r, 'dobles', 'sense_espai')
+    if any(n is None for n in (pendents, laboratoris, dobles)):
+        return ''
+    return f'{numero(pendents)} per assignar de debò · {numero(laboratoris)} laboratoris (no es toquen) · {numero(dobles)} dobles (sense aula pròpia)'
 
 
 def context(t, altres=None):
@@ -40,7 +81,17 @@ def context(t, altres=None):
             c['ocupacio'] = numero(round(float(ocupacio.iloc[0].ocupacio_pct)))
         mida = pd.DataFrame(extra.get('per_mida', []))
         c['falla'] = ('falla' in mida and bool(mida.falla.any())) or c.get('pic_n', 0) > AULES_DISPONIBLES
-        c['resposta'] = 'Cal ajustar el matí.' if c['falla'] else 'Sí, però just.'
+        c['resposta'] = 'Hi ha marge d’hores'
+        c['torns'] = f"Matí {c['ocupacio']} % ocupat. Que l’horari encaixi de debò ho valida la part 2."
+        torns = taula_extra(extra.get('torns', []))
+        if {'torn', 'ocupacio_pct'}.issubset(torns.columns):
+            noms = torns.torn.astype(str).str.lower().str.replace('í', 'i', regex=False)
+            valors = dict(zip(noms, torns.ocupacio_pct))
+            parts = [f"{nom} {numero(round(float(valors[torn]), 1))} % {acord}" for torn, nom, acord in
+                     [('mati', 'Matí', 'ocupat'), ('tarda', 'Tarda', 'ocupada')] if torn in valors]
+            if parts:
+                c['torns'] = ' · '.join(parts) + '. Que l’horari encaixi de debò ho valida la part 2.'
+        c['coll_ampolla'] = coll_ampolla(extra)
     elif t.id in ('fora-torn', 'hores-aula'):
         cobertura = t if t.id == 'hores-aula' else altres.get('hores-aula')
         total = None
@@ -73,6 +124,10 @@ def text(t, altres=None):
         resultat.update(estat='vermell', etiqueta='Cal actuar')
         if t.id == 'marge-grau-nou':
             resultat['frase'] = f"Necessita {c['hores_noves']} h d’aula a la setmana i en queden {c['hores_lliures']} h lliures. Algunes mides d’aula no cobreixen la demanda."
+    if t.id == 'hi-cap-mati':
+        resultat.update(etiqueta='Pendent de validar', estat='ambre', frase=c['torns'])
+    if t.id == 'marge-grau-nou' and (t.extra.get('estat_provisional') or not t.extra.get('validat_part2', False)):
+        resultat.update(etiqueta='Pendent de validar', estat='ambre')
     resultat.update(c=c)
     return resultat
 

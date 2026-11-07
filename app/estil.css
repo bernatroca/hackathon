@@ -70,3 +70,34 @@ main {padding:0;max-width:none;}
 .stApp p,.stApp button,.stApp h1,.stApp h2,.stApp h3,.stApp label {
  font-family:-apple-system,"Segoe UI",system-ui,sans-serif;
 }
+/* El contingut útil, amb el menú obert, determina quan s'apila l'heroi. */
+.block-container {container-type:inline-size;container-name:contingut;}
+@container contingut (max-width:1100px) {
+ .st-key-heroi [data-testid="stHorizontalBlock"] {flex-direction:column;}
+ .st-key-heroi [data-testid="stColumn"] {width:100%!important;flex:1 1 100%!important;min-width:0!important;}
+}
+@media(max-width:1100px) {
+ .st-key-heroi [data-testid="stHorizontalBlock"] {flex-direction:column;}
+ .st-key-heroi [data-testid="stColumn"] {width:100%!important;flex:1 1 100%!important;min-width:0!important;}
+}
+.aules {grid-template-columns:repeat(7,minmax(0,28px));max-width:100%;}
+.aules i {width:100%;height:auto;aspect-ratio:1;}
+.aules-peu {word-break:normal;overflow-wrap:normal;hyphens:none;white-space:normal;max-width:38rem;}
+.ocupacio-rajola {display:block;font-size:12px;margin-top:4px;}
+/* Cada cel·la s'estira; el cos flexible deixa la proposta i el botó al peu. */
+.st-key-targetes [data-testid="stHorizontalBlock"] {align-items:stretch;}
+.st-key-targetes [data-testid="stColumn"] {display:flex;align-items:stretch;}
+.st-key-targetes [data-testid="stColumn"] > div {flex:1;}
+.st-key-targetes [data-testid="stColumn"] [data-testid="stVerticalBlock"] {flex:1;}
+.st-key-targetes [class*="st-key-targeta-"] {height:100%;display:flex;flex-direction:column;}
+.st-key-targetes [class*="st-key-targeta-"] > div {flex:1;}
+.st-key-targetes [data-testid="stElementContainer"]:has(.targeta-cor) {flex:1;display:flex;}
+.st-key-targetes [data-testid="stMarkdown"]:has(.targeta-cor),
+.st-key-targetes [data-testid="stMarkdownContainer"]:has(.targeta-cor) {height:100%;width:100%;}
+.targeta-cor {display:flex;flex-direction:column;gap:12px;height:100%;}
+.targeta-cor h3,.targeta-cor p {margin:0;}
+.targeta-cor .estat {align-self:flex-start;}
+.targeta-cor .proposem {margin-top:auto;min-height:4.5rem;}
+.desglos:empty {display:none;}
+/* Streamlit conserva els elements antics durant una recàrrega: els amaguem. */
+[data-testid="stMain"] [data-stale="true"] {visibility:hidden;}

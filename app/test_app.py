@@ -1,6 +1,9 @@
 """Proves amb dades reals, sense servidor: python app/test_app.py."""
 from pathlib import Path
 import sys
+import copy
+import re
+import pandas as pd
 import unittest
 from unittest.mock import patch
 import streamlit as st
@@ -11,7 +14,7 @@ sys.path.insert(0,str(ARREL.parent))
 sys.path.insert(0,str(ARREL))
 from nivell1.troballes import PORTADA, una
 from components.grafics import grafics
-from presentacio import context
+from presentacio import context, proporcio, text
 from servei import AULES_DISPONIBLES, AULES_RESERVA, inventari
 
 
@@ -29,7 +32,8 @@ class TestApp(unittest.TestCase):
         self.comprova(app)
         self.assertTrue(any(t.value == 'Espais de l’Escola' for t in app.title))
         self.assertTrue(any(t.value == 'Com estem avui' for t in app.title))
-        self.assertTrue(any(t.value == 'Sí, però just.' for t in app.subheader))
+        self.assertTrue(any(t.value == 'Hi ha marge d’hores' for t in app.subheader))
+        self.assertFalse(any('Sí, però just' in m.value for m in list(app.markdown)+list(app.subheader)))
         self.assertEqual(len([m for m in app.markdown if 'class="xifra-targeta"' in m.value]),len(PORTADA)-1)
         self.assertEqual(len([b for b in app.button if b.label == 'Com ho sabem →']),len(PORTADA))
         self.assertEqual(len(app.get('plotly_chart')),0)
@@ -72,6 +76,7 @@ preguntes.mostra()
                 sales = sales[sales.tipus == 'Aules docents']
                 self.assertEqual(html.count('class="rajola"'),len(sales))
                 self.assertIn('title="Q',html)
+                self.assertEqual(html.count('class="ocupacio-rajola"'),len(sales))
             app.button(key='torna').click().run(timeout=90)
 
     def test_grafic_mati_i_xifres(self):
@@ -89,6 +94,71 @@ preguntes.mostra()
         c = context(t)
         self.assertEqual(c['pic_n'],int(t.extra['pic'].classes.max()))
         self.assertEqual(AULES_DISPONIBLES+AULES_RESERVA,len(inventari().query("tipus == 'Aules docents'")))
+
+    def test_camps_nous_i_provisional(self):
+        from servei import totes, versio_registre
+        resultat = copy.deepcopy(totes(2,None,versio_registre()))
+        mapa = {t.id:t for t in resultat}
+        mapa['hi-cap-mati'].extra.update(
+            torns=pd.DataFrame({'torn':['mati','tarda'],'ocupacio_pct':[67.5,81.2]}),
+            coll_ampolla={'llindar':88,'torn':'mati','setmana':'2027-W05'})
+        mapa['hores-aula'].extra['desglos'] = {'per_assignar':4541,'laboratoris':919,'dobles':262}
+        mapa['marge-grau-nou'].extra.update(estat_provisional=True,validat_part2=True)
+        with patch('servei.totes',return_value=resultat):
+            app = self.carrega()
+        self.comprova(app)
+        html = '\n'.join(m.value for m in app.markdown)
+        self.assertIn('Matí 67,5 % ocupat · Tarda 81,2 % ocupada',html)
+        self.assertIn('El més ajustat: aules de més de 88 places, al matí, la setmana 2027-W05',html)
+        self.assertIn('4.541 per assignar de debò',html)
+        self.assertIn('919 laboratoris (no es toquen)',html)
+        self.assertIn('262 dobles (sense aula pròpia)',html)
+        marge = text(mapa['marge-grau-nou'])
+        self.assertEqual(marge['etiqueta'],'Pendent de validar')
+        self.assertEqual(marge['estat'],'ambre')
+        self.assertIn('Pendent de validar',html)
+        self.assertIn('A part, 2 aules de reserva (vora discontínua)',html)
+
+    def test_proporcions_i_metodes(self):
+        from textos import TEXTOS
+        self.assertEqual(proporcio(2,100),'gairebé cap (2 %)')
+        self.assertEqual(proporcio(0,100),'gairebé cap (0 %)')
+        self.assertEqual(proporcio(25,100),'1 de cada 4 classes')
+        self.assertEqual(proporcio(74,100),'el 74 % de les classes')
+        for info in TEXTOS.values():
+            self.assertIn('metode_planer',info)
+            self.assertIsNone(re.search(r'\b(cohort|PLAB|llindar|cota|heretades|bloc)\b',info['metode_planer'],re.I))
+        marge = copy.deepcopy(una('marge-grau-nou'))
+        marge.extra.pop('estat_provisional',None)
+        self.assertEqual(text(marge)['etiqueta'],'Pendent de validar')
+
+    def test_figures_sense_manipulacio(self):
+        from servei import totes, versio_registre
+        resultat = totes(2,None,versio_registre())
+        with patch('components.grafics.st.plotly_chart') as mostra:
+            for t in resultat:
+                grafics(t,clau=t.id,altres={r.id:r for r in resultat})
+        self.assertGreater(len(mostra.call_args_list),0)
+        for crida in mostra.call_args_list:
+            figura = crida.args[0]
+            config = crida.kwargs['config']
+            self.assertFalse(config['displayModeBar'])
+            self.assertFalse(config['scrollZoom'])
+            self.assertFalse(config['doubleClick'])
+            self.assertFalse(config['staticPlot'])
+            self.assertFalse(figura.layout.dragmode)
+            self.assertTrue(figura.layout.xaxis.fixedrange)
+            self.assertTrue(figura.layout.yaxis.fixedrange)
+
+    def test_casos_singular_plural(self):
+        from components.grafics import barres
+        with patch('components.grafics.st.plotly_chart') as mostra:
+            barres(['Un','Dos'],[1,2],'casos',' casos')
+        self.assertEqual(list(mostra.call_args.args[0].data[0].text),['2 casos','1 cas'])
+
+    @unittest.skip('AppTest no disposa de navegador ni d’una API d’amplada o viewport; no executa el CSS adaptable.')
+    def test_renderitzat_estret(self):
+        pass
 
     def test_canvi_semestre(self):
         app = self.carrega()
