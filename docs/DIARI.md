@@ -58,3 +58,16 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - Gràfics: cap mapa de calor ni gràfic tècnic a la portada. Quadrets d'aules, barres amb el número escrit i el plànol d'aules per espina (de l'opció C) al detall d'ocupació. Seguim la skill dataviz (paleta validada, colors d'estat sempre amb icona i text).
 - Llibreries mirades: Plotly (ja la fem servir, bona integració), Altair i ECharts (streamlit-echarts, més vistós però menys integrat). Ens quedem amb HTML/CSS propi per a les targetes i Plotly simplificat.
 - Claude Design (tipus d'artefacte) no estava disponible en aquesta sessió: les maquetes són HTML locals a docs/disseny/.
+
+### [ds 13:52] DECISIÓ · Prompt de la part 2, esborrany v2
+- Criteri que mana: un horari rutinari per a l'estudiant (mateix dia, hora i aula cada setmana; aula base per grup; poques hores mortes). Es planifica per activitat, no per sessió.
+- «Fet» vol dir una xifra abans i després per a cada objectiu, calculada pel codi (`nivell2.comprova`), no la paraula del subagent.
+- Titulacions comparades en percentatge, no en absolut: una gran sempre té més sessions mogudes (com qui sempre contesta les enquestes perquè té més temps).
+- S'afegeixen alternatives de torn per a la Junta, imprevistos amb canvi mínim des del 5.2 i el grau nou de 40 amb la mateixa rutina.
+- La graella espera el disseny confirmat del nivell 1. No es programa res fins a l'OK de l'equip. Espec: .plans/nivell2-prompt.md
+
+### [ds 14:12] SOLUCIÓ · App de la part 1 amb el disseny B1
+- frontend-1 (Codex) ha passat la B1 a Streamlit en 16 minuts. Té la resposta gran amb els 19 quadrets, targetes de semàfor amb «Proposem», 11 detalls amb un gràfic senzill i el plànol d'aules per espina.
+- Textos planers a app/textos.py. El SQL queda dins «Per a tècnics».
+- PROBLEMA resolt: al frontend li faltava l'inventari d'aules. L'app el llegeix amb una sola consulta, i les constants (19 aules, 2 de reserva, 40 places) porten comentari d'on surten.
+- Pendent: «Com ho hem calculat» encara fa servir paraules tècniques (cohort, PLAB, llindar).
