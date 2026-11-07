@@ -123,6 +123,8 @@ def test_funcio_pura_serialitzable_i_veredicte_no_inferit():
     assert d['resum']['veredicte'] == ''
     assert d['resum']['temps_s'] is None
     d = resultat(resum={'veredicte': 'VALIDA', 'temps_s': 2.5})
+    assert d['resum']['veredicte'] == ''  # Un resum antic no acredita el CSV.
+    d = resultat(informe={'veredicte': 'VALIDA'}, resum={'temps_s': 2.5})
     assert d['resum']['veredicte'] == 'VALIDA'
     assert d['resum']['temps_s'] == 2.5
 
@@ -145,3 +147,19 @@ def test_bases_incompatibles_i_motius_planers():
         resultat((b, c, p, q, noms))
     assert motiu_planer('R1-FIXADA: TE, PAUL, SEM i PLAB.') == (
         'torn i classes fixades: teoria, problemes, seminari i laboratori.')
+
+
+def test_recompte_csv_inclou_recuperada_i_ignora_resum_antic():
+    b, c, p, q, noms = escenari()
+    q.files['cancel-inventada'].aula = 'Q8/0001'
+    d = resultat((b, c, p, q, noms), resum={'canvis_aula_vs_referencia': 500,
+                  'canvis_franja_vs_referencia': 500, 'veredicte': 'VALIDA'},
+                 informe={'veredicte': 'NO VALIDA',
+                          'objectius': {'canvis_aula_vs_referencia': 5}})
+    assert d['resum']['canvis_aula_vs_referencia'] == 6
+    assert d['resum']['canvis_franja_vs_referencia'] == 2
+    assert d['resum']['canvis_aula_oficials'] == 5
+    assert d['resum']['canvis_aula_recuperades'] == 1
+    assert d['resum']['veredicte'] == 'NO VALIDA'
+    assert motiu_planer('R2-FRANJA') == 'finestra horària'
+    assert motiu_planer('R4-DOCENT') == 'solapaments d’aula, professorat o alumnat'

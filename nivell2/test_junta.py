@@ -45,7 +45,7 @@ def test_percentatges_unio_i_pitjor_cohort(tmp_path):
     assert rows['GXX:1r']['mogudes_pct'] == pytest.approx(100 / 3)
     assert rows['GYY:1r']['mogudes_pct'] == 0
     assert rows['GYY:1r']['aula'] == 1
-    assert d['pitjor_cohort'] == ['GXX:1r']
+    assert d['pitjor_cohort'] == ['GYY:1r']
     assert d['excepcions'][0]['motiu'] == 'Prova explicada'
     assert d['excepcions_resum'][0]['percentatge'] == pytest.approx(100 / 3)
 
@@ -203,7 +203,7 @@ def test_textos_principals_planers_i_detall_separat():
     assert 3 <= metode.count('.') <= 4
 
 
-def test_fora_torn_heretades_i_noves():
+def test_fora_torn_heretades_i_noves(tmp_path):
     b = petita()
     for s in b.sessions.values():
         s.torn = 'tarda'
@@ -212,7 +212,9 @@ def test_fora_torn_heretades_i_noves():
     p.files['0'].aula = 'Inventada'
     p.files['1'].h_ini = '09:30'
     p.files['2'].dia = 'M'
-    d = calcula(p, b, b, colloca(b, p))
+    relax = tmp_path / 'relaxacions.csv'
+    relax.write_text('restriccio,sessions,justificacio\nR1-TORN,1|2,Motiu inventat\n')
+    d = calcula(p, b, b, colloca(b, p), relax)
     assert d['fora_torn_ja_avui'] == 1
     assert len(d['excepcions']) == 2
     for text in documents(d):
@@ -301,3 +303,34 @@ def test_files_daltres_semestres_del_mateix_escenari(tmp_path, monkeypatch):
     _, col = carrega_proposta(path, b, GRAU_NOU)
     assert set(col) == set(b.sessions)
     assert crides == [(GRAU_NOU, None)]
+
+
+def test_declarada_sense_canvi_horari_i_heretada_exclosa(tmp_path):
+    b = petita()
+    for s in b.sessions.values():
+        s.torn = 'tarda'
+        s.fixada = 'R1: GXX 1r'
+    p = Proposta.de_base(b)
+    b.sessions['0'].fixada = ''
+    p.files['0'].aula = 'Reserva0'
+    relax = tmp_path / 'relaxacions.csv'
+    relax.write_text('restriccio,sessions,justificacio\nR1-TORN,0|1|2,Motiu inventat\n')
+    d = calcula(p, b, b, colloca(b, p), relax)
+    assert [e['id_sessio'] for e in d['excepcions']] == ['0']
+    assert d['fora_torn_ja_avui'] == 2
+    r, = d['sessions_mogudes']
+    assert r['afectades'] == r['aula'] == 1
+    assert r['franja'] == 0
+
+
+def test_pic_instantani_successives_en_aules_diferents():
+    b = petita()
+    b.sessions['0'].durada = 30
+    s = deepcopy(b.sessions['0'])
+    s.id, s.ini, s.aula = 'extra', 540, 'Reserva0'
+    b.sessions[s.id] = s
+    b.ordre.append(s.id)
+    p = Proposta.de_base(b)
+    r = pics_i_mides(b, b, colloca(b, p))['mati']
+    assert r['simultani']['classes'] == 1
+    assert r['pitjor']['classes'] == 2

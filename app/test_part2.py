@@ -205,9 +205,10 @@ class TestGraellaResponsive(unittest.TestCase):
         from html import unescape
         for c in classes:
             assert f'<b>{c.assignatura}</b>' in unescape(html)
-        assert '…' not in html and 'text-overflow' not in CSS
+        assert '…' not in html  # El text complet roman al DOM; el CSS aplica l'el·lipsi.
+        assert 'text-overflow:ellipsis' in CSS
         assert 'hyphens:none' in CSS and 'word-break:normal' in CSS
-        assert 'overflow-wrap:anywhere' not in CSS and 'line-clamp' not in CSS
+        assert 'overflow-wrap:anywhere' not in CSS and '-webkit-line-clamp:var(--linies-nom)' in CSS
         assert 'color:#1a1a18;font-size:14px;font-weight:600' in CSS
         assert 'font-size:12px;color:#52514e' in CSS
         esperats = {
@@ -232,7 +233,7 @@ class TestGraellaResponsive(unittest.TestCase):
         from components.graella import CSS_FILTRES, filtres_html
         from components.prova_graella import setmana_inventada
         html = filtres_html(setmana_inventada())
-        assert 'Totes (9)' in html and 'Aula assignada (1)' in html
+        assert 'Totes (23)' in html and 'Aula assignada (1)' in html
         assert html.count('aria-pressed="true"') == 1
         assert 'background:#fff;color:#1a1a18;border:1px solid' in CSS_FILTRES
         assert 'border-color:#1a1a18;font-weight:700;outline:none' in CSS_FILTRES
@@ -346,6 +347,51 @@ class TestGraella(unittest.TestCase):
         with raises(ValueError, match='Dia incorrecte'):
             celles_aula(base, p, date(2027, 3, 8), 'Q9/0001')
 
+
+    def test_doble_amb_amfitrio_fora_del_grup_i_aula_de_la_proposta(self):
+        from components.graella import celles
+        host = sessio('HOST-INVENTAT', grup='TE/81', cohorts=('GXX:1r',))
+        double = sessio('DOBLE-INVENTAT', grup='TE/91', cohorts=('GDD:3r',),
+                        aula='', sense_espai=True)
+        base = Base({s.id: s for s in (host, double)}, {})
+        p = Proposta.de_base(base)
+        p.files[host.id].aula = 'Q9/0002'
+        c, = celles(base, p, host.data, cohort='GDD:3r', linia=double.linia)
+        assert c.aula == '' and not c.aula_assignada and not c.canvi_aula
+        for originals in (True, False):
+            html = contingut_graella(taula_html([c], originals=originals))
+            assert 'Amb el grup 81 · Aula Q9/0002' in html
+            assert 'Pendent d’assignar aula' not in html
+            assert 'Aula no indicada' not in html
+        assert len(celles_aula(base, p, host.data, 'Q9/0002')) == 1
+
+    def test_doble_per_unitat_compartida_i_sense_amfitrio(self):
+        from components.graella import celles
+        host = sessio('HOST-INVENTAT', compartida='UNITAT-INVENTADA')
+        double = sessio('DOBLE-INVENTAT', codi='100099', grup='TE/91',
+                        compartida=host.compartida, aula='', sense_espai=True)
+        base = Base({s.id: s for s in (host, double)}, {})
+        p = Proposta.de_base(base)
+        c = next(c for c in celles(base, p, host.data) if c.id_sessio == double.id)
+        assert 'Amb el grup 81 · Aula Q9/0001' in taula_html([c])
+        p.files[host.id].data = '2027-03-15'
+        c, = celles(base, p, host.data)
+        html = taula_html([c])
+        assert 'Classe compartida amb un altre grup' in html
+        assert 'Pendent d’assignar aula' not in html
+
+    def test_doble_orfe_i_aula_amfitriona_absent(self):
+        from components.graella import celles
+        double = sessio('DOBLE-INVENTAT', aula='', sense_espai=True)
+        host = sessio('HOST-INVENTAT', grup='TE/91', aula='')
+        base = Base({s.id: s for s in (host, double)}, {})
+        p = Proposta.de_base(base)
+        cs = celles(base, p, double.data)
+        c = next(c for c in cs if c.id_sessio == double.id)
+        assert c.ubicacio_compartida == 'Classe compartida amb un altre grup'
+        host.codi = '100099'
+        c = next(c for c in celles(base, p, double.data) if c.id_sessio == double.id)
+        assert 'Classe compartida amb un altre grup' in taula_html([c])
 
     def test_tipica_mediana_i_desempat(self):
         base = crea_base()
@@ -548,6 +594,39 @@ class TestRedisseny(unittest.TestCase):
             nom = ESTATS[esperat][0]
             assert f'title="{nom} ·' in html and f'aria-label="{nom} ·' in html
             assert '<span class="estat">' not in html and '<svg' not in html
+
+    def test_pressupost_classes_curtes_i_noms_llargs(self):
+        from components.graella import Cella, CSS, pressupost_classe
+        nom = 'Assignatura inventada amb un nom molt llarg & difícil "de resumir" ' * 8
+        for durada in (30, 45, 60, 90, 120, 180):
+            for carrils in range(1, 5):
+                cs = [Cella(f'CURTA-{i}', 'L', 510, 510 + durada,
+                            'Aula inventada molt llarga', nom, 'Problemes',
+                            f'PAUL/99{i}', True, False) for i in range(carrils)]
+                html = taula_html(cs)
+                graella = estructura_graella(html)
+                assert graella.dies[0]['data-carrils'] == str(carrils)
+                for _, attrs in graella.classes:
+                    assert nom in attrs['title'] and nom in attrs['aria-label']
+                    for nota in (False, True):
+                        p = pressupost_classe(durada, nota=nota)
+                        # Recalculem l'alçada amb les mètriques reals del CSS.
+                        secundaries = sum(p[k] for k in ('ubicacio', 'grup', 'nota'))
+                        visible = 2 * p['padding'] + p['nom'] * 17.5 + secundaries * (16.2 + 3)
+                        assert visible <= durada * 1.6 - 6
+                        assert abs(visible - p['visible']) < 1e-6
+                        assert p['nom'] >= 1 and p['ubicacio']
+                        assert not p['nota'] or p['grup']
+                        if nota:
+                            assert f'--linies-nom:{p["nom"]};' in attrs['style']
+                            for camp in ('ubicacio', 'grup', 'nota'):
+                                assert f'--mostra-{camp}:{"block" if p[camp] else "none"};' in attrs['style']
+                if durada == 30:
+                    assert pressupost_classe(durada)['padding'] == 2
+                    assert not pressupost_classe(durada, nota=True)['grup']
+        assert '-webkit-line-clamp:var(--linies-nom)' in CSS
+        assert '.classe:not([open]){overflow:hidden;}' in CSS
+        assert '.classe[open] b' in CSS
 
     def test_tres_linies_i_nota_curta_amb_detall_complet(self):
         from dataclasses import replace
@@ -789,7 +868,8 @@ assert.equal(host.listeners.resize.size,1);
         import ast
         arbre = ast.parse((ARREL / 'app.py').read_text())
         crida = next(n for n in ast.walk(arbre) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == 'navigation')
-        assert [n.value for n in crida.args[0].keys] == ['Com està l’horari', 'La proposta', 'Ajuda']
+        # La secció «Ajuda» («Pregunta-ho · aviat») ja no hi és: l'assistent és el botó de baix a la dreta.
+        assert [n.value for n in crida.args[0].keys] == ['Com està l’horari', 'La proposta']
         pagines = [n for n in ast.walk(crida) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == 'Page']
         titols = [next(k.value.value for k in n.keywords if k.arg == 'title') for n in pagines]
         assert 'Horari proposat' in titols

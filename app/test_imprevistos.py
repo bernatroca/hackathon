@@ -81,7 +81,7 @@ def test_sense_canvis_i_filtre_sense_files():
 
 
 def test_resultats_absents_i_incomplets_sense_excepcio_visible(tmp_path):
-    paths = tuple(tmp_path / f'fitxer-inventat-{i}' for i in range(5))
+    paths = tuple(tmp_path / f'fitxer-inventat-{i}' for i in range(6))
     with patch.object(imprevistos, '_fitxers', return_value=paths), \
             patch.object(imprevistos, '_carrega', side_effect=AssertionError('No ha de carregar.')):
         assert imprevistos.carrega() is None
@@ -97,7 +97,7 @@ def test_resultats_absents_i_incomplets_sense_excepcio_visible(tmp_path):
 
 
 def test_veredicte_no_validat_no_es_presenta_com_resolt():
-    for valor in ('INVALIDA', ''):
+    for valor in ('NO VALIDA', ''):
         dades = dades_inventades()
         dades['resum']['veredicte'] = valor
         dades['resum']['temps_s'] = None
@@ -120,7 +120,7 @@ def test_html_escapa_els_textos_de_les_targetes():
 
 
 def test_actualitzacio_dels_fitxers_invalida_cache(tmp_path):
-    paths = tuple(tmp_path / f'fitxer-inventat-{i}' for i in range(5))
+    paths = tuple(tmp_path / f'fitxer-inventat-{i}' for i in range(6))
     for p in paths:
         p.touch()
     with patch.object(imprevistos, '_fitxers', return_value=paths), \
@@ -197,3 +197,34 @@ def test_temps_un_segon_en_singular():
     html = contingut(obre(dades))
     assert 'en 1,00 segon<' in html
     assert 'en 1,00 segons' not in html
+
+
+def test_informe_ha_de_correspondre_al_csv(tmp_path):
+    import hashlib
+    import json
+    import pytest
+    proposta, informe = tmp_path/'proposta.csv', tmp_path/'informe.json'
+    proposta.write_text('id_sessio,dia,h_ini,aula\ninventada,L,15:00,Q9/0001\n')
+    report = {'veredicte': 'VALIDA', 'context': {
+        'proposta_sha256': hashlib.sha256(proposta.read_bytes()).hexdigest()}}
+    informe.write_text(json.dumps(report))
+    assert imprevistos._informe_validat(informe, proposta) == report
+    proposta.write_text('id_sessio,dia,h_ini,aula\n')
+    with pytest.raises(ValueError, match='CSV actual'):
+        imprevistos._informe_validat(informe, proposta)
+    informe.write_text('{"veredicte": "VALIDA"}')
+    with pytest.raises(ValueError, match='CSV actual'):
+        imprevistos._informe_validat(informe, proposta)
+
+
+def test_canvis_csv_i_oficials_i_suport_explicats():
+    dades = dades_inventades()
+    dades['resum'].update(canvis_aula_vs_referencia=54, canvis_aula_oficials=53,
+                          canvis_aula_recuperades=1, classes_de_suport=2)
+    html = contingut(obre(dades))
+    assert 'El CSV inclou 54 canvis' in html
+    assert 'El verificador en compta 53' in html
+    assert 'classe cancel·lada' in html
+    assert '2 classes més es mouen per fer lloc a les afectades' in html
+    assert 'només movem' not in html
+    assert imprevistos.veredicte({'veredicte': 'NO VALIDA'})[0] == 'vermell'

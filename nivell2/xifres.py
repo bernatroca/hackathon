@@ -36,6 +36,11 @@ def calcula(proposta: Proposta, base: Base, informe: Informe,
     x = {'veredicte': informe.veredicte}
     for codi, valors in informe.json['restriccions'].items():
         x[f'incompliments:{codi}'] = valors['compten']
+    x['incompliments_declarats'] = informe.json.get('incompliments_declarats', 0)
+    x['incompliments_heretats'] = sum(v.get('heretades', 0) for v in informe.json['restriccions'].values())
+    for codi, v in informe.json['restriccions'].items():
+        x[f'heretats:{codi}'] = v.get('heretades', 0)
+        x[f'declarats:{codi}'] = v.get('declarades', 0)
     x.update(informe.objectius)
     x['sessions_no_avaluables'] = len(base.sessions) - len(col)
     patrons = defaultdict(Counter)
@@ -77,6 +82,8 @@ def calcula(proposta: Proposta, base: Base, informe: Informe,
     x['aules_grup_setmana_maxim'] = max(map(len, aules.values()), default=0)
     relax = Counter((r.restriccio, r.justificacio) for r in llegeix_relaxacions(relaxacions))
     x['relaxacions_declarades'] = sum(relax.values())
+    for tipus in sorted({k[0] for k in relax}):
+        x[f'relaxacions:{tipus}'] = sum(n for (t, _), n in relax.items() if t == tipus)
     for (tipus, motiu), n in sorted(relax.items()):
         x[f'relaxacio:{tipus}: {motiu}'] = n
     files = []
@@ -108,15 +115,32 @@ def compara(proposta: Proposta, base: Base | None = None, *,
     """
     avui = carrega_oficial()
     base = base if base is not None else carrega_oficial(escenari)
-    inicial = Proposta.de_base(avui)
+    inicial = Proposta.llegeix(referencia) if referencia else Proposta.de_base(avui)
+    relax_abans = referencia.with_name('relaxacions.csv') if referencia else None
+    if relax_abans is not None and not relax_abans.exists():
+        relax_abans = None
     with TemporaryDirectory() as tmp:
         partida = inicial.escriu(Path(tmp) / 'avui.csv')
         desti = proposta_path or proposta.escriu(Path(tmp) / 'proposta.csv')
-        abans = verifica(partida, referencia=referencia, nomes_aules=nomes_aules)
+        abans = verifica(partida, referencia=referencia, relaxacions=relax_abans, nomes_aules=nomes_aules)
         despres = verifica(desti, escenari=escenari, referencia=referencia,
                            relaxacions=relaxacions, nomes_aules=nomes_aules)
-    a, ta = calcula(inicial, avui, abans)
+    a, ta = calcula(inicial, avui, abans, relax_abans)
     d, td = calcula(proposta, base, despres, relaxacions)
+    for values, candidate in ((a, inicial), (d, proposta)):
+        hora = aula = torn = 0
+        for sid, old in inicial.files.items():
+            new = candidate.files.get(sid)
+            if new is None:
+                continue
+            moved = (old.dia, old.h_ini, old.data) != (new.dia, new.h_ini, new.data)
+            hora += moved
+            aula += not moved and old.aula != new.aula
+            from nivell2.base import hm
+            torn += (hm(old.h_ini) >= 870) != (hm(new.h_ini) >= 870)
+        values['sessions_canvien_hora'] = hora
+        values['sessions_nomes_canvien_aula'] = aula
+        values['canvis_torn'] = torn
     claus = dict.fromkeys([*a, *d])
     files = [{'xifra': k, 'abans': a.get(k, 0), 'despres': d.get(k, 0)} for k in claus]
     titulacions = []

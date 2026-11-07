@@ -218,3 +218,126 @@ def test_reserva_es_compta_per_aules_diferents_durant_tota_hora():
     # Tres aules i dues de reserva: totes dues classes successives comparteixen aula.
     assert result.proposta.files['a'].aula == 'Q9/0002'
     validate(new, result.proposta)
+
+
+def test_heretats_es_calculen_sobre_52_amb_totes_les_compartides():
+    from nivell2.reparacio import _heretats
+    docent = frozenset({'docent-inventat'})
+    b = base(sessio('a', docents=docent), sessio('b', docents=docent, aula='Q9/0002'))
+    ref = Proposta.de_base(b)
+    assert ('R4-DOCENT', ('a', 'b')) in _heretats(b, ref)
+    ref.files['b'].h_ini = '16:00'
+    assert ('R4-DOCENT', ('a', 'b')) not in _heretats(b, ref)
+
+
+@pytest.mark.parametrize('obre_obstacle', [False, True])
+def test_no_recrea_conflictes_de_partida_resolts_al_52(monkeypatch, obre_obstacle):
+    import nivell2.reparacio as reparacio
+    docent = frozenset({'docent-inventat'})
+    b = base(sessio('a', docents=docent), sessio('b', docents=docent, aula='Q9/0002'))
+    ref = Proposta.de_base(b)
+    ref.files['a'].h_ini = '16:00'
+    new = copy.deepcopy(b)
+    new.sessions['a'].alumnes = 25
+    if obre_obstacle:
+        new.sessions['b'].alumnes = 25
+    monkeypatch.setattr(reparacio, '_franges', lambda *args, **kwargs: [(DATE, 900)])
+    assert resolve(b, new, ref).proposta is None
+
+
+def test_recuperacio_no_reutilitza_exempcio_de_conflicte_heretat():
+    docent = frozenset({'docent-inventat'})
+    b = base(sessio('cancel', docents=docent),
+             sessio('obstacle', docents=docent, aula='Q9/0002'))
+    ref = Proposta.de_base(b)
+    ref.files['obstacle'].dia = 'M'
+    new = copy.deepcopy(b)
+    new.cancellades = {'cancel': DATE+dt.timedelta(days=1)}
+    result = resolve(b, new, ref)
+    assert _referencia(b.sessions['cancel'], result.proposta)[1] >= 960
+
+
+@pytest.mark.parametrize('fixada', ['', 'R1: inventada'])
+def test_teoria_no_pot_tornar_al_laboratori_original(fixada):
+    b = base(sessio('a', fixada=fixada))
+    b.aules['Q9/0001'] = Aula('Q9/0001', 'Q9', 'Laboratoris docents', 80)
+    ref = Proposta.de_base(b)
+    ref.files['a'].aula = 'Q9/0002'
+    new = copy.deepcopy(b)
+    new.tancaments = [Tancament('Q9/0002', DATE, DATE)]
+    result = resolve(b, new, ref)
+    assert result.proposta.files['a'].aula == 'Q8/1001'
+
+
+def test_fixada_que_creix_no_conserva_aula_sense_aforament():
+    b = base(sessio('a', fixada='R1: inventada'))
+    new = copy.deepcopy(b)
+    new.sessions['a'].alumnes = 60
+    result = resolve(b, new)
+    assert result.proposta is None
+
+
+def test_cancel_fixada_pot_canviar_aula_tancada_el_dia_de_recuperacio():
+    b = base(sessio('a', fixada='R1: inventada'))
+    new = copy.deepcopy(b)
+    tomorrow = DATE+dt.timedelta(days=1)
+    new.cancellades = {'a': tomorrow}
+    new.tancaments = [Tancament('Q9/0001', tomorrow, tomorrow)]
+    result = resolve(b, new)
+    assert result.proposta.files['a'].aula != 'Q9/0001'
+    assert _referencia(b.sessions['a'], result.proposta)[0] == tomorrow
+    validate(new, result.proposta)
+
+
+def test_rutina_prefereix_aula_de_les_setmanes_congelades():
+    b = base(sessio('a', activitat='rutina'),
+             sessio('b', activitat='rutina', data=DATE+dt.timedelta(days=7), aula='Q9/0002'))
+    new = copy.deepcopy(b)
+    new.tancaments = [Tancament('Q9/0001', DATE, DATE)]
+    # Dues alternatives del mateix passadís, però només una conserva rutina.
+    new.aules['Q9/0000'] = Aula('Q9/0000', 'Q9', 'Seminaris', 30)
+    result = resolve(b, new)
+    assert result.proposta.files['a'].aula == 'Q9/0002'
+    assert result.proposta.files['b'] == Proposta.de_base(b).files['b']
+
+
+def test_hores_mortes_desempaten_la_recuperacio():
+    recovered = sessio('cancel', cohorts=('GXX:3r',))
+    tomorrow = DATE+dt.timedelta(days=1)
+    other = sessio('alumnat', data=tomorrow, dia='M', ini=1080,
+                   cohorts=('GXX:3r',), codi='900002', aula='Q9/0002')
+    b = base(recovered, other)
+    new = copy.deepcopy(b)
+    new.cancellades = {'cancel': tomorrow}
+    result = resolve(b, new)
+    assert _referencia(recovered, result.proposta)[1] in (1020, 1140)
+
+
+def test_cap_afectada_torna_tots_els_recomptes_zero():
+    b = base(sessio('a'))
+    stats = resolve(b, b).estadistiques
+    assert all(stats[k] == 0 for k in ('sessions_obertes', 'sessions_afectades',
+                                      'canvis_franja_vs_referencia', 'canvis_aula_vs_referencia'))
+    assert all(n == 0 for n in stats['sessions_afectades_per_imprevist'].values())
+
+
+def test_mateixa_llavor_mateix_csv(tmp_path):
+    b = base(sessio('a'), sessio('b', aula='Q9/0002'))
+    new = copy.deepcopy(b)
+    new.cancellades = {'a': DATE+dt.timedelta(days=3)}
+    a = resolve(b, new).proposta.escriu(tmp_path/'a.csv')
+    c = resolve(b, new).proposta.escriu(tmp_path/'b.csv')
+    assert a.read_bytes() == c.read_bytes()
+
+
+def test_aula_cancel_no_te_cost_oficial_i_evitem_moure_suport(monkeypatch):
+    import nivell2.reparacio as reparacio
+    tomorrow = DATE+dt.timedelta(days=1)
+    b = base(sessio('cancel'), sessio('suport', data=tomorrow, dia='M'))
+    new = copy.deepcopy(b)
+    new.cancellades = {'cancel': tomorrow}
+    new.sessions['suport'].alumnes = 21
+    monkeypatch.setattr(reparacio, '_franges', lambda *args, **kwargs: [(tomorrow, 900)])
+    result = resolve(b, new)
+    assert result.proposta.files['suport'].aula == 'Q9/0001'
+    assert result.proposta.files['cancel'].aula == 'Q9/0002'

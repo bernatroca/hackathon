@@ -2,12 +2,16 @@
 from __future__ import annotations
 import argparse
 import csv
+import ctypes
+import os
 import json
 import time
+import shutil
+import tempfile
 from pathlib import Path
 
-from nivell2.base import (Proposta, RESULTATS, PYTHON, REPTE, carrega_model,
-                          carrega_oficial, verifica)
+from nivell2.base import (Proposta, RESULTATS, carrega_model,
+                          carrega_oficial, verifica, avalua_rapid)
 from nivell2.franges import assigna_franges, proposta_franges
 from nivell2.aules import assigna_aules
 from nivell2.xifres import compara
@@ -20,7 +24,7 @@ def escriu_csv(path, rows, columns):
         writer.writerows(rows)
 
 
-def resol(base, *, temps_franges=300, temps_aules=600, llavor=0):
+def resol(base, *, temps_franges=300, temps_aules=600, llavor=0, pista=None):
     """Fins a tres intents; mai retorna una proposta parcial com si fos vàlida.
 
     Els pressupostos són compartits entre intents de cada etapa. Un fracàs
@@ -34,7 +38,7 @@ def resol(base, *, temps_franges=300, temps_aules=600, llavor=0):
     for attempt in range(3):
         start = time.monotonic()
         slots, state_f, exceptions = assigna_franges(base, referencia=ref,
-            temps_s=max(.001,remaining_f), llavor=llavor, limits_capacitat=limits, permet_excepcions_torn=True)
+            temps_s=max(.001,remaining_f), llavor=llavor, limits_capacitat=limits, permet_excepcions_torn=True, pista=pista)
         elapsed_f = time.monotonic()-start
         remaining_f -= elapsed_f
         record = {'intent':attempt+1, 'franges':state_f, 'temps_franges_s':elapsed_f,
@@ -46,7 +50,7 @@ def resol(base, *, temps_franges=300, temps_aules=600, llavor=0):
             return None, exceptions, history
         start = time.monotonic()
         rooms, state_a = assigna_aules(base,slots,referencia=ref,
-            temps_s=max(.001,remaining_a),llavor=llavor)
+            temps_s=max(.001,remaining_a),llavor=llavor,pista=pista)
         elapsed_a = time.monotonic()-start
         remaining_a -= elapsed_a
         record.update(aules=state_a,temps_aules_s=elapsed_a)
@@ -59,12 +63,12 @@ def resol(base, *, temps_franges=300, temps_aules=600, llavor=0):
         if remaining_f <= 0 or remaining_a <= 0:
             break
         # Necessary capacity conditions are weaker than room assignment. Tighten
-        # the hourly packing by one slot in ALL buckets as a repair heuristic.
+        # simultaneous packing by one slot as a repair heuristic.
         # This is deliberately not presented as a Hall/infeasibility certificate.
         available = sum(a.tipus in ('Aules docents','Seminaris') for a in base.aules.values())-2
         limits[-1] = max(0,available-attempt-1)
         record['reintent_motiu'] = ('Aules sense solució; es redueix en una sessió la capacitat '
-                                    'de tots els cubells horaris. Heurística, sense prova d’impossibilitat.')
+                                    'simultània. Heurística, sense prova d’impossibilitat.')
     return None, [], history
 
 
@@ -96,10 +100,14 @@ def relaxacions_proposta(base, proposal, w14):
         members = [base.sessions[sid] for sid in [double,*hosts]]
         if any(r.fixada or r.tipus == 'PLAB' for r in members):
             frozen_hosts.update(hosts)
+    # Let the official inheritance rules decide which violations still count.
+    # In particular unchanged doubles need no explicit relaxation.
+    needed = {sid for v in avalua_rapid(base,proposal).violacions
+              if v.regla == 'R1-TORN' and v.compta for sid in v.sessions}
     classified = {MOTIU_FIXADES:[],MOTIU_DOBLES:[],MOTIU_AVALUACIO:[]}
     for s in base.sessions.values():
         date,minute = _referencia(s,proposal)
-        if _torn_ok(s.torn,minute,minute+s.durada) is not False:
+        if s.id not in needed or _torn_ok(s.torn,minute,minute+s.durada) is not False:
             continue
         if (s.sense_espai or (s.id in frozen_hosts and not s.fixada)) and (date,minute) == (s.data,s.ini):
             if any(_referencia(base.sessions[p],proposal) != (base.sessions[p].data,base.sessions[p].ini)
@@ -114,122 +122,187 @@ def relaxacions_proposta(base, proposal, w14):
             for motiu,ids in classified.items() if ids]
 
 
+VALIDES = {'VALIDA','VALIDA AMB RELAXACIONS DECLARADES'}
+
+
+def metriques(report):
+    return {'declarats':report.json['incompliments_declarats'],
+            **{k:report.objectius[k] for k in ('canvis_franja','hores_mortes_min',
+                'desplacaments_aula','r6_aules_te_extra_per_grup')}}
+
+
+def persones_correctes(base, proposal):
+    from nivell2.comprova_persones import (colloca_avui, conflictes,
+                                           parelles_dobles, comprova_dobles)
+    from horaris.check import Informe as InformeIntern, _col_loca
+    col = _col_loca(base,proposal.a_files(),InformeIntern())
+    if set(col) != set(base.sessions):
+        return False
+    new = set(conflictes(col))-set(conflictes(colloca_avui(base)))
+    pairs,_ = parelles_dobles(base)
+    doubles = comprova_dobles(base,col,pairs)
+    return not new and not any(doubles.values())
+
+
+def _intercanvia(stage, out):
+    """Atomic exchange on the supported macOS/Linux development systems."""
+    libc = ctypes.CDLL(None,use_errno=True)
+    source, target = os.fsencode(stage), os.fsencode(out)
+    if hasattr(libc,'renamex_np'):
+        exchange = libc.renamex_np
+        exchange.argtypes = [ctypes.c_char_p,ctypes.c_char_p,ctypes.c_uint]
+        exchange.restype = ctypes.c_int
+        result = exchange(source,target,2)  # RENAME_SWAP on macOS
+    elif hasattr(libc,'renameat2'):
+        exchange = libc.renameat2
+        exchange.argtypes = [ctypes.c_int,ctypes.c_char_p,ctypes.c_int,ctypes.c_char_p,ctypes.c_uint]
+        exchange.restype = ctypes.c_int
+        result = exchange(-100,source,-100,target,2)  # RENAME_EXCHANGE
+    else:
+        raise OSError('El sistema no permet substituir atòmicament el lliurament')
+    if result:
+        code = ctypes.get_errno()
+        raise OSError(code,os.strerror(code))
+
+
+def publica(stage, out):
+    """Publish every artifact together, with no missing-directory window."""
+    if out.exists():
+        _intercanvia(stage,out)
+        # After the exchange, staging contains the previous complete delivery.
+        shutil.rmtree(stage,ignore_errors=True)
+    else:
+        stage.rename(out)
+
+
+def diagnostic(history, proposal_found):
+    lines = ['# Diagnòstic del model 5.2', '',
+        'R8 compta aules ordinàries diferents dins de cada hora. '
+        'El model de franges usa només demanda simultània com a condició necessària; '
+        'l’assignació d’aules imposa la unió exacta d’aules per hora. '
+        'Dues classes consecutives poden ocupar la mateixa aula sense comptar dues vegades.', '',
+        'L’objectiu prioritza les excepcions R1 i després aplica 10 punts per sessió '
+        'amb canvi de franja i 1 punt per 30 minuts d’hora morta. '
+        'La cerca continua dins del pressupost; no s’afirma òptim global.', '']
+    for record in history:
+        for phase in ('franges','aules'):
+            state = record.get(phase)
+            if state:
+                meaning = ('temps esgotat sense solució; no demostra impossibilitat' if state == 'UNKNOWN'
+                           else 'impossibilitat demostrada dins del model d’aquest intent' if state == 'INFEASIBLE'
+                           else 'solució trobada')
+                lines.append(f'{phase}: {state} — {meaning}.')
+        stats = record.get('estadistiques_franges',{})
+        for obstacle in stats.get('colls_capacitat',[]):
+            lines.append('Recompte de classes simultànies: demanda '
+                         f"{obstacle['demanda']}, oferta {obstacle['oferta']}; "
+                         f"llindar d’alumnes {obstacle['mes_de_alumnes']}.")
+        for proof in stats.get('proves_torn',[]):
+            lines.append(f"R1 dura: {proof['dur']} ({proof['dur_s']:.3f} s). "
+                         f"R1 tova: {proof.get('tou','no aplicada')}; "
+                         f"excepcions: {proof.get('nombre',0)}.")
+            if proof['dur'] == 'INFEASIBLE':
+                lines.append('Prova de tota la setmana amb calendari, persones i equipament; '
+                             'sense els límits heurístics dels reintents ni el fals recompte horari de classes.')
+    if not proposal_found:
+        lines += ['', 'No es publica cap proposta nova. El lliurament anterior es conserva íntegre.']
+    return '\n'.join(lines)+'\n'
+
+
+def _executa(args, stage, out):
+    start = time.monotonic()
+    previous = None
+    pista = None
+    if (out/'proposta.csv').exists():
+        previous = verifica(out/'proposta.csv',relaxacions=(out/'relaxacions.csv')
+                            if (out/'relaxacions.csv').exists() else None)
+        print('Abans:',json.dumps(metriques(previous),ensure_ascii=False),flush=True)
+        if previous.veredicte in VALIDES and not previous.compten():
+            pista = Proposta.llegeix(out/'proposta.csv')
+    base = carrega_model()
+    official = carrega_oficial()
+    proposal, exceptions, history = resol(base,temps_franges=args.temps_franges,
+        temps_aules=args.temps_aules,llavor=args.llavor,pista=pista)
+    escriu_csv(stage/'excepcions.csv',exceptions,
+               list(exceptions[0]) if exceptions else ['id_sessio','data','minut_inici','motiu'])
+    (stage/'execucio.json').write_text(json.dumps(history,ensure_ascii=False,indent=2)+'\n')
+    (stage/'diagnostic.md').write_text(diagnostic(history,proposal is not None),encoding='utf-8')
+    if proposal is None:
+        print('No s’ha trobat proposta completa; es conserva el lliurament anterior.',flush=True)
+        return 1
+    relaxed = [sid for record in history[-1:]
+               for proof in record['estadistiques_franges'].get('proves_torn',[])
+               if proof['dur'] == 'INFEASIBLE' for sid in proof.get('sessions',[])]
+    valida_excepcions(base,proposal,relaxed)
+    relax_path = stage/'relaxacions.csv'
+    relaxations = relaxacions_proposta(official,proposal,set(relaxed))
+    escriu_csv(relax_path,relaxations,['restriccio','sessions','justificacio'])
+    path = proposal.escriu(stage/'proposta.csv')
+    report = verifica(path,json_path=stage/'informe.json',violacions_path=stage/'violacions.csv',relaxacions=relax_path)
+    print('Candidata:',report.veredicte,json.dumps(metriques(report),ensure_ascii=False),flush=True)
+    cap = min(459,previous.json['incompliments_declarats']) if previous else 459
+    if report.veredicte not in VALIDES or report.compten() or report.json['incompliments_declarats'] > cap:
+        print('Candidata rebutjada pel veredicte o pel nombre de declarats; es conserva l’anterior.',flush=True)
+        return 1
+    if not persones_correctes(official,proposal):
+        print('Candidata rebutjada: conflictes nous de persones o dobles separats; es conserva l’anterior.',flush=True)
+        return 1
+    comparison = compara(proposal,base=official,proposta_path=path,relaxacions=relax_path)
+    escriu_csv(stage/'xifres.csv',comparison.files,['xifra','abans','despres'])
+    escriu_csv(stage/'titulacions.csv',comparison.titulacions,list(comparison.titulacions[0]))
+    elapsed = time.monotonic()-start
+    counts = {**metriques(report), 'incompliments_no_declarats':sum(report.compten().values()),
+        'relaxacions_fixades':sum(len(r['sessions'].split('|')) for r in relaxations if r['justificacio']==MOTIU_FIXADES),
+        'relaxacions_dobles':sum(len(r['sessions'].split('|')) for r in relaxations if r['justificacio']==MOTIU_DOBLES),
+        'relaxacions_avaluacio':sum(len(r['sessions'].split('|')) for r in relaxations if r['justificacio']==MOTIU_AVALUACIO)}
+    (stage/'resum.json').write_text(json.dumps(counts,ensure_ascii=False,indent=2)+'\n')
+    (stage/'comparacio-lliurament.json').write_text(json.dumps(
+        {'abans':metriques(previous) if previous else None,'despres':metriques(report)},ensure_ascii=False,indent=2)+'\n')
+    (stage/'README.md').write_text(f'''# 5.2 Torns nous
+
+Veredicte oficial: **{report.veredicte}**. Incompliments declarats: {report.json['incompliments_declarats']}.
+Temps total: {elapsed:.3f} s. Llavor: {args.llavor}.
+
+```sh
+python -m nivell2.s52 --temps-franges {args.temps_franges:g} --temps-aules {args.temps_aules:g} --llavor {args.llavor}
+python -m nivell2.verificacio 5.2
+python -m nivell2.comprova_persones --resultats resultats/nivell2
+```
+
+`xifres.csv` compara amb l’horari de partida; `comparacio-lliurament.json` compara amb el lliurament anterior.
+`execucio.json` registra els intents i les proves R1; `diagnostic.md` n’explica l’abast.
+Les dobles heretades pel verificador no es declaren. Les excepcions R1 noves requereixen INFEASIBLE,
+mai UNKNOWN, amb tota la setmana oberta i sense límits heurístics.
+R8 compta aules diferents per hora. Es minimitzen canvis per sessió i hores mortes.
+No s’afirma òptim global. La proposta es publica sencera després de validar-la i comprovar les persones.
+''',encoding='utf-8')
+    publica(stage,out)
+    print(report.veredicte,f'{elapsed:.3f} s; lliurament substituït.',flush=True)
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--temps-franges',type=float,default=300)
     parser.add_argument('--temps-aules',type=float,default=600)
     parser.add_argument('--llavor',type=int,default=0)
     args = parser.parse_args(argv)
-    start = time.monotonic()
+    # Keep failed attempts away from the directories scanned as deliveries.
+    attempts = RESULTATS.parent/'.intents-s52'
+    attempts.mkdir(parents=True,exist_ok=True)
+    stage = Path(tempfile.mkdtemp(prefix='intent-',dir=attempts))
     out = RESULTATS/'5.2'
-    out.mkdir(parents=True,exist_ok=True)
-    proposal, exceptions, history = resol(carrega_model(),temps_franges=args.temps_franges,
-        temps_aules=args.temps_aules,llavor=args.llavor)
-    escriu_csv(out/'excepcions.csv',exceptions,
-               list(exceptions[0]) if exceptions else ['id_sessio','data','minut_inici','motiu'])
-    (out/'execucio.json').write_text(json.dumps(history,ensure_ascii=False,indent=2)+'\n')
-    if proposal is None:
-        (out/'README.md').write_text(
-            '# 5.2 pendent de solució\n\n'
-            'No hi ha proposta completa ni veredicte VALIDA. Cap relaxació aplicada.\n\n'
-            f'Ordre: `{PYTHON} -m nivell2.s52 --temps-franges {args.temps_franges:g} --temps-aules {args.temps_aules:g} --llavor {args.llavor}`.\n\n'
-            'Estats, temps i setmana de reparació fallida: `execucio.json`.\n'
-            'El diagnòstic inicial detectà tres PAUL compatibles només amb dues aules informàtiques\n'
-            'coincidents el 2027-02-05 a les 15:00. Afegida la capacitat per equipament,\n'
-            'la reparació de la setmana 2027-04-05 a la tarda retorna INFEASIBLE,\n'
-            'també reobrint les sessions no fixades de tota aquella setmana.\n'
-            'Això no és una prova d’impossibilitat del problema oficial complet: el model\n'
-            'de franges inclou condicions conservadores de capacitat per cubell horari.\n'
-            'No s’han generat xifres de després perquè no existeix una proposta completa.\n', encoding='utf-8')
-        print('No s’ha trobat proposta completa; intents:',len(history))
-        return 1
-    relaxed = [sid for record in history[-1:]
-               for proof in record['estadistiques_franges'].get('proves_torn',[]) for sid in proof.get('sessions',[])]
-    valida_excepcions(carrega_model(),proposal,relaxed)
-    relax_path = out/'relaxacions.csv'
-    base = carrega_model()
-    relaxations = relaxacions_proposta(base,proposal,set(relaxed))
-    escriu_csv(relax_path,relaxations,['restriccio','sessions','justificacio'])
-    path = proposal.escriu(out/'proposta.csv')
-    report = verifica(path,json_path=out/'informe.json',violacions_path=out/'violacions.csv',relaxacions=relax_path)
-    comparison = compara(proposal,base=carrega_oficial(),proposta_path=path,relaxacions=relax_path)
-    escriu_csv(out/'xifres.csv',comparison.files,['xifra','abans','despres'])
-    escriu_csv(out/'titulacions.csv',comparison.titulacions,list(comparison.titulacions[0]))
-    (out/'diagnostic.md').write_text('# Prova de la setmana d’avaluació\n\n'
-        'Del 5 al 8 d’abril no es poden portar classes d’altres dies. Les sessions que ja hi són només poden canviar d’hora el mateix dia. '
-        'La resta ha de cabre el divendres 9. La combinació de disponibilitat de docents, grups i equipament impedeix fer-ho tot al torn requerit.\n\n'
-        'Model de tota la setmana: totes les sessions no fixades obertes, mateixa setmana i durada, calendari, finestres, docent, alumnat, PLAB, compartides i capacitat d’equipament durs. '
-        'L’única alternativa fora de torn és la franja original. Es minimitza lexicogràficament el nombre de sessions amb excepció, després els canvis.\n\n'
-        + '\n'.join(f"R1 dura: {p['dur']} ({p['dur_s']:.3f} s). R1 tova: {p.get('tou')} ({p.get('tou_s',0):.3f} s), {p.get('nombre')} excepcions. "+
-            ('Mínim demostrat dins del model.' if p.get('tou') == 'OPTIMAL' else 'El mínim que hem trobat, sense prova d’optimalitat.')
-            for r in history for p in r['estadistiques_franges'].get('proves_torn',[]))+'\n',encoding='utf-8')
-    if report.compten():
-        with (out/'diagnostic.md').open('a',encoding='utf-8') as f:
-            f.write('\n## Incompliments pendents després de les aules\n\n'
-                + json.dumps(report.compten(),ensure_ascii=False)+'\n\n'
-                'Atenció a les fixades originalment sense aula: `_marca_heretades` exigeix '
-                'aula igual a l’original per eximir R1-TORN. Assignar una aula pot fer '
-                'comptar el torn; deixar-la buida fa comptar R5-SENSE-AULA i moure-la '
-                'fa comptar R1-FIXADA. Es declaren només els tres motius acordats: fixades sense aula, dobles vinculats i excepcions d’avaluació provades.\n')
-    elapsed = time.monotonic()-start
-    command = f'{PYTHON} -m nivell2.s52 --temps-franges {args.temps_franges:g} --temps-aules {args.temps_aules:g} --llavor {args.llavor}'
-    checking = f'{PYTHON} -m horaris check {path.resolve()} --semestre 2 --relaxacions {relax_path.resolve()} --json {out.resolve()}/informe.json --violacions {out.resolve()}/violacions.csv'
-    (out/'README.md').write_text(f'''# 5.2 Torns nous
-
-Veredicte oficial: **{report.veredicte}**. Excepcions R1-TORN: {sum(len(r['sessions'].split('|')) for r in relaxations)}. Temps total: {elapsed:.3f} s.
-Llavor: {args.llavor}. Pressupostos: franges {args.temps_franges:g} s; aules {args.temps_aules:g} s.
-
-Des del worktree:
-```sh
-{command}
-```
-Verificació oficial, sense `--nomes-aules`:
-```sh
-cd {REPTE}
-{checking}
-```
-Proves ràpides:
-```sh
-{PYTHON} -m pytest nivell2/test_s52.py nivell2/test_franges.py
-```
-
-Estats i temps de cada intent:
-```json
-{json.dumps(history,ensure_ascii=False,indent=2)}
-```
-
-`xifres.csv` conté abans/després; `titulacions.csv` els percentatges per cohort.
-`excepcions.csv` conté {len(exceptions)} excepcions de calendari amb motiu.
-Les aules es resolen amb rutina prioritària, referència d'avui i reserva R8
-per cubells d'una hora. B3/0021 es conserva quan no es mou la franja.
-La passada opcional d'hores mortes no s'executa. No s'afirma òptim global.
-Si fallen les aules, hi ha com a màxim tres intents amb capacitat horària
-més estricta; aquests límits són una heurística, no una prova d'impossibilitat.
-''',encoding='utf-8')
-    print(report.veredicte,f'{elapsed:.3f} s')
-    metrics = {r['xifra']:r['despres'] for r in comparison.files}
-    counts = {
-        'sessions_mogudes':metrics.get('canvis_franja',0),
-        'canvis_aula':metrics.get('canvis_aula',0),
-        'aules_assignades_noves':sum(not s.aula and bool(proposal.files[s.id].aula) for s in base.sessions.values()),
-        'relaxacions_fixades':sum(len(r['sessions'].split('|')) for r in relaxations if r['justificacio']==MOTIU_FIXADES),
-        'relaxacions_dobles':sum(len(r['sessions'].split('|')) for r in relaxations if r['justificacio']==MOTIU_DOBLES),
-        'relaxacions_avaluacio':sum(len(r['sessions'].split('|')) for r in relaxations if r['justificacio']==MOTIU_AVALUACIO),
-        'incompliments_no_declarats':sum(report.compten().values()),
-    }
-    (out/'resum.json').write_text(json.dumps(counts,ensure_ascii=False,indent=2)+'\n')
-    for name,count in counts.items():
-        print(name,':',count)
-    return 0 if report.veredicte in ('VALIDA','VALIDA AMB RELAXACIONS DECLARADES') else 1
+    out.parent.mkdir(parents=True,exist_ok=True)
+    try:
+        return _executa(args,stage,out)
+    except Exception:
+        import traceback
+        (stage/'error-s52.txt').write_text(traceback.format_exc(),encoding='utf-8')
+        (stage/'diagnostic.md').write_text('ERROR d’execució; no és una prova d’impossibilitat. '
+            'El lliurament anterior es conserva íntegre.\n',encoding='utf-8')
+        print('Errors d’execució: 1; detall a la carpeta temporal. Es conserva el lliurament anterior.',flush=True)
+        return 2
 
 
 if __name__ == '__main__':
-    try:
-        raise SystemExit(main())
-    except Exception:
-        import traceback
-        target = Path(__file__).resolve().parents[1]/'resultats/nivell2/5.2'
-        target.mkdir(parents=True,exist_ok=True)
-        (target/'error-s52.txt').write_text(traceback.format_exc(),encoding='utf-8')
-        print('Errors d’execució: 1; detall desat fora de git')
-        raise SystemExit(2)
+    raise SystemExit(main())
