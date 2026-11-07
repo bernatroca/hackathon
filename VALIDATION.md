@@ -167,6 +167,9 @@ Engegar l'app amb la IA de prova: `IA_PROVA=1 .venv/bin/streamlit run app/app.py
 6. [cap @ /part2] Toca el botó de fer-ho gran i després el de tornar-ho petit → ocupa tota la finestra i torna a la mida de plafó.
 7. [cap @ /part2] Toca ↺ «Conversa nova» → la conversa es buida i torna la salutació.
 8. [cap @ /junta] Recarrega la pàgina amb una conversa feta → la conversa es manté i només hi ha un botó «Assistent».
+9. [cap @ /part2] Amb l'assistent obert, tria «Només avui» i canvia el grup → el plafó continua obert, «Veu:» canvia i la conversa es manté.
+10. [cap @ /part2] Amb l'assistent obert, mira la pàgina → el contingut s'estreny a l'esquerra del plafó i no queda res tapat ni cap barra de desplaçament horitzontal.
+11. [cap @ /part2] Clica qualsevol lloc de la pàgina amb l'assistent obert → no es tanca; només es tanca amb la creu o amb Esc dins del plafó.
 
 ## Part 3 · Assistent (amb quiver.ai)
 
