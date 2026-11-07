@@ -146,3 +146,7 @@ main {padding:0;max-width:none;}
 .st-key-torna button {color:#256abf;}
 
 .targeta-cor h2 {font-size:20px!important;line-height:1.3;}
+
+.resum-grau p {margin:8px 0;}
+.resum-grau .xifra-targeta {display:inline-block;}
+.marge-semestral {border-top:1px solid var(--linia);padding-top:12px;}

@@ -33,7 +33,7 @@ def carrega_grup(ids):
 
 
 def contingut(t):
-    return text(t, st.session_state.get('resultats', {}))
+    return text(t, st.session_state.get('resultats', {}), setmana_triada=st.session_state.get('setmana'))
 
 
 def estat(info):
@@ -78,6 +78,13 @@ def heroi(t):
         st.caption('El recompte orienta sobre l’espai necessari; cal validar que les classes es poden repartir en un horari.')
 
 
+def resum_grau(info):
+    c = info['c']
+    return (f'<div class="resum-grau"><p><span class="xifra-targeta">{escape(c["hores_noves"])} h</span> a la setmana que necessita</p>'
+        f'<p><strong>{escape(c["hores_lliures"])} h</strong> lliures {escape(c["etiqueta_setmana"])}</p>'
+        f'<p class="marge-semestral"><strong>{escape(c["marge_semestre"])} h</strong> de marge en tot el semestre</p></div>')
+
+
 def targeta(t, posicio=0):
     info = contingut(t)
     with st.container(border=True, height='stretch', key='targeta-'+t.id):
@@ -87,8 +94,9 @@ def targeta(t, posicio=0):
         if percent is not None:
             metre = f'<div class="metre" role="img" aria-label="{percent:.1f} %"><i style="width:{max(0,min(100,percent)):.2f}%;background:var(--blau)"></i></div>'
         detall_desglos = desglos(t.extra) if t.id == 'hores-aula' else ''
+        xifra = resum_grau(info) if t.id == 'marge-grau-nou' else f'<div class="xifra-targeta">{escape(info["c"]["xifra"])}</div>'
         st.markdown(f'<article class="targeta-cor">{estat(info)}<h2>{escape(info["titol"])}</h2>'
-            f'<div class="xifra-targeta">{escape(info["c"]["xifra"])}</div>'
+            f'{xifra}'
             f'<p class="desglos">{escape(detall_desglos)}</p>{metre}<p>{escape(info["frase"])}</p></article>',unsafe_allow_html=True)
         # Un sol peu natiu: la proposta i el botó comparteixen l'alineació.
         with st.container(key='peu-targeta-'+t.id):
@@ -105,9 +113,9 @@ def detall(t):
     st.markdown(estat(info),unsafe_allow_html=True)
     st.header(info['titol'])
     resposta = info['c'].get('resposta',info['c']['xifra'])
-    st.markdown(f'<div class="xifra-targeta resposta-gran">{escape(resposta)}</div>',unsafe_allow_html=True)
+    st.markdown(resum_grau(info) if t.id == 'marge-grau-nou' else f'<div class="xifra-targeta resposta-gran">{escape(resposta)}</div>',unsafe_allow_html=True)
     st.caption(abast(t) + ' · La xifra principal resumeix el semestre; la comparació mostra la setmana seleccionada.'
-               if t.id != 'marge-grau-nou' else abast(t) + ' · Hores necessàries i lliures en aquesta setmana.')
+               if t.id != 'marge-grau-nou' else abast(t) + ' · Comparació setmanal i marge del semestre, indicats per separat.')
     grafics(t,clau='detall-'+t.id,altres=st.session_state.get('resultats',{}))
     st.subheader('Què vol dir')
     st.write(info['frase'])

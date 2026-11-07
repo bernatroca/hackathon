@@ -18,6 +18,15 @@ from presentacio import context, proporcio, text, coll_ampolla
 from servei import AULES_DISPONIBLES, AULES_RESERVA, inventari
 
 
+def grau_inventat():
+    from nivell1.troballes import Troballa
+    return Troballa(id='marge-grau-nou', titol='Grau inventat', xifra='4.679 h',
+        frase='Resum inventat', metode='Text tècnic inventat: la xifra gran és semestral.', sql='-- prova',
+        taula=pd.DataFrame([{'llindar':0,'seminaris':False,'nou_hores':26.,'marge_hores':181.}]),
+        extra={'setmana':'2027-W07','demanda_h_setmana':26.,'lliures_h_setmana':181.,
+               'cap_per_mida':True,'estat_provisional':True}, exemples=['S90001'])
+
+
 class TestApp(unittest.TestCase):
     def carrega(self):
         return AppTest.from_file(str(ARREL/'app.py')).run(timeout=90)
@@ -305,6 +314,65 @@ part2.mostra()
         self.assertEqual(list(app.exception),[])
         self.assertEqual(list(app.error),[])
         self.assertTrue(any(h.value == 'La setmana de l’estudiant' for h in app.subheader))
+
+    def test_grau_nou_tres_magnituds_inventades(self):
+        t = grau_inventat()
+        info = text(t)
+        self.assertEqual(info['c']['hores_noves'],'26')
+        self.assertEqual(info['c']['hores_lliures'],'181')
+        self.assertEqual(info['c']['marge_semestre'],'4.679')
+        self.assertIn('setmana seleccionada',text(t,setmana_triada='2027-W07')['frase'])
+        app = AppTest.from_string("""
+import streamlit as st
+from test_app import grau_inventat
+from components.vistes import targeta, detall
+st.session_state.resultats = {}
+st.session_state.setmana = None
+t = grau_inventat()
+targeta(t)
+detall(t)
+""").run(timeout=90)
+        self.comprova(app)
+        html = '\n'.join(m.value for m in app.markdown)
+        self.assertEqual(html.count('a la setmana que necessita'),4)
+        self.assertEqual(html.count('de marge en tot el semestre'),4)
+        self.assertIn('lliures a la setmana més plena',html)
+        self.assertIn('26 h',html)
+        self.assertIn('181 h',html)
+        self.assertIn('4.679 h',html)
+        self.assertTrue(any(c.value == 'id_sessio per buscar al CSV original' for c in app.caption))
+        self.assertEqual(t.metode,'Text tècnic inventat: la xifra gran és semestral.')
+
+    def test_columnes_privades_i_resum_docents_inventats(self):
+        from components.taules import filtra_columnes, taula_presentacio
+        from nivell1.troballes import Troballa
+        df = pd.DataFrame({'docent':['D900','D901','D902'],'dies_mati_tarda':[1,2,2],
+            'a_cavall':[True]*3,'dies':['L','L,M','M,X'], 'exemples':[['S90001']]*3,
+            'codi':['100000']*3,'assignatura':['Assignatura Inventada I']*3})
+        filtrada = filtra_columnes(df)
+        self.assertNotIn('docent',filtrada)
+        self.assertNotIn('codi',filtrada)
+        self.assertNotIn('assignatura',filtrada)
+        self.assertNotIn('exemples',filtrada)
+        t = Troballa('docents-cavall','Prova','3','Prova','Prova','-- prova',df)
+        resum = taula_presentacio(t)
+        self.assertEqual(set(resum.columns),{'dies_mati_tarda','docents_recompte'})
+        self.assertEqual(int(resum.docents_recompte.sum()),3)
+        with patch('components.grafics.st.plotly_chart') as mostra:
+            grafics(t)
+        fig = mostra.call_args.args[0]
+        self.assertFalse(any('D90' in nom for nom in fig.data[0].y))
+        self.assertEqual(int(sum(fig.data[0].x)),3)
+
+    def test_marges_barres_inventades(self):
+        from components.grafics import barres
+        with patch('components.grafics.st.plotly_chart') as mostra:
+            barres(['GXX · 3r'],[64],'prova',' classes')
+        fig = mostra.call_args.args[0]
+        self.assertGreaterEqual(fig.layout.margin.r,120)
+        self.assertEqual(fig.layout.yaxis.ticklabelstandoff,12)
+        self.assertTrue(fig.data[0].texttemplate.startswith('\u2009\u2009\u2009'))
+        self.assertFalse(fig.data[0].cliponaxis)
 
     def test_canvi_semestre(self):
         app = self.carrega()
