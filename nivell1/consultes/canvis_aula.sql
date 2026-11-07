@@ -6,7 +6,7 @@ WITH base AS (
         THEN left(split_part(grup, '/', -1), -1) ELSE split_part(grup, '/', -1) END
  ELSE CASE WHEN length(split_part(grup, '/', -1)) >= 3
         THEN left(split_part(grup, '/', -1), -1) ELSE split_part(grup, '/', -1) END END AS linia
- FROM sessions WHERE sem = $semestre AND setmana = $setmana
+ FROM sessions WHERE sem = $semestre AND ($setmana IS NULL OR setmana = $setmana)
 ), cohorts AS (
  SELECT b.*, c.cohort FROM base b, unnest(string_split(coalesce(titulacions_curs,''), '|')) c(cohort)
  WHERE c.cohort <> ''

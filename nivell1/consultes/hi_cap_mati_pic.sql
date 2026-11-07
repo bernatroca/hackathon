@@ -1,11 +1,11 @@
 -- Capa a: hores actuals; una compartida és una classe.
 WITH dies AS (
- SELECT DISTINCT data, dia FROM sessions WHERE sem=$semestre AND setmana=$setmana
+ SELECT DISTINCT data, dia FROM sessions WHERE sem=$semestre AND ($setmana IS NULL OR setmana=$setmana)
 ), demanda AS (
  SELECT s.data, sb.bloc, count(DISTINCT unitat) AS classes,
         list(DISTINCT s.id_sessio ORDER BY s.id_sessio) AS exemples
  FROM sessions s JOIN sessio_blocs sb USING(id_sessio)
- WHERE sem=$semestre AND setmana=$setmana AND demanda_aulari
+ WHERE sem=$semestre AND ($setmana IS NULL OR setmana=$setmana) AND demanda_aulari
    AND regexp_matches(titulacions_curs, ':(1r|2n)(\||$)')
  GROUP BY s.data, sb.bloc
 )

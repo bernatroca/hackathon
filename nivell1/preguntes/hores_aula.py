@@ -14,7 +14,7 @@ def calcula(semestre: int, setmana: str | None = None) -> Troballa:
     n = f'{r.sense_aula:,}'.replace(',', '.')
     return Troballa(
         id=ID, titol='Hores-aula necessàries i disponibles', xifra=f'{percent} %',
-        frase=f'{n} sessions del semestre no tenen aula; la demanda es mostra per bloc de la setmana {setmana}.',
+        frase=f'{percent} % de les sessions del semestre no tenen aula: {n} sessions.',
         metode='El percentatge compta les files del semestre sense aula, inclosos PLAB i dobles, per reproduir la cobertura de l’enunciat. La demanda setmanal compta compartides un cop i exclou PLAB i dobles sense espai; cada bloc són 0,5 hores-aula i l’oferta nominal és de 19 aules (27 amb seminaris), sense descomptar festius.',
         sql=sql, taula=taula.drop(columns=['exemples']), exemples=list(r.exemples[:5]), grafic='linia',
         extra={'setmana': setmana, 'hores_demanda': float(taula.hores_demanda.sum()),

@@ -10,15 +10,16 @@ def calcula(semestre: int, setmana: str | None = None) -> Troballa:
     setmana = setmana if setmana is not None else setmana_tipica(semestre)
     taula, sql = consulta('aforament', semestre=semestre, setmana=setmana)
     incidencies = taula[taula.supera]
-    compten = incidencies[~incidencies.heretada]
+    resum, sql_resum = consulta('aforament', semestre=semestre, setmana=None)
+    total = int((resum.supera & ~resum.heretada).sum())
     mostra = incidencies if not incidencies.empty else taula
     exemples = [sid for xs in mostra.exemples for sid in xs][:5]
     return Troballa(
         id=ID, titol='Grups amb més alumnes que places',
-        xifra=f'{len(compten):,}'.replace(',', '.'),
-        frase=f'{len(compten)} incidències d’aforament computables i {len(incidencies) - len(compten)} heretades de sessions fixades la setmana {setmana}.',
-        metode='Com el R3-AFORAMENT oficial, sumem els alumnes de les sessions compartides dins de cada aula i comptem una incidència per classe i aula. La xifra exclou les incidències heretades amb totes les sessions fixades (la taula també les mostra); excloem dobles sense espai i aules fora de l’inventari; els alumnes sense dada compten com a zero, de manera que no permeten descartar excés d’aforament.',
-        sql=sql, taula=incidencies.reset_index(drop=True), exemples=exemples, grafic='taula',
+        xifra=f'{total:,}'.replace(',', '.'),
+        frase=f'{total} incidències d’aforament computables al semestre, excloses les heretades de sessions fixades.',
+        metode='La xifra és del semestre sencer i el detall és setmanal; com el R3-AFORAMENT oficial, sumem els alumnes de les sessions compartides dins de cada aula i comptem una incidència per classe i aula. La xifra exclou les incidències heretades amb totes les sessions fixades (la taula també les mostra); excloem dobles sense espai i aules fora de l’inventari; els alumnes sense dada compten com a zero, de manera que no permeten descartar excés d’aforament.',
+        sql=sql_resum + '\n-- Detall setmanal\n' + sql, taula=incidencies.reset_index(drop=True), exemples=exemples, grafic='taula',
         extra={'setmana': setmana, 'classes_comprovades': len(taula),
                'classes_amb_alumnes_sense_dada': int((taula.sense_dada > 0).sum())})
 
