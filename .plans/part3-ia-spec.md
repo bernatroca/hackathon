@@ -36,7 +36,7 @@ Fora d'abast: aplicar canvis, enviar avisos, respondre coses que no siguin de l'
 - **Llenguatge.** Python per a tot el que pensa: el servidor, les eines, DuckDB i el verificador, perquè l'app i les dades ja ho són. JavaScript només per al widget, que ja està fet.
 - **Navegador.** `app.py` injecta el JS i el CSS del widget a la pàgina de Streamlit, un sol cop. Cada pàgina, en pintar-se, crida `XatIA.pantalla({resum, text, preguntes})` amb el que es veu.
 - **Servidor.** Fem servir el `xat_ia.py` del zip (validació, IA principal i de reserva, flux SSE, `IA_PROVA=1`) i hi afegim el **bucle d'eines**: la IA demana una eina, Python l'executa, li torna el resultat i ho repeteix fins que la IA respon. Com a molt 6 voltes per pregunta. El servidor arrenca **dins del mateix `streamlit run`**, en un fil apart (un sol cop, amb `st.cache_resource`) i a un port local (8502). Només accepta peticions de l'app (CORS a `localhost:8501`).
-- **La IA.** quiver.ai amb el format compatible amb OpenAI (`/chat/completions`, `stream`, `tools`). `IA_URL`, `IA_CLAU` i `IA_MODEL` van només a `.env`. **Primer de tot**, una crida de prova confirma que és de xat, que accepta `tools` i si accepta imatges. Si no accepta `tools`, es canvia `_trossos_api()` per un format JSON propi (la IA respon `{"eina":…}`) i es diu a l'especificació.
+- **La IA.** quiver.ai (`https://api.quiver.ai/v1`), model **`arrow-2-telos`** (el més capaç, context d'1M tokens) i **`arrow-2`** de reserva. Comprovat el ds 7-11 a la nit: no té `/chat/completions` (404), però sí l'API **Responses** (`POST /responses`, amb `stream`, `tools` i `function_call`), i respon en català i crida eines bé en uns 2 s per volta. El servidor parla Responses per defecte (`IA_API=responses`) i manté el format de xat amb `IA_API=chat`. `IA_URL`, `IA_CLAU`, `IA_MODEL` i `IA_RESERVA_MODEL` van només al `.env`. Accepta imatges com a entrada.
 - **Instruccions.** Són a `app/xat/instruccions.md` (el prompt de més avall), i el servidor les posa al davant de la conversa. La pantalla va dins de `<pantalla>`. El resultat de les eines va dins de `<dades>`, marcat com a dada i no com a ordres.
 
 ### Eines
@@ -173,5 +173,4 @@ Abans de donar el prompt per bo, es passa per aquestes preguntes, primer amb una
 
 ## Pendent de decidir
 
-- L'adreça, el nom del model i el format de l'API de quiver.ai: es confirma amb la crida de prova.
-- Si es poden enviar captures (depèn que el model accepti imatges).
+- Res de bloquejant. Captures: el model n'accepta (`input_image`), queda per provar a l'app.
