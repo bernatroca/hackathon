@@ -84,7 +84,7 @@
 23. [cap @ /] Mira les quatre caixes de sota la resposta gran → són més baixes que abans, amb la xifra i els textos una mica més petits.
 24. [cap @ /respostes] Mira el filtre «Estat» → «Cal actuar» en vermell amb la creu, «Vigilar» en groc amb el signe d'admiració i «Hi cap» en verd amb el check, com les etiquetes de les targetes.
 25. [cap @ /respostes] Desmarca «Vigilar» → la pastilla queda blanca amb la icona grisa, i torna a tenir color en marcar-la.
-26. [cap @ /respostes] Mira una etiqueta verda «Hi cap» → el verd és més apagat que abans i es llegeix bé.
+26. [cap @ /respostes] Mira la pastilla «Hi cap» del filtre → el verd és més apagat que abans i es llegeix bé.
 
 ## Part 2 · Proposta d'horari
 
