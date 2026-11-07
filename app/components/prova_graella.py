@@ -30,6 +30,8 @@ def setmana_inventada():
         canvi_franja=i == 2, canvi_aula=False,
         aula_assignada=i == 1,
         abans='Abans: dijous 12:30' if i == 2 else '',
+        ubicacio_compartida='Amb el grup 81 · Aula fictícia 5' if i == 5 else
+                            'Classe compartida amb un altre grup' if i == 6 else '',
         relaxacions=('Excepció fictícia per a la prova visual.',) if i == 4 else (),
     ) for i, (dia, nom) in enumerate(zip(('L', 'L', 'M', 'X', 'X', 'J', 'V'), noms))] + [
         Cella('INVENTADA-SOLA', 'L', 690, 750, 'Aula fictícia ampla',

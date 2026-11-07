@@ -348,6 +348,51 @@ class TestGraella(unittest.TestCase):
             celles_aula(base, p, date(2027, 3, 8), 'Q9/0001')
 
 
+    def test_doble_amb_amfitrio_fora_del_grup_i_aula_de_la_proposta(self):
+        from components.graella import celles
+        host = sessio('HOST-INVENTAT', grup='TE/81', cohorts=('GXX:1r',))
+        double = sessio('DOBLE-INVENTAT', grup='TE/91', cohorts=('GDD:3r',),
+                        aula='', sense_espai=True)
+        base = Base({s.id: s for s in (host, double)}, {})
+        p = Proposta.de_base(base)
+        p.files[host.id].aula = 'Q9/0002'
+        c, = celles(base, p, host.data, cohort='GDD:3r', linia=double.linia)
+        assert c.aula == '' and not c.aula_assignada and not c.canvi_aula
+        for originals in (True, False):
+            html = contingut_graella(taula_html([c], originals=originals))
+            assert 'Amb el grup 81 · Aula Q9/0002' in html
+            assert 'Pendent d’assignar aula' not in html
+            assert 'Aula no indicada' not in html
+        assert len(celles_aula(base, p, host.data, 'Q9/0002')) == 1
+
+    def test_doble_per_unitat_compartida_i_sense_amfitrio(self):
+        from components.graella import celles
+        host = sessio('HOST-INVENTAT', compartida='UNITAT-INVENTADA')
+        double = sessio('DOBLE-INVENTAT', codi='100099', grup='TE/91',
+                        compartida=host.compartida, aula='', sense_espai=True)
+        base = Base({s.id: s for s in (host, double)}, {})
+        p = Proposta.de_base(base)
+        c = next(c for c in celles(base, p, host.data) if c.id_sessio == double.id)
+        assert 'Amb el grup 81 · Aula Q9/0001' in taula_html([c])
+        p.files[host.id].data = '2027-03-15'
+        c, = celles(base, p, host.data)
+        html = taula_html([c])
+        assert 'Classe compartida amb un altre grup' in html
+        assert 'Pendent d’assignar aula' not in html
+
+    def test_doble_orfe_i_aula_amfitriona_absent(self):
+        from components.graella import celles
+        double = sessio('DOBLE-INVENTAT', aula='', sense_espai=True)
+        host = sessio('HOST-INVENTAT', grup='TE/91', aula='')
+        base = Base({s.id: s for s in (host, double)}, {})
+        p = Proposta.de_base(base)
+        cs = celles(base, p, double.data)
+        c = next(c for c in cs if c.id_sessio == double.id)
+        assert c.ubicacio_compartida == 'Classe compartida amb un altre grup'
+        host.codi = '100099'
+        c = next(c for c in celles(base, p, double.data) if c.id_sessio == double.id)
+        assert 'Classe compartida amb un altre grup' in taula_html([c])
+
     def test_tipica_mediana_i_desempat(self):
         base = crea_base()
         assert setmana_tipica(base) == date(2027, 3, 8)

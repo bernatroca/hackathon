@@ -98,9 +98,10 @@ def test_student_home_beats_original_rooms_and_uses_hint():
     incumbents = []
     rooms, status = solve(data, pista=hint, en_solucio=lambda r, st: incumbents.append((r, st)))
     assert status in ('OPTIMAL', 'FEASIBLE')
-    assert rooms['S90001'] == rooms['S90002'] == rooms['S90003']
-    # Parallel LNS can return a different tied optimum than its last callback.
-    assert incumbents and any(len(set(r.values())) == 1 for r, _ in incumbents)
+    assert rooms['S90001'] == rooms['S90002']
+    # Restoring PAUL would cost 3, while its corridor transition costs 2.
+    assert rooms['S90003'] == c.aula
+    assert incumbents and any(r[a.id] == r[b.id] for r, _ in incumbents)
 
 
 def test_fixed_te_prevents_impossible_home_but_stays_valid():
@@ -136,10 +137,133 @@ def test_hint_from_old_slots_can_be_repaired():
     assert rooms['S90001'] != rooms['S90002']
 
 
+def test_inherited_fixed_room_overlap_is_allowed():
+    from nivell2.base import avalua_rapid
+    a, b = session('S90001', room='Q9/0001'), session('S90002', room='Q9/0001')
+    a.fixada = b.fixada = 'R1: fixed'
+    data = base(a, b)
+    assert avalua_rapid(data, Proposta.de_base(data), nomes_aules=True).veredicte == 'VALIDA'
+    rooms, status = solve(data)
+    assert status in ('OPTIMAL', 'FEASIBLE')
+    assert rooms[a.id] == rooms[b.id] == 'Q9/0001'
+
+
+def test_new_overlap_with_fixed_room_is_forbidden():
+    a, b = session('S90001', room='Q9/0001'), session('S90002', room='Q9/0002', day=9)
+    a.fixada = b.fixada = 'R1: fixed'
+    data = base(a, b)
+    assert assigna_aules(data, {s.id: (a.data, a.ini) for s in (a, b)}, temps_s=2)[0] == {
+        a.id: 'Q9/0001', b.id: 'Q9/0002'}
+    b.aula = a.aula
+    assert assigna_aules(data, {s.id: (a.data, a.ini) for s in (a, b)}, temps_s=2)[1] == 'INFEASIBLE'
+
+
+def test_recovered_capacity_uses_model_estimates_and_shared_sum():
+    from copy import deepcopy
+    from nivell2.s51 import aforament_model_ok
+    official = base(session('S90001', students=0, room='Q9/0001'))
+    model = deepcopy(official)
+    model.sessions['S90001'].alumnes = 50
+    p = Proposta.de_base(official)
+    assert aforament_model_ok(official, p)
+    assert not aforament_model_ok(model, p)
+    p.files['S90001'].aula = 'Q9/0002'
+    assert aforament_model_ok(model, p)
+    shared = base(session('S90001', shared='C90001', students=20, room='Q9/0001'),
+                  session('S90002', shared='C90001', students=20, room='Q9/0001'),
+                  session('S90003', shared='C90001', students=100, sense_espai=True))
+    assert not aforament_model_ok(shared, Proposta.de_base(shared))
+    for row in shared.sessions.values():
+        row.aula = 'Q9/0002'
+    assert aforament_model_ok(shared, Proposta.de_base(shared))
+
+
+def test_recovered_capacity_keeps_only_unchanged_fixed_exemption():
+    from nivell2.s51 import aforament_model_ok
+    a = session('S90001', students=70, room='Q9/0001')
+    a.fixada = 'R1: fixed'
+    data = base(a)
+    p = Proposta.de_base(data)
+    assert aforament_model_ok(data, p)
+    p.files[a.id].aula = 'Q9/0002'
+    assert not aforament_model_ok(data, p)
+
+
+def test_extra_rooms_reports_official_and_without_doubles():
+    from nivell2.base import avalua_rapid
+    from nivell2.s51 import comparacio_extres
+    a, b = session('S90001', room='Q9/0001'), session('S90002', room='Q9/0002', sense_espai=True)
+    a.cohorts = b.cohorts = ('GXX:1r',)
+    data = base(a, b)
+    p = Proposta.de_base(data)
+    assert avalua_rapid(data, p, nomes_aules=True).objectius['r6_aules_te_extra_per_grup'] == 1
+    assert comparacio_extres(data, p) == {'r6_aules_te_extra_sense_dobles': (0, 0)}
+
+
+def test_csv_normalizes_case_spaces_and_rejects_duplicates(tmp_path):
+    import pytest
+    from nivell2.s51 import llegeix_proposta
+    path = tmp_path / 'inventada.csv'
+    path.write_text(' id_sessio , Dia , h_ini , aula \n s90001 , m , 08:30 , q9/0001 \n')
+    p = llegeix_proposta(path)
+    assert p.files['S90001'].dia == 'M' and p.files['S90001'].aula == 'Q9/0001'
+    with path.open('a') as f:
+        f.write('S90001,M,08:30,Q9/0001\n')
+    with pytest.raises(ValueError, match='duplicats'):
+        llegeix_proposta(path)
+
+
+def test_solver_and_selector_share_quality_and_weights():
+    from nivell2.aules import qualitat_aules, PES_CANVI, PES_PASSADIS
+    from nivell2.s51 import qualitat
+    a, b = session('S90001', room='Q9/0001'), session('S90002', room='Q9/1001', start=570)
+    a.cohorts = b.cohorts = ('GXX:1r',)
+    b.tipus, b.grup = 'PAUL', 'PAUL/811'
+    data = base(a, b)
+    data.aules['Q9/1001'] = Aula('Q9/1001', 'Q9', 'Aules docents', 30)
+    p = Proposta.de_base(data)
+    assert qualitat(data, p) == (0, 0, PES_PASSADIS)
+    p.files[b.id].aula = a.aula
+    assert qualitat(data, p) == (0, 0, PES_CANVI)
+    rooms, _ = solve(data)
+    assert qualitat_aules(data, rooms) == (0, 0, PES_PASSADIS)
+
+
+def test_theory_unions_also_try_unmerged_after_feasible(monkeypatch):
+    from ortools.sat.python import cp_model
+    calls = []
+    original = cp_model.CpSolver.solve
+    def track(self, *args, **kwargs):
+        calls.append(1)
+        return original(self, *args, **kwargs)
+    monkeypatch.setattr(cp_model.CpSolver, 'solve', track)
+    a, b = session('S90001'), session('S90002', start=570)
+    a.cohorts = b.cohorts = ('GXX:1r',)
+    assert solve(base(a, b), agrupa_te=True)[0]
+    assert len(calls) == 2
+
+
+def test_reference_restoration_keeps_shared_activity_block_and_skips_doubles():
+    from nivell2.s51 import restauracions_referencia
+    data = base(session('S90001', activity='A9001', shared='C90001', room='Q9/0001'),
+                session('S90002', activity='A9002', shared='C90001', room='Q9/0001'),
+                session('S90003', activity='A9001', day=9, room='Q9/0001'),
+                session('S90004', activity='A9002', day=9, start=570, room='Q9/0001'),
+                session('S90005', activity='A9001', sense_espai=True))
+    assert list(restauracions_referencia(data)) == [(
+        {'S90001', 'S90002', 'S90003', 'S90004'}, 'Q9/0001')]
+
+
+def test_inherited_shared_room_conflicts_use_physical_units():
+    rows = [session(f'S9000{i}', shared=unit, room='Q9/0003')
+            for i, unit in enumerate(('C90001', 'C90001', 'C90002', 'C90002'), 1)]
+    for row in rows:
+        row.fixada = 'R1: fixed'
+    rooms, status = solve(base(*rows))
+    assert status in ('OPTIMAL', 'FEASIBLE')
+    assert set(rooms.values()) == {'Q9/0003'}
+
+
 if __name__ == '__main__':
-    import time
-    start = time.monotonic()
-    tests = [v for k, v in list(globals().items()) if k.startswith('test_')]
-    for test in tests:
-        test()
-    print(f'{len(tests)} proves OK en {time.monotonic()-start:.3f} s')
+    import pytest
+    raise SystemExit(pytest.main([__file__, '-q']))

@@ -6,6 +6,7 @@ from html import escape
 from statistics import median
 
 from nivell2.base import fmt, hm
+from nivell2.comprova_persones import parelles_dobles
 from horaris.model import a_traslladar
 
 DIES = ('L', 'M', 'X', 'J', 'V')
@@ -56,6 +57,7 @@ class Cella:
     abans: str = ''
     setmana_diferent: bool = False
     grups_compartits: tuple[str, ...] = ()
+    ubicacio_compartida: str = ''
 
     @property
     def canvi(self):
@@ -74,6 +76,16 @@ def celles(base, proposta, setmana, *, cohort=None, linia=None, aula=None,
     desconegudes = proposta.files.keys() - base.sessions.keys()
     if falten or desconegudes:
         raise ValueError(f'La proposta té {len(falten)} sessions absents i {len(desconegudes)} desconegudes.')
+    # Resolve hosts before the visible cohort/room filter; another group's
+    # class may be outside this view. Use proposed dates and rooms for display.
+    hosts, _ = parelles_dobles(base)
+    positions = {}
+    for sid, s in base.sessions.items():
+        a = proposta.files[sid]
+        if a.dia not in DIES:
+            raise ValueError(f'Dia incorrecte a la sessió {sid}.')
+        d = date.fromisoformat(a.data) if a.data else dilluns(s.data) + timedelta(days=DIES.index(a.dia))
+        positions[sid] = d, hm(a.h_ini)
     resultat = []
     for sid, s in base.sessions.items():
         a = proposta.files[sid]
@@ -89,6 +101,15 @@ def celles(base, proposta, setmana, *, cohort=None, linia=None, aula=None,
         inici = hm(a.h_ini)
         if not 0 <= inici < 1440:
             raise ValueError(f'Hora incorrecta a la sessió {sid}.')
+        shared_location = ''
+        if s.sense_espai:
+            candidates = [base.sessions[h] for h in hosts.get(sid, ())
+                          if positions[h] == positions[sid] and proposta.files[h].aula]
+            if candidates:
+                host = min(candidates, key=lambda h: (h.grup != s.grup, h.id))
+                shared_location = f'Amb el grup {host.num_grup} · Aula {proposta.files[host.id].aula}'
+            else:
+                shared_location = 'Classe compartida amb un altre grup'
         resultat.append(Cella(sid, a.dia, inici, inici + s.durada, a.aula,
             (noms or {}).get(s.codi, s.codi), TIPUS.get(s.tipus, s.tipus), s.grup,
             data != s.data or inici != s.ini,
@@ -97,7 +118,8 @@ def celles(base, proposta, setmana, *, cohort=None, linia=None, aula=None,
             bool(not s.aula and a.aula and not s.sense_espai),
             s.compartida,
             f'Abans: {NOMS_DIES[s.data.weekday()].lower()} {fmt(s.ini)} · {s.aula or "aula no indicada"} ({s.data:%d/%m/%Y})',
-            dilluns(data) != dilluns(s.data)))
+            dilluns(data) != dilluns(s.data),
+            ubicacio_compartida=shared_location))
     return sorted(resultat, key=lambda c: (DIES.index(c.dia), c.ini, c.id_sessio))
 
 
@@ -337,7 +359,7 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
             nom, _, _, _ = ESTATS[estat]
             marques = estat + (' apagada' if filtre not in ('totes', estat) else '')
             columna = f'{carril+1}/span 1' if coincideix else f'1/span {n}'
-            ubicacio = c.aula or ('Aula no indicada a les dades' if originals else 'Pendent d’assignar aula')
+            ubicacio = c.ubicacio_compartida or c.aula or ('Aula no indicada a les dades' if originals else 'Pendent d’assignar aula')
             grup = ' / '.join(c.grups_compartits) or nom_grup(c.grup, c.tipus)
             # El format antic de nom_grup es conserva als altres usos de la pàgina.
             grup = ' / '.join(g.split(' · ', 1)[0] for g in grup.split(' / '))
