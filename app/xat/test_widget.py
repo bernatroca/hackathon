@@ -106,12 +106,29 @@ const sandbox = {
   },
 };
 const source = fs.readFileSync(process.argv[1], 'utf8').replace('  window.XatIA = {', `
-  window.prova = { htmlMissatge, llegeixFlux, perAlServidor, desa, llegeixMemoria, estat,
-    prepara() { op = { clauMemoria: 'prova' }; } };
+  window.prova = { markdown, htmlMissatge, llegeixFlux, perAlServidor, desa, llegeixMemoria, estat,
+    prepara() { op = { clauMemoria: 'prova' }; },
+    parcial(text) {
+      el = {conversa: {innerHTML: ''}, final: {scrollIntoView() {}}};
+      estat.feina = true; estat.parcial = text;
+      pintaConversa();
+      estat.feina = false; estat.parcial = '';
+      return el.conversa.innerHTML;
+    } };
   window.XatIA = {`);
 vm.runInNewContext(source, sandbox);
 const p = sandbox.window.prova;
 p.prepara();
+const entitats = 'inici &gt; 15.00 &lt; 20.00 &amp; &quot;hora&quot; &#39;dia&#39; &#x27;aula&#x27;';
+const esperat = '<p>inici &gt; 15.00 &lt; 20.00 &amp; &quot;hora&quot; &#39;dia&#39; &#39;aula&#39;</p>';
+assert.equal(p.markdown(entitats), esperat);
+assert.ok(p.parcial(entitats).includes(esperat));
+assert.equal(p.markdown('&lt;img src=x onerror=&quot;alert(1)&quot;&gt;'),
+  '<p>&lt;img src=x onerror=&quot;alert(1)&quot;&gt;</p>');
+assert.ok(!p.parcial('&lt;script&gt;alert(1)&lt;/script&gt;').includes('<script>'));
+assert.equal(p.markdown('&copy; &#60; &#x3c;'), '<p>&amp;copy; &amp;#60; &amp;#x3c;</p>');
+assert.equal(p.markdown('&amp;lt;'), '<p>&amp;lt;</p>');
+assert.equal(p.markdown('**Hora** &gt; 15.00'), '<p><strong>Hora</strong> &gt; 15.00</p>');
 const mal = '<img src=x onerror="alert(1)">';
 const consultes = [{ eina: mal, args: { [mal]: mal, llarg: 'x'.repeat(120), limit: 50 },
   ok: false, consulta: 'SELECT *\nFROM inventat WHERE x < 4; ' + mal,

@@ -281,6 +281,10 @@
   }
 
   function markdown(text) {
+    // Una sola passada i només les entitats conegudes. enLinia ho torna a
+    // escapar abans de generar HTML, també durant la resposta en directe.
+    const entitats = { '&lt;': '<', '&gt;': '>', '&amp;': '&', '&quot;': '"', '&#39;': "'", '&#x27;': "'" };
+    text = text.replace(/&(?:lt|gt|amp|quot|#39|#x27);/g, (entitat) => entitats[entitat]);
     const linies = text.replace(/\r/g, '').split('\n');
     let html = '';
     let llista = null; // 'ul' | 'ol'
