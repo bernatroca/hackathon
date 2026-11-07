@@ -19,6 +19,17 @@ st.markdown('''<style>
 .block-container {padding-top:2.8rem;padding-bottom:3rem;max-width:1450px;}
 [data-testid="stMetricValue"] {font-size:2.7rem;color:#28666E;}
 [data-testid="stMetricLabel"] {white-space:normal;}
+.xifra-targeta {font-size:clamp(1.8rem, 3vw, 2.7rem);font-weight:600;
+ line-height:1.2;color:#28666E;white-space:normal;overflow-wrap:anywhere;margin:.6rem 0 1rem;}
+.st-key-targetes-portada [data-testid="stHorizontalBlock"] {
+ display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1.5rem;}
+.st-key-targetes-portada [data-testid="stColumn"] {width:100%!important;min-width:0!important;}
+@media(max-width:1000px) {
+ .st-key-targetes-portada [data-testid="stHorizontalBlock"] {grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+@media(max-width:600px) {
+ .st-key-targetes-portada [data-testid="stHorizontalBlock"] {grid-template-columns:minmax(0,1fr);}
+}
 h1,h2,h3 {letter-spacing:-.025em;}
 </style>''', unsafe_allow_html=True)
 with st.sidebar:
@@ -33,7 +44,7 @@ with st.sidebar:
     setmana = st.selectbox('Setmana', [None] + disponibles,
         format_func=lambda s: 'Típica' if s is None else str(s), key=f'setmana-{semestre}')
     st.session_state.setmana = setmana
-    st.caption('«Típica» delega la setmana de referència al mòdul de dades. «Hi cap el matí?» aplica la pitjor setmana segons el seu mètode.')
+    st.caption('Setmana típica: la que té un nombre de classes normal. "Hi cap el matí?" fa servir la setmana més plena.')
     if st.button('Actualitza les dades'):
         st.cache_data.clear()
         st.rerun()

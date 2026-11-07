@@ -14,10 +14,23 @@ def mostra():
     st.title('Troballes')
     st.write('On van plens els espais i hi cap el model nou?')
     st.caption('Escola d’Enginyeria · UAB · Planificació del curs 2027–28')
-    for inici in range(0, len(PORTADA), 3):
-        columnes = st.columns(min(3, len(PORTADA) - inici), gap='large')
-        for posicio, (columna, id_) in enumerate(zip(columnes, PORTADA[inici:inici + 3]), inici):
+    troballes = [carrega(id_) for id_ in PORTADA]
+    abasts = []
+    for t in troballes:
+        if t is None:
+            continue
+        if (t.extra or {}).get('mostra'):
+            abast = 'MOSTRA, sense setmana real'
+        elif t.id in ('fora-torn', 'hores-aula'):
+            abast = 'tot el semestre'
+        else:
+            setmana = (t.extra or {}).get('setmana')
+            abast = f'setmana {setmana}' if setmana is not None else 'setmana no indicada pel resultat'
+        abasts.append(f'{t.titol}: {abast}')
+    st.caption('Abast de cada xifra · ' + ' · '.join(abasts))
+    with st.container(key='targetes-portada'):
+        columnes = st.columns(len(PORTADA), gap='large')
+        for posicio, (columna, t) in enumerate(zip(columnes, troballes)):
             with columna:
-                t = carrega(id_)
                 if t is not None:
                     targeta(t, posicio)
