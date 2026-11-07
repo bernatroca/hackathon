@@ -54,6 +54,8 @@ Llegeix .plans/[nom]-spec.md i .plans/tasques.md. Fes només la tasca [n]: [tít
 Només pots crear o modificar: [fitxers o carpetes]. No toquis res més.
 Està feta quan: [ordre que ho demostra i resultat esperat].
 
+DADES DEL REPTE. Són a /Users/bernatroca/Bernat/Hackathon/repte/repte-horaris-escola/ (paquet/ amb els CSV i paquet/DICCIONARI.md; horaris/ és el verificador). Llegeix-les des d'allà amb la ruta absoluta, sense modificar-les ni copiar-les al repositori: no poden anar a GitHub. Comprova cada proposta amb `python -m horaris check <proposta.csv> --semestre 2`, executat des d'aquella carpeta.
+
 REGLA DE PREGUNTES. Abans de programar, llista el que l'especificació no deixa prou clar (dades, formats, textos, disseny, què passa si hi ha errors). Si un punt canvia el resultat i no el pots deduir del repositori, NO suposis: acaba amb STATUS QUESTION i escriu preguntes numerades i concretes, cadascuna amb 2–3 opcions i la que recomanes. Si són detalls menors, tria l'opció més simple i apunta-la a «SUPÒSITS».
 
 En acabar, respon amb: (1) què has canviat, en 3 línies; (2) com ho has comprovat (ordre i sortida); (3) SUPÒSITS; (4) problemes que has trobat.
