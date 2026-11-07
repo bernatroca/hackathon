@@ -145,3 +145,103 @@ def test_altres_imprevistos(paquet, canvi):
     r = e.executa('prova_canvi', {'apartat': '5.2', 'canvi': canvi})
     assert r['ok'], r
     assert r['resultat']['veredicte'] == 'VALIDA'
+
+
+@pytest.mark.parametrize('apartat', e.APARTATS)
+def test_resultat_sense_resum_conserva_informe(paquet, apartat):
+    carpeta = e.nb.RESULTATS_PRINCIPAL / apartat
+    (carpeta / 'resum.json').unlink()
+    informe = {'veredicte': 'VALIDA', 'restriccions': {'R4': {'compten': 0}},
+               'nomes_aules': apartat == '5.1', 'objectius': {'canvis_aula': 2}}
+    (carpeta / 'informe.json').write_text(json.dumps(informe))
+    r = e.executa('resultat_proposta', {'apartat': apartat})
+    assert r['ok'], r
+    assert r['resultat'] == informe
+    assert 'resum.json' not in r['consulta']
+    assert r['id_sessio'] == []
+
+
+def test_resultat_amb_resum_opcional(paquet):
+    carpeta = e.nb.RESULTATS_PRINCIPAL / '5.2'
+    resum = {'incompliments_no_declarats': 0, 'resposta': 1}
+    (carpeta / 'resum.json').write_text(json.dumps(resum))
+    r = e.executa('resultat_proposta', {'apartat': '5.2'})
+    assert r['ok'], r
+    assert r['resultat']['resum'] == resum
+    assert 'resum.json' in r['consulta']
+
+
+@pytest.mark.parametrize('grup', ['81', 'TE/81', '811'])
+def test_horari_sense_titulacio_ni_curs(paquet, monkeypatch, grup):
+    b, _ = paquet
+    b = copy.deepcopy(b)
+    for sid in ('S1', 'S2'):
+        s = copy.deepcopy(b.sessions[sid])
+        s.id = 'ALT' + sid
+        s.cohorts = ('GYY:2n',)
+        b.sessions[s.id] = s
+    monkeypatch.setattr(e.nb, 'carrega_oficial', lambda *a, **kw: copy.deepcopy(b))
+    r = e.executa('horari_grup', {'grup': grup, 'dia': 'lunes'})
+    assert r['ok'], r
+    assert r['resultat']['total'] == 4
+    assert [(h['titulacio'], h['curs']) for h in r['resultat']['horaris']] == [('GXX', '3r'), ('GYY', '2n')]
+    assert set(r['id_sessio']) == {'S1', 'S2', 'ALTS1', 'ALTS2'}
+    r = e.executa('horari_grup', {'grup': grup, 'titulacio': 'GYY'})
+    assert r['resultat']['total'] == 2
+    r = e.executa('horari_grup', {'grup': grup, 'curs': '3r'})
+    assert r['resultat']['total'] == 2
+    definition = next(d['function'] for d in e.EINES if d['function']['name'] == 'horari_grup')
+    assert definition['parameters']['required'] == ['grup']
+
+
+@pytest.mark.parametrize('noms,codi', [
+    (['L', 'dilluns', 'lunes', 'monday'], 'L'),
+    (['M', 'dimarts', 'martes', 'tuesday'], 'M'),
+    (['X', 'dimecres', 'miércoles', 'miercoles', 'wednesday'], 'X'),
+    (['J', 'dijous', 'jueves', 'thursday'], 'J'),
+    (['V', 'divendres', 'viernes', 'friday'], 'V'),
+])
+def test_dies_multilingues(paquet, noms, codi):
+    for nom in noms:
+        for variant in (nom.lower(), nom.upper()):
+            assert e._dia(variant) == codi
+            r = e.executa('aules_lliures', dict(dia=variant, hora_ini='16', durada_min=60, places_min=20, tipus='Seminaris'))
+            assert r['ok'], r
+            r = e.executa('ocupacio_aula', dict(aula='Q9/0001', dia=variant))
+            assert r['ok'], r
+            r = e.executa('horari_grup', dict(grup='81', dia=variant))
+            assert r['ok'], r
+
+
+@pytest.mark.parametrize('hora', ['16', '16:00', '16.00', '16h'])
+def test_formats_hora(paquet, hora):
+    r = e.executa('aules_lliures', dict(dia='monday', hora_ini=hora, durada_min=60, places_min=20, tipus='Seminaris'))
+    assert r['ok'], r
+    assert r['resultat']['total'] == 2
+    assert all(a['h_ini'] == '16:00' for a in r['resultat']['files'])
+    r = e.executa('prova_canvi', dict(apartat='5.2', canvi={'tipus': 'moure', 'id_sessio': 'S1', 'dia': 'MARTES', 'hora_ini': hora}))
+    assert r['ok'], r
+    assert r['resultat']['canvis'][0]['despres']['h_ini'] == '16:00'
+    assert r['resultat']['canvis'][0]['despres']['dia'] == 'M'
+
+
+def test_horaris_limit_global(paquet, monkeypatch):
+    b, _ = paquet
+    b = copy.deepcopy(b)
+    for i in range(60):
+        s = copy.deepcopy(b.sessions['S1'])
+        s.id = f'EXTRA{i}'
+        s.cohorts = ('GYY:2n',)
+        b.sessions[s.id] = s
+    monkeypatch.setattr(e.nb, 'carrega_oficial', lambda *a, **kw: copy.deepcopy(b))
+    r = e.executa('horari_grup', {'grup': '81'})
+    assert r['ok'], r
+    assert r['resultat']['total'] == 62
+    assert sum(len(h['files']) for h in r['resultat']['horaris']) == 50
+    assert len(r['id_sessio']) == 50
+
+
+@pytest.mark.parametrize('hora', ['24', '16:60', '16.99', '-1', 'demà'])
+def test_hores_invalides(paquet, hora):
+    r = e.executa('aules_lliures', dict(dia='L', hora_ini=hora, durada_min=60, places_min=20))
+    assert not r['ok']
