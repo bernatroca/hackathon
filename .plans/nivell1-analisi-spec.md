@@ -42,14 +42,17 @@ Totes dues setmanes i tots dos semestres, amb selector de semestre. Les troballe
 1. **Ocupació per aula, dia i bloc**, per semestre. Mapa de calor `aula × (dia, bloc)` de la setmana triada, amb les sessions sense aula com a fila pròpia. Taula d'aules ordenada per % d'ocupació: quines van plenes i quines buides.
 2. **Hores-aula necessàries i disponibles per franja.** Al 2n semestre, 5.722 de les 7.739 sessions (74 %) no tenen aula. Per a cada bloc: demanda d'aulari contra aules disponibles.
 3. **Sessions fora del torn del model nou**, per titulació i curs. Fora de torn vol dir `torn_requerit = mati` amb inici a les 14.30 o més tard, o `tarda` amb inici abans de les 14.30. Sessions i hores-aula.
-4. **Hi cap el matí?** És la xifra central i té tres capes:
-   - a. **Pic d'avui**: classes de 1r i 2n del 2n semestre (sense PLAB ni dobles) alhora per bloc, amb les hores d'avui, contra 19 aules.
-   - b. **Ocupació**: hores-aula de matí que demanen 1r i 2n, contra les que ofereixen les 19 aules.
-   - c. **Per mida**: les sessions de 1r i 2n que avui són a la tarda no tenen hora de matí, així que es compta en hores-aula. Per a cada llindar de places `k` (les capacitats diferents de les aules: 24, 48, 50, 63, 88, 90, 100, 117, 130, 160), es compara:
-     - **demanda**: hores de matí de sessions de 1r i 2n amb més de `k` alumnes;
-     - **oferta**: hores de matí d'aules disponibles amb més de `k` places.
-
-     Si a algun llindar la demanda supera l'oferta, és impossible, i aquest resultat serveix també de prova per al 5.4. Es mostra a la pitjor setmana i, com a variant, amb els seminaris.
+4. **Hi cap el model nou, al matí i a la tarda?** (ID `hi-cap-mati`, que es manté perquè l'app el fa servir). És la xifra central. Es respon per a **tots dos torns**, perquè amb el model nou unes 1.770 sessions passen a la tarda. Revisat el ds 16:30 arran de la revisió del jurat.
+   - **Qui va a cada torn:** el que diu `torn_requerit` (`mati` o `tarda`), no el curs de `titulacions_curs`. Així hi entren les 156 sessions fixades de curs desconegut (`GEI:?`) que demanen matí.
+   - **Demanda:** les sessions que necessiten aula de l'aulari (sense PLAB ni dobles). Una sessió compartida compta un cop, amb els **alumnes sumats** (com fa el verificador). Les sessions amb alumnes = 0 també ocupen hores d'aula, encara que no sapiguem la mida.
+   - **Oferta:** 19 aules docents disponibles (21 menys 2 de reserva), sense comptar les hores aturades pel calendari (festius, no lectius, aturades) de cada setmana. Matí: de 8.30 a 14.30. Tarda: de 14.30 a 21.00. Variant: amb els 8 seminaris.
+   - **Capes, per a cada torn:**
+     - a. **Pic d'avui** (només matí): classes que avui ja són al matí i hi han de ser, alhora per bloc, contra 19. Comprovació: 15.
+     - b. **Ocupació:** hores-aula que demana el torn contra les que ofereix, a cada setmana. Es mostra la pitjor setmana i la mediana. Comprovació: el matí entre el 67 % i el 70 %.
+     - c. **Per mida:** per a cada llindar de places `k`, hores de sessions amb més de `k` alumnes contra hores d'aules amb més de `k` places. Es fa a cada setmana, no només a la pitjor global.
+   - **Coll d'ampolla:** la combinació de torn, setmana i mida amb menys marge (oferta − demanda, en hores i en %). Va a la frase.
+   - **Com es diu la resposta:** mai «Sí» a seques. La resposta és un balanç: «Hi ha marge d'hores al matí (X %) i a la tarda (Y %); el coll d'ampolla són les aules de més de K places la setmana W. Que l'horari encaixi de debò ho valida la part 2.» Si algun llindar falla, «No hi cap per mida» amb on i quant falta. Això és una prova vàlida per al 5.4.
+   - **Límit, dit a la frase del mètode:** és una condició necessària (si falla, és impossible). Si passa, no demostra que hi càpiga, perquè no mira solapaments de docent i alumnat ni la reserva hora a hora.
 5. **Grups amb més alumnes que places** a l'aula on són avui.
 
 ### Afegides per l'equip
@@ -72,6 +75,7 @@ L'ordre `python -m nivell1.comprova` calcula totes les troballes, les imprimeix 
 | Sessions totals / 2n semestre | 17.026 / 7.739 |
 | Sessions del 2n semestre sense aula | 5.722 (74 %), de les quals 262 dobles i 919 PLAB |
 | Pic de 1r i 2n al matí, hores d'avui (4a) | 15 classes alhora |
+| Demanda de la tarda, pitjor setmana (4b) | unes 259 h contra unes 617 h nominals (es recalcula amb el calendari) |
 | Ocupació del matí de 1r i 2n (4b) | entre el 67 % i el 70 % de les 19 aules |
 | Fora de torn al 2n semestre (3) | 2.008 (= R1-TORN del verificador) |
 | Més alumnes que places al 2n semestre (5) | 43 (= R3-AFORAMENT) |
