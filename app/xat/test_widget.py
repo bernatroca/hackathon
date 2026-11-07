@@ -106,6 +106,12 @@ const sandbox = {
 };
 const source = fs.readFileSync(process.argv[1], 'utf8').replace('  window.XatIA = {', `
   window.prova = { markdown, htmlMissatge, llegeixFlux, perAlServidor, desa, llegeixMemoria, estat,
+    sincronitzaPlafó, teclaPlafó, clicFons,
+    preparaInteraccio() {
+      el = {fons: {}, lupa: {hidden:true},
+        plafo: {contains: (node) => node === 'dins'}, boto: {focus() {}}};
+      return el;
+    },
     adreca() { return op.api; },
     prepara() { op = { clauMemoria: 'prova' }; },
     parcial(text) {
@@ -119,6 +125,44 @@ const source = fs.readFileSync(process.argv[1], 'utf8').replace('  window.XatIA 
 vm.runInNewContext(source, sandbox);
 const p = sandbox.window.prova;
 p.prepara();
+let mobil = false;
+const classes = new Set();
+sandbox.window.matchMedia = () => ({matches: mobil});
+sandbox.document = {activeElement:'fora', documentElement:{classList:{toggle(nom, activa) {
+  if (activa) classes.add(nom); else classes.delete(nom);
+}}}};
+const elements = p.preparaInteraccio();
+p.estat.obert = true;
+p.sincronitzaPlafó();
+assert.ok(classes.has('xatia-obert'));
+assert.equal(elements.fons.hidden, true);
+p.clicFons();
+assert.equal(p.estat.obert, true);
+p.teclaPlafó({key:'Escape'});
+assert.equal(p.estat.obert, true);
+sandbox.document.activeElement = 'dins';
+p.teclaPlafó({key:'Enter'});
+assert.equal(p.estat.obert, true);
+p.teclaPlafó({key:'Escape'});
+assert.equal(p.estat.obert, false);
+p.sincronitzaPlafó();
+assert.ok(!classes.has('xatia-obert'));
+for (const mode of ['gran', 'mobil']) {
+  p.estat.obert = true;
+  p.estat.gran = mode === 'gran';
+  mobil = mode === 'mobil';
+  sandbox.document.activeElement = 'fora';
+  p.sincronitzaPlafó();
+  assert.ok(!classes.has('xatia-obert'));
+  assert.equal(elements.fons.hidden, false);
+  p.teclaPlafó({key:'Escape'});
+  assert.equal(p.estat.obert, false);
+  p.estat.obert = true;
+  p.clicFons();
+  assert.equal(p.estat.obert, false);
+}
+mobil = false;
+p.estat.gran = false;
 const entitats = 'inici &gt; 15.00 &lt; 20.00 &amp; &quot;hora&quot; &#39;dia&#39; &#x27;aula&#x27;';
 const esperat = '<p>inici &gt; 15.00 &lt; 20.00 &amp; &quot;hora&quot; &#39;dia&#39; &#39;aula&#39;</p>';
 assert.equal(p.markdown(entitats), esperat);
@@ -212,3 +256,15 @@ async function flux(fi) {
     resultat = subprocess.run([node, '-e', prova, str(widget.WEB / 'xat-ia.js')],
                               text=True, capture_output=True, timeout=15)
     assert resultat.returncode == 0, resultat.stderr
+
+
+def test_css_plafó_acoblat_i_compactacio():
+    css = (widget.WEB / 'xat-ia.css').read_text()
+    assert 'html.xatia-obert [data-testid="stMain"]' in css
+    assert 'margin-right: var(--xatia-amplada)' in css
+    assert '.xatia:not(.xatia--gran) .xatia-fons { pointer-events: none; }' in css
+    assert '(min-width: 700px) and (max-width: 1099px)' in css
+    assert 'flex-wrap: wrap' in css
+    assert '[data-testid="stColumn"]' in css
+    assert 'transition: margin-right' in css
+    assert 'prefers-reduced-motion' in css

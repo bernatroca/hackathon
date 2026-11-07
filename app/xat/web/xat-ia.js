@@ -395,9 +395,28 @@
     connecta();
   }
 
+  // A l'ordinador, en mida normal, es pot treballar a la pàgina alhora.
+  const esAcoblat = () => !esMobil() && !estat.gran;
+
+  function sincronitzaPlafó() {
+    const acoblat = estat.obert && esAcoblat();
+    document.documentElement.classList.toggle('xatia-obert', acoblat);
+    el.fons.hidden = !estat.obert || acoblat;
+  }
+
+  function clicFons() {
+    if (!esAcoblat()) tanca();
+  }
+
+  function teclaPlafó(e) {
+    if (e.key !== 'Escape') return;
+    if (!el.lupa.hidden) el.lupa.hidden = true;
+    else if (estat.obert && (!esAcoblat() || el.plafo.contains(document.activeElement))) tanca();
+  }
+
   function connecta() {
     el.boto.addEventListener('click', () => obre());
-    el.fons.addEventListener('click', tanca);
+    el.fons.addEventListener('click', clicFons);
     el.plafo.addEventListener('click', (e) => {
       const fa = e.target.closest('[data-fa]');
       if (fa) {
@@ -467,11 +486,7 @@
       afegeixCaptures(e.dataTransfer.files);
     });
     el.lupa.addEventListener('click', () => (el.lupa.hidden = true));
-    window.addEventListener('keydown', (e) => {
-      if (e.key !== 'Escape') return;
-      if (!el.lupa.hidden) el.lupa.hidden = true;
-      else if (estat.obert) tanca();
-    });
+    window.addEventListener('keydown', teclaPlafó);
     /* Al mòbil, el teclat tapa la caixa: el plafó s'acaba on comença el teclat. */
     if (window.visualViewport) {
       const teclat = () => {
@@ -565,7 +580,7 @@
     el.arrel.classList.toggle('xatia--gran', gran && !esMobil());
     el.arrel.classList.toggle('xatia--amb-conversa', estat.missatges.length > 0);
     el.boto.hidden = obert;
-    el.fons.hidden = !obert;
+    sincronitzaPlafó();
     el.plafo.setAttribute('aria-hidden', String(!obert));
     el.plafo.inert = !obert;
     el.gran.innerHTML = icona(gran ? 'petit' : 'gran', 16);
