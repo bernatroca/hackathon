@@ -30,6 +30,7 @@ WITH setmanes AS (
 )
 , llindars AS (
  SELECT DISTINCT capacitat AS llindar FROM aules WHERE tipus='Aules docents'
+ UNION SELECT 0 -- Totes les mides, incloses les sessions de mida desconeguda.
 ), capacitats AS (
  SELECT k.llindar,
  least(19,count(*) FILTER(WHERE a.tipus='Aules docents')) AS aules,
@@ -42,7 +43,7 @@ WITH setmanes AS (
  o.hores_torn*k.aules AS oferta_h,
  o.hores_torn*k.aules_amb_seminaris AS oferta_h_amb_seminaris
  FROM oferta_torn o CROSS JOIN capacitats k LEFT JOIN unitats u
- ON u.setmana=o.setmana AND u.torn=o.torn AND u.alumnes>k.llindar
+ ON u.setmana=o.setmana AND u.torn=o.torn AND (k.llindar=0 OR u.alumnes>k.llindar)
  GROUP BY ALL
 )
 SELECT *,demanda_h>oferta_h AS falla,

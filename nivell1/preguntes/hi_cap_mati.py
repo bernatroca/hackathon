@@ -11,12 +11,12 @@ def _percent(valor):
 
 
 def _coll(mida):
-    # 0 hores contra 0 hores és un llindar buit, no un coll d'ampolla.
-    candidats = mida[(mida.oferta_h > 0) | (mida.demanda_h > 0)]
+    # Només hi ha risc on hi ha demanda; comparem el marge relatiu.
+    candidats = mida[mida.demanda_h > 0]
     if candidats.empty:
         return {}
     fila = candidats.sort_values(
-        ['marge_h', 'marge_pct', 'setmana', 'torn', 'llindar']).iloc[0]
+        ['marge_pct', 'setmana', 'torn', 'llindar']).iloc[0]
     return {clau: (int(fila[clau]) if clau == 'llindar' else
                    float(fila[clau]) if clau.endswith(('_h', '_pct')) else fila[clau])
             for clau in ['torn', 'setmana', 'llindar', 'demanda_h', 'oferta_h',
@@ -47,10 +47,18 @@ def calcula(semestre=2, setmana=None):
     else:
         balanc = f'Hi ha marge d’hores al matí ({pct_m} d’ocupació) i a la tarda ({pct_t} d’ocupació)'
     if coll:
-        marge = f"{coll['marge_h']:.1f}".replace('.', ',')
-        balanc += (f"; el menor marge és al torn de {('matí' if coll['torn'] == 'mati' else 'tarda')}, "
-                   f"la setmana {coll['setmana']}, per sobre de {coll['llindar']} places "
-                   f"({marge} h de marge; demanda {coll['demanda_h']:g} h)")
+        ocupat = _percent(100 - coll['marge_pct'])
+        torn = 'matí' if coll['torn'] == 'mati' else 'tarda'
+        if coll['llindar'] == 0:
+            article = 'el' if coll['torn'] == 'mati' else 'la'
+            estat = 'ocupat' if coll['torn'] == 'mati' else 'ocupada'
+            balanc += (f"; el més ajustat és {article} {torn} en conjunt "
+                       f"(setmana {coll['setmana']}, {ocupat} {estat})")
+        else:
+            estat = f'{ocupat} ocupades' if coll['oferta_h'] > 0 else 'sense oferta disponible'
+            balanc += (f"; el més ajustat són les aules de més de {coll['llindar']} places, "
+                       f"{'al matí' if coll['torn'] == 'mati' else 'a la tarda'}, "
+                       f"la setmana {coll['setmana']} ({estat})")
     ocupacio = oficial[(oficial.setmana == seleccionada) & (oficial.torn == 'mati')].copy()
     mida = mida_oficial[(mida_oficial.setmana == seleccionada) & (mida_oficial.torn == 'mati')].copy()
     return Troballa(
@@ -71,7 +79,7 @@ def calcula(semestre=2, setmana=None):
                'coll_ampolla_15_21': _coll(mides[mides.variant == '15-21']),
                'falla_per_mida_amb_seminaris': bool(mida_oficial.falla_amb_seminaris.any()),
                'problemes': ['L’oferta per mida és una cota optimista amb reserva flexible; les mides desconegudes només entren a l’ocupació total.',
-                             'El menor marge absolut pot correspondre a un llindar amb demanda zero; se n’explicita la demanda i s’exclouen només els llindars 0 contra 0.',
+                             'El coll d’ampolla minimitza el marge percentual entre llindars amb demanda; el llindar 0 inclou totes les sessions, també les de mida desconeguda.',
                              'Els registres avaluacio no es descompten: no indiquen una aturada docent; alguns contenen classes de partida.',
                              'Les referències 397 h de matí i 259 h de tarda corresponen a setmanes diferents (W06 i W09); les compartides es dedupliquen.']})
 
