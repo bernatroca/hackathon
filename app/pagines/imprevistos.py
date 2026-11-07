@@ -12,6 +12,29 @@ from components.vistes import estat
 from nivell2.imprevistos import ORDRE, calcula
 
 
+def normalitza_assignatura(text):
+    """Repara mojibake UTF-8/Latin-1 habitual i uniformitza apòstrofs."""
+    if not isinstance(text, str):
+        return text
+    reparat = text
+    # Repetim per arreglar casos de doble codificació, però només si millora.
+    for _ in range(2):
+        try:
+            candidat = reparat.encode('cp1252').decode('utf-8')
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            break
+        def qualitat(s):
+            return sum(s.count(x) for x in ('Ã', 'â€', 'Â', '\ufffd')) + sum(
+                1 for c in s if '\x80' <= c <= '\x9f')
+        if qualitat(candidat) >= qualitat(reparat):
+            break
+        reparat = candidat
+    # C1 0x92 acostuma a ser l'apòstrof tipogràfic en CP1252 llegit com Latin-1.
+    reparat = reparat.replace('\x92', '’')
+    reparat = reparat.replace('â€™', '’').replace('â', '’')
+    return reparat.replace("'", '’').replace('`', '’').replace('´', '’')
+
+
 CSS = """<style>
 .st-key-imp-pagina{gap:20px;min-width:0;}
 .st-key-imp-pagina .imp-intro{color:var(--tinta-2);margin:0;}
@@ -221,7 +244,7 @@ def mostra(dades=None):
             clau = mostra_filtres(dades)
             files = filtra(dades['files'], clau)
             if files:
-                st.dataframe(pd.DataFrame([{'Assignatura': r['assignatura'], 'Grup': r['grup'],
+                st.dataframe(pd.DataFrame([{'Assignatura': normalitza_assignatura(r['assignatura']), 'Grup': r['grup'],
                                            'Abans': r['abans'], 'Després': r['despres']} for r in files]),
                              hide_index=True, width='stretch')
             else:

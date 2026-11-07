@@ -15,6 +15,12 @@ from pagines import imprevistos
 from prova_imprevistos import dades_inventades
 
 
+def test_normalitza_assignatura_mojibake_inventat():
+    assert imprevistos.normalitza_assignatura("Bases dâ€™Experimentació") == "Bases d’Experimentació"
+    assert imprevistos.normalitza_assignatura("Organització i Gestió d\x92Empreses") == "Organització i Gestió d’Empreses"
+    assert imprevistos.normalitza_assignatura("Assignatura d'Exemple") == "Assignatura d’Exemple"
+
+
 def obre(dades=None):
     app = AppTest.from_string("""
 import streamlit as st
