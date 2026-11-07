@@ -18,9 +18,15 @@ def genera(pregunta, arrel):
         writer.writeheader()
         writer.writerows(comparison.files)
     path = out / 'README.md'
-    text = normalitza(path.read_text(encoding='utf-8'), pregunta, arrel)
+    text = path.read_text(encoding='utf-8')
     import re
-    text = re.sub(r'\n## Què empitjora i per què\n.*?(?=\n## |\Z)', '', text, flags=re.S)
+    explanations = {}
+    for line in text.splitlines():
+        match = re.fullmatch(r'- (.*): ([^;]+); (.+)', line)
+        if match:
+            explanations[(match[1], match[2])] = match[3]
+    text = re.sub(r'(?:\A|\n)## Què empitjora i per què\n.*?(?=\n## |\Z)', '', text, flags=re.S)
+    text = normalitza(text, pregunta, arrel)
     lines = []
     neutral = {'sessions_avaluades', 'aules_assignades', 'relaxacions_declarades'}
     for row in comparison.files:
@@ -28,7 +34,8 @@ def genera(pregunta, arrel):
         if isinstance(a, (int, float)) and isinstance(d, (int, float)):
             worse = d < a if key == 'activitats_rutinaries_pct' else d > a
             if worse and key not in neutral:
-                lines.append(f'- {key}: {a} → {d}; per explicar.')
+                explanation = explanations.get((key, f'{a} → {d}'), 'per explicar.')
+                lines.append(f'- {key}: {a} → {d}; {explanation}')
     path.write_text(text.rstrip() + '\n\n## Què empitjora i per què\n\n' +
                     ('\n'.join(lines) if lines else 'Cap empitjorament numèric detectat.') + '\n', encoding='utf-8')
 

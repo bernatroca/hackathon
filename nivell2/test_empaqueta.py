@@ -233,3 +233,39 @@ def test_xifres_referencia_real(tmp_path):
     assert rows['sessions_nomes_canvien_aula']['despres'] == 1
     assert rows['incompliments_declarats']['despres'] == 3
     assert rows['incompliments_heretats']['despres'] == 2
+
+
+@pytest.mark.parametrize('verification', [
+    'python -m nivell2.verificacio 5.2',
+    'python -m horaris check proposta.csv \\\n  --semestre 2',
+])
+def test_normalitza_bloc_mixt(verification):
+    generation = 'python -m nivell2.s52 --temps-franges 300 --temps-aules 600 --llavor 0'
+    people = 'RESULTATS_DIR=$PWD/resultats/nivell2 python -m nivell2.comprova_persones'
+    original = f'```sh\n{generation}\n{verification}\n{people}\n```\n'
+    result = normalitza(original, '5.2')
+    assert generation in result
+    assert people in result
+    assert normalitza(result, '5.2') == result
+    assert result.count(verificacio.ordre('5.2')) == 1
+
+
+def test_conserva_explicacions_nomes_si_xifra_igual(tmp_path):
+    from nivell2 import xifres_lliurament as delivery
+    out = tmp_path/'5.2'
+    out.mkdir()
+    path = out/'README.md'
+    path.write_text('## Què empitjora i per què\n\n'
+                    '- hores_mortes_min: 1 → 2; Explicació conservada.\n'
+                    '- canvis_aula: 0 → 1; Explicació antiga.\n')
+    comparison = SimpleNamespace(files=[
+        {'xifra': 'hores_mortes_min', 'abans': 1, 'despres': 2},
+        {'xifra': 'canvis_aula', 'abans': 0, 'despres': 3}])
+    with patch.object(delivery.Proposta, 'llegeix'), patch.object(delivery, 'compara', return_value=comparison):
+        delivery.genera('5.2', tmp_path)
+        first = path.read_text()
+        delivery.genera('5.2', tmp_path)
+    assert path.read_text() == first
+    assert 'Explicació conservada.' in first
+    assert 'Explicació antiga.' not in first
+    assert '- canvis_aula: 0 → 3; per explicar.' in first
