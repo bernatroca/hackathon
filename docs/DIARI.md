@@ -111,3 +111,9 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - Matí (pitjor setmana 2027-W06): 397 h contra 570 h, el 70 %. És el torn ajustat.
 - Per mida a la tarda no falla cap llindar (p. ex. grups de més de 63 alumnes: 50 h contra 455 h).
 - Per què sobra tarda: els laboratoris (PLAB) i les dobles no ocupen aules de l'aulari, i 3r, 4t i màsters tenen menys hores de teoria i problemes que 1r i 2n.
+
+### [ds 17:09] PROBLEMA · Validació de la part 1: 22 passos bé, 5 malament
+- Fallen: la resposta gran («Sí, però just», i els quadrets desborden a 768-1024 px), el 4.541 sense aula, el grau nou en verd, i «Com ho hem calculat» amb jerga.
+- Millores: alçades iguals a les targetes, singulars, proporció «cap de les classes» quan és un 2 %, estat de càrrega, i % escrit al plànol.
+- SOLUCIÓ en marxa: dades-1 (desglossament 4.541), dades-2 (pregunta 4 amb matí i tarda), dades-3 (grau nou corregit i provisional) i frontend-1 (textos planers, responsivitat i estats), en paral·lel.
+- PROBLEMA nostre: una edició de l'integrador (abe83e1) va tallar l'especificació de la part 2; la sessió Part 2 l'ha restaurada (9c3488b).
