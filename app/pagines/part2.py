@@ -77,7 +77,7 @@ NOMS_PROPOSTES = {
 def tria_si_cal(label, opcions, *, key, format_func=str, index=0, contenidor=st, help=None):
     """Manté la mateixa etiqueta i alçada quan només hi ha una opció."""
     if key in st.session_state and st.session_state[key] not in opcions:
-        del st.session_state[key]
+        st.session_state[key] = opcions[index]
     return contenidor.selectbox(label, opcions, index=index, key=key,
         format_func=format_func, help=help, disabled=len(opcions) == 1)
 
@@ -211,7 +211,12 @@ def _mostra():
                 tit = tria_si_cal('Estudis', sorted(arbre), format_func=lambda t: titulacions.get(t, t), key='p2-titulacio', contenidor=a)
                 curs = tria_si_cal('Curs', sorted(arbre[tit], key=lambda c: (c == '?', c)),
                     format_func=lambda c: 'Sense curs a les dades' if c == '?' else c, key='p2-curs', contenidor=b)
-                grup = tria_si_cal('Grup', sorted(arbre[tit][curs]), key='p2-grup',
+                grups_disponibles = sorted(arbre[tit][curs])
+                context_grup = (tit, curs)
+                if st.session_state.get('p2-context-grup') != context_grup:
+                    st.session_state['p2-grup'] = grups_disponibles[0]
+                    st.session_state['p2-context-grup'] = context_grup
+                grup = tria_si_cal('Grup', grups_disponibles, key='p2-grup',
                     format_func=lambda g: f'Grup {g}', contenidor=c)
         actuals = celles_grup(base, avui, setmana, tit, curs, grup, noms=noms)
         noves = celles_grup(base, proposta, setmana, tit, curs, grup, noms=noms, relaxacions=relaxacions)
