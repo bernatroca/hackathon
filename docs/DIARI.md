@@ -256,3 +256,10 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - n2-frontend-6 (Codex gpt-6.1-sol high): la guia ja funciona (ressalta l'apartat, enfosqueix la resta, el panell va al costat, Esc la tanca, també al mòbil); el camp «Grup» ja no es trepitja; carrils només on hi ha classes alhora.
 - n2-frontend-7 (Codex gpt-6.1-sol medium): a la Junta, l'estat per mida és exacte, selector Matí/Tarda, «Cap» quan cap curs canvia, percentatges en català, i les excepcions noves als torns se separen de les classes que avui ja són fora del seu torn i no es toquen.
 - Integració (Claude): la setmana sencera no hi cabia a 1280 px i el botó de la guia quedava sota la barra lateral; corregit. El resum antic de la Junta es torna a generar sol.
+
+### [ds 20:58] SOLUCIÓ · Horari proposat llegible i comprovació de persones
+- Feedback de l'equip: la graella era massa estreta i lletja. n2-frontend-8 (Codex gpt-6.1-sol high): classes de 150 px mínim amb el nom sencer, la setmana es parteix en blocs si no hi cap, colors amb contrast, filtres com la maqueta A, només les hores amb classe, línies contínues, apòstrofs i «Sense curs a les dades».
+- Error trobat en verificar amb dades inventades: el cos de la taula anava desplaçat una columna; corregit i amb prova automàtica.
+- Norma: el disseny es verifica amb una pàgina de dades inventades (docs/disseny/part2-prova-app.html); de l'app real només mirem l'estructura.
+- Nova eina: nivell2/comprova_persones.py diu, només amb recomptes, si alguna persona té dues classes alhora o si les classes dels dobles graus se separen o es dupliquen. L'executa l'equip.
+- Codex passa al mode ràpid (service_tier priority, 1,5x de velocitat i més consum).
