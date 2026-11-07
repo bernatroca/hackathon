@@ -105,7 +105,7 @@ def test_sense_excepcions_i_html_segura():
     p = Proposta.de_base(b)
     d = calcula(p, b, b, colloca(b, p))
     md, html = documents(d)
-    assert 'No hi ha cap sessió fora del torn requerit.' in md
+    assert 'No hi ha cap classe fora del torn que li toca.' in md
     assert '@page{size:A4' in html and '@media print' in html
     d['excepcions'] = [{}]
     d['excepcions_resum'] = [{'motiu': '<script>alert(1)</script>', 'nom': 'Grup',
@@ -222,3 +222,24 @@ def test_estimacio_mides_mateix_filtre_que_pic():
     assert r['mides'][1]['pic_categoria'] == 1
     md, html = documents(d)
     assert 'Matí (estimació)' in md and 'Matí (estimació)' in html
+
+
+def test_textos_principals_planers_i_detall_separat():
+    b = petita()
+    p = Proposta.de_base(b)
+    d = calcula(p, b, b, colloca(b, p))
+    # També comprovem que resums antics i justificacions internes no es mostren al resum.
+    d['com_ho_hem_calculat'] = 'R8 PLAB llindar cota'
+    d['excepcions'] = [{}]
+    d['excepcions_resum'] = [{'motiu': 'R1-TORN PLAB TE/ PAUL SEM J R8',
+                             'nom': 'Grau inventat', 'percentatge': 1, 'sessions': 1}]
+    md, html = documents(d)
+    principals = (md.split('## Detall tècnic')[0],
+                  html.split('<section class="detall-tecnic">')[0])
+    for text in principals:
+        for cadena in ('R8', 'R1-', 'PLAB', ' J ', 'TE/', 'PAUL', 'SEM', 'llindar', 'cota'):
+            assert cadena not in text
+    assert '<small>' in md and '<small>' in html
+    assert 'R1-TORN PLAB TE/ PAUL SEM J R8' in md.split('## Detall tècnic')[1]
+    metode = md.split('## Com ho hem calculat')[1].split('## Detall tècnic')[0]
+    assert 3 <= metode.count('.') <= 4

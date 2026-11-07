@@ -75,11 +75,11 @@ def grafic_mogudes(files):
     files = sorted(files, key=lambda r: (-r['franja_pct'], r['nom']))
     fig = go.Figure(go.Bar(y=[r['nom'] for r in files], x=[r['franja_pct'] for r in files],
         orientation='h', marker_color='#2a78d6',
-        text=[f"{r['franja_pct']:.1f} % · {r['franja']}/{r['sessions']} sessions" for r in files],
+        text=[f"{r['franja_pct']:.1f} % · {r['franja']}/{r['sessions']} classes" for r in files],
         textposition='outside', cliponaxis=False,
         hovertemplate='%{y}: %{text}<extra></extra>'))
     fig.update_layout(height=max(260, 38 * len(files) + 80),
-        xaxis=dict(title='Sessions que canvien de franja (%)', range=[0, 130], ticksuffix=' %'),
+        xaxis=dict(title='Classes que canvien de dia o hora (%)', range=[0, 130], ticksuffix=' %'),
         yaxis=dict(autorange='reversed'), margin=dict(l=0, r=120, t=10, b=45))
     return fig
 
@@ -93,65 +93,73 @@ def mostra():
     try:
         d = carrega(triada)
         st.caption(f"Resum calculat: {d['data']} · {triada}")
-        st.subheader('Pic d’aules ordinàries ocupades')
-        st.caption('Comptem les aules ordinàries diferents ocupades durant cada hora; sense aula assignada, estimem la demanda ordinària.')
-        st.caption('21 aules ordinàries menys 2 de reserva: 19 disponibles. Pitjor moment de cada torn al llarg del semestre.')
+        st.subheader('Moment amb més aules ocupades')
+        st.caption('Mostrem quantes aules calen en el moment de més ocupació. Si falta assignar una aula, en fem una estimació.')
+        st.caption('De les 21 aules per a classes, dues sempre han de quedar lliures: 19 disponibles. Mostrem el moment de més ocupació de cada torn durant el semestre.')
         for columna, torn, nom in zip(st.columns(2), ('mati', 'tarda'), ('Matí', 'Tarda')):
             p = d['pics'][torn]['pitjor']
             cap = p['classes'] <= p['aules_disponibles']
             with columna, st.container(border=True):
                 st.markdown(estat({'estat': 'verd' if cap else 'vermell', 'etiqueta': nom + (' · Hi cap' if cap else ' · Falten aules')}), unsafe_allow_html=True)
                 st.markdown(f'<div class="xifra-targeta" style="color:var(--{"verd" if cap else "vermell"}-text)">{p["classes"]} / {p["aules_disponibles"]} aules</div>', unsafe_allow_html=True)
-                st.caption('Estimació de demanda d’aules ordinàries' if p['estimacio']
-                           else 'Aules ordinàries diferents ocupades en una franja d’una hora')
+                st.caption('Estimació de les aules necessàries' if p['estimacio']
+                           else 'Aules ocupades en el moment de més ocupació')
                 st.caption(f"{p['data'] or 'Sense classes'} · {p['hora']}")
-        st.subheader('Aules que falten o sobren per mida')
+        st.subheader('Aules que falten o sobren segons les places')
         format_actual = all('ocupades_al_pic' in m for torn in ('mati', 'tarda')
                             for m in d['pics'][torn]['mides'])
         if not format_actual:
-            st.info('Resum antic: cal tornar-lo a generar per veure les mides amb el mateix criteri que el pic.')
+            st.info('Resum antic: cal tornar-lo a generar per comparar les places amb el màxim d’ocupació.')
         files = []
         for m, t in zip(d['pics']['mati']['mides'], d['pics']['tarda']['mides']):
             files.append({'Places': m.get('mida', str(max(1, m['minim_places']))),
-                'Matí: ocupades al pic': m.get('ocupades_al_pic'),
-                'Tarda: ocupades al pic': t.get('ocupades_al_pic'),
+                'Matí: ocupades al màxim': m.get('ocupades_al_pic'),
+                'Tarda: ocupades al màxim': t.get('ocupades_al_pic'),
                 'Aules de la mida': m['aules_categoria'],
-                'Matí: marge acumulat': m['marge'] if format_actual else None,
-                'Tarda: marge acumulat': t['marge'] if format_actual else None})
+                'Matí: sobren (+) o falten (−)': m['marge'] if format_actual else None,
+                'Tarda: sobren (+) o falten (−)': t['marge'] if format_actual else None})
         mostra_taula(pd.DataFrame(files))
-        st.caption('Les ocupades per mida corresponen a la franja del pic de cada torn i sumen el mateix total. Mida: places de l’aula assignada; sense aula, alumnes (estimació).')
-        st.caption('Llindars acumulats: les aules grans també poden acollir grups petits. No sumis els marges. La reserva de dues aules és flexible; aquest recompte no garanteix que l’horari encaixi.')
-        st.subheader('Sessions mogudes per titulació i curs')
-        st.write('Percentatge de les seves sessions que canvien de dia o d’hora (franja); cada sessió compta un sol cop.')
+        st.caption('Les aules ocupades per mida sumen el màxim de cada torn. La mida indica les places de l’aula; si encara no en té, indica els alumnes previstos (estimació).')
+        st.caption('Comparem les classes i les aules prou grans a partir del mínim de places de cada fila. Les aules grans també poden acollir grups petits. Cal mantenir dues aules lliures. No sumis els resultats de les files. Aquest recompte no garanteix que tot l’horari encaixi.')
+        st.subheader('Classes que canvien per titulació i curs')
+        st.write('Percentatge de les classes que canvien de dia o d’hora; cada classe compta un sol cop.')
         if all(r['franja_pct'] == 0 for r in d['sessions_mogudes']):
-            st.write('Cap sessió moguda: totes les titulacions i cursos empaten al 0 %.')
+            st.write('Cap classe canvia de dia ni d’hora: totes les titulacions i cursos empaten al 0 %.')
         else:
             st.plotly_chart(grafic_mogudes(d['sessions_mogudes']), width='stretch')
             pitjors = [r for r in d['sessions_mogudes'] if r['cohort'] in d['pitjor_cohort']]
-            st.write('Percentatge més alt: ' + '; '.join(f"{r['nom']}: {r['franja_pct']:.1f} % ({r['franja']} sessions)" for r in pitjors))
+            st.write('Percentatge més alt: ' + '; '.join(f"{r['nom']}: {r['franja_pct']:.1f} % ({r['franja']} classes)" for r in pitjors))
         mostra_taula(pd.DataFrame([{
             'Titulació i curs': r['nom'],
-            'Canvien de franja (%)': r['franja_pct'],
+            'Canvien de dia o hora (%)': r['franja_pct'],
             'Canvien d’aula (%)': r['aula_pct'],
             'Canvis d’aula': r['aula'],
             'Aules assignades': r['aules_assignades'],
         } for r in d['sessions_mogudes']]))
-        st.caption('Assignar aula a una sessió que no en tenia no és un canvi d’aula.')
-        st.subheader('Excepcions a la regla 1: torn requerit')
+        st.caption('Assignar aula a una classe que no en tenia no és un canvi d’aula.')
+        st.subheader('Classes fora del torn que els toca')
         if not d['excepcions']:
-            st.write('No hi ha cap sessió fora del torn requerit.')
+            st.write('No hi ha cap classe fora del torn que li toca.')
         else:
             motius = {}
             for r in d['excepcions']:
                 motius[r['motiu']] = motius.get(r['motiu'], 0) + 1
-            mostra_taula(pd.DataFrame([{'Motiu': m, 'Sessions': n} for m, n in motius.items()]))
-            st.caption('L’hora acredita l’incompliment, però no demostra que sigui impossible corregir-lo.')
-            with st.expander('Veure les dades'):
-                mostra_taula(pd.DataFrame(d['excepcions']).rename(columns={'id_sessio': 'Sessió', 'cohorts': 'Titulació i curs (identificador)', 'torn_requerit': 'Torn requerit', 'motiu': 'Motiu', 'prova': 'Data i hora', 'prova_impossibilitat': 'Prova d’impossibilitat'}))
+            mostra_taula(pd.DataFrame([{'Motiu': f'Motiu {i} (detall tècnic)', 'Classes': n}
+                                       for i, (m, n) in enumerate(motius.items(), 1)]))
+            st.caption('Sabem a quina hora es fan aquestes classes, però això no demostra que sigui impossible canviar-les.')
         if d['torn_no_avaluable']:
-            st.caption(f"{d['torn_no_avaluable']} sessions sense torn definit: no es poden avaluar.")
+            st.caption(f"{d['torn_no_avaluable']} classes sense torn definit: no es poden avaluar.")
         st.subheader('Com ho hem calculat')
-        st.write(d['com_ho_hem_calculat'])
+        st.write(junta.COM_HO_HEM_CALCULAT)
+        with st.expander('Detall tècnic', expanded=False):
+            st.write(d.get('detall_tecnic', junta.DETALL_TECNIC))
+            if d['excepcions']:
+                for i, motiu in enumerate(motius, 1):
+                    st.write(f'Motiu {i}: {motiu}')
+                mostra_taula(pd.DataFrame(d['excepcions']).rename(columns={
+                    'id_sessio': 'Classe', 'cohorts': 'Titulació i curs (identificador)',
+                    'torn_requerit': 'Torn requerit', 'motiu': 'Motiu',
+                    'prova': 'Data i hora', 'prova_impossibilitat': 'Prova d’impossibilitat'}))
         if format_actual:
             _, html = junta.documents(d)
             st.download_button('Descarrega junta.html · A4 per imprimir', html, file_name='junta.html', mime='text/html')
