@@ -186,3 +186,15 @@ def text(t, altres=None, *, setmana_triada=None):
 def abast(t):
     setmana = (t.extra or {}).get('setmana')
     return f'Detall de la setmana {setmana}' if setmana else 'Setmana no indicada'
+
+
+def grup_estat(info):
+    """El filtre groc també inclou els balanços pendents de validar."""
+    return {'vermell':'Cal actuar', 'ambre':'Vigilar', 'verd':'Hi cap'}[info['estat']]
+
+
+def ordena_respostes(resultat, infos):
+    # totes() ja torna les preguntes segons ORDRE. L'ordenació estable conserva
+    # aquest ordre d'especificació dins de cadascun dels tres grups d'urgència.
+    prioritat = {'vermell':0, 'ambre':1, 'verd':2}
+    return sorted(resultat,key=lambda t:prioritat[infos[t.id]['estat']])
