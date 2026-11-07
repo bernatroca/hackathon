@@ -65,18 +65,11 @@ def pics_i_mides(base, model, col, nomes_mati_requerit=False):
     for sid, c in col.items():
         if c.s.tipus != 'PLAB' and not c.s.sense_espai:
             unitats[c.s.unitat].append((sid, c))
-    franges = defaultdict(dict)
-    ocupacio = defaultdict(set)
+    ocupacio = defaultdict(dict)
     estimacions = set()
     ordinaries = {a for a, x in base.aules.items() if x.ordinaria}
-    for unitat, membres in unitats.items():
-        alumnes = sum(model.sessions[sid].alumnes for sid, _ in membres)
-        for _, c in membres:
-            if nomes_mati_requerit and c.s.torn != 'mati':
-                continue
-            for h in range(510, 1260, 60):
-                if c.ini < min(h + 60, 1260) and c.fi > h:
-                    franges[c.data, h][unitat] = alumnes
+    alumnes_unitat = {u: sum(model.sessions[sid].alumnes for sid, _ in membres)
+                      for u, membres in unitats.items()}
     # R8 compta aules diferents durant tota l'hora, també si dues classes
     # successives comparteixen aula. Les sessions sense aula són demanda estimada.
     for sid, c in col.items():
@@ -88,12 +81,13 @@ def pics_i_mides(base, model, col, nomes_mati_requerit=False):
             continue
         for h in range(510, 1260, 60):
             if c.ini < h + 60 and c.fi > h:
-                ocupacio[c.data, h].add(('estimada', c.s.unitat) if estimada else ('aula', c.aula))
+                clau = ('estimada', c.s.unitat) if estimada else ('aula', c.aula)
+                ocupacio[c.data, h][clau] = (alumnes_unitat[c.s.unitat] if estimada
+                                                   else base.aules[c.aula].capacitat)
                 if estimada:
                     estimacions.add((c.data, h))
     out = {}
     for torn, ini, fi in [('mati', 510, 870), ('tarda', 870, 1260)]:
-        files = [(d, h, v) for (d, h), v in franges.items() if ini <= h < fi]
         pics = [(d, h, v) for (d, h), v in ocupacio.items() if ini <= h < fi]
         def pic(rows):
             d, h, v = min(rows, key=lambda r: (-len(r[2]), r[0], r[1])) if rows else (None, ini, {})
@@ -101,23 +95,29 @@ def pics_i_mides(base, model, col, nomes_mati_requerit=False):
                     'estimacio': any((dd, hh) in estimacions for dd, hh, _ in rows),
                     'setmana': d.strftime('%G-W%V') if d else None,
                     'data': str(d) if d else None, 'hora': fmt(h)}
+        # La descomposició per mida correspon a la mateixa franja que el pic;
+        # els màxims independents de cada mida no es poden sumar.
+        al_pic = min(pics, key=lambda r: (-len(r[2]), r[0], r[1]))[2] if pics else {}
         mides = []
         for baix, alt, etiqueta in MIDES:
-            exacta = max((sum(baix <= n <= alt for n in v.values()) for _, _, v in files), default=0)
+            exacta = max((sum(baix <= n <= alt for n in v.values()) for _, _, v in pics), default=0)
             oferta = sum(baix <= a.capacitat <= alt for a in base.aules.values() if a.ordinaria)
-            demanda = max((sum(n >= max(1, baix) for n in v.values()) for _, _, v in files), default=0)
+            demanda = max((sum(n >= max(1, baix) for n in v.values()) for _, _, v in pics), default=0)
             # El primer llindar inclou també els grups encara sense dada.
             if baix == 0:
-                demanda = max((len(v) for _, _, v in files), default=0)
+                demanda = max((len(v) for _, _, v in pics), default=0)
             disponibles = min(19, sum(a.capacitat >= baix for a in base.aules.values() if a.ordinaria))
-            mides.append({'mida': etiqueta, 'pic_categoria': exacta, 'aules_categoria': oferta,
+            mides.append({'mida': etiqueta, 'pic_categoria': exacta,
+                          'ocupades_al_pic': sum(baix <= n <= alt for n in al_pic.values()),
+                          'estimacio': any((d, h) in estimacions for d, h, _ in pics),
+                          'aules_categoria': oferta,
                           'minim_places': baix, 'demanda_acumulada': demanda,
                           'oferta_acumulada': disponibles, 'marge': disponibles - demanda,
                           'falten': max(0, demanda - disponibles),
                           'sobren': max(0, disponibles - demanda)})
         out[torn] = {'pitjor': pic(pics),
                      'tipica': pic([r for r in pics if r[0].isocalendar()[:2] == tipica]),
-                     'mides': mides}
+                     'mides': mides, 'total_mides': sum(m['ocupades_al_pic'] for m in mides)}
         out[torn]['tipica']['setmana'] = f'{tipica[0]}-W{tipica[1]:02}'
     return out
 
@@ -165,7 +165,7 @@ def calcula(proposta, base, model, col, relaxacions=None):
             'torn_no_avaluable': sum(c.s.torn not in ('mati', 'tarda') for c in col.values()),
             'com_ho_hem_calculat': (
                 'Segon semestre; hores proposades; franges d’una hora des de les 8.30 '
-                '(última: 20.30–21); aules ordinàries diferents ocupades (R8). Sense aula: estimació de demanda ordinària, sense PLAB, dobles sense espai, seminaris, laboratoris ni aules externes de partida. Compartides un cop i alumnes sumats; sense laboratoris '
+                '(última: 20.30–21); aules ordinàries diferents ocupades (R8). Sense aula: estimació de demanda ordinària, sense PLAB, dobles sense espai, seminaris, laboratoris ni aules externes de partida. Mides segons les places de l’aula ocupada; sense aula, alumnes estimats. Compartides un cop i alumnes sumats; sense laboratoris '
                 'ni dobles sense espai per a la demanda. Setmana típica: sessions més properes '
                 'a la mediana, desempat per la primera. Pitjor setmana: pic màxim de cada torn. '
                 'Torns de la base oficial, segons l’hora d’inici. Alumnes de la base del model. '
@@ -177,19 +177,20 @@ def calcula(proposta, base, model, col, relaxacions=None):
 def documents(d):
     """Una mateixa pàgina de contingut per al Markdown i l’HTML imprimible."""
     md = ['# Resum per a la Junta', f"Data: {d['data'][:10]}",
-          '## Classes i aules', '21 aules ordinàries − 2 de reserva = **19 disponibles**.',
+          '## Pic d’aules ordinàries',
+          'Comptem les aules ordinàries diferents ocupades durant cada hora. Sense aula assignada, estimem la demanda ordinària.', '21 aules ordinàries − 2 de reserva = **19 disponibles**.',
           '| Torn | Pitjor setmana: pic | Setmana típica: pic |', '|---|---|---|']
     for torn, nom_torn in [('mati', 'Matí'), ('tarda', 'Tarda')]:
         p, t = d['pics'][torn]['pitjor'], d['pics'][torn]['tipica']
         nom_torn += ' (estimació)' if p['estimacio'] else ' (aules ordinàries)'
         md.append(f"| {nom_torn} | {p['classes']}/19 · {p['setmana']} · {p['hora']} | {t['classes']}/19 · {t['setmana']} · {t['hora']} |")
-    md += ['## Aules per mida',
-           'Marge al pitjor moment del semestre: + sobren; − falten. Llindars acumulats: una aula gran pot acollir un grup petit. Reserva flexible de dues aules; cota optimista, no garantia d’encaix. No se sumen els marges.',
-           '| Places | Aules ordinàries | Pic matí / tarda de la mida | Matí: demanda/oferta (marge) acumulats | Tarda: demanda/oferta (marge) acumulats |', '|---|---|---|---|---|']
+    md += ['## Aules ordinàries per mida (estimació si falta aula)',
+           'Les mides són les places de l’aula assignada; sense aula, les dels alumnes (estimació). Les ocupades al pic se sumen i coincideixen amb el pic del torn. Marge al pitjor moment del semestre: + sobren; − falten. Llindars acumulats: una aula gran pot acollir un grup petit. Reserva flexible de dues aules; cota optimista, no garantia d’encaix. No se sumen els marges.',
+           '| Places | Aules ordinàries | Ocupades al pic matí / tarda | Matí: demanda/oferta (marge) acumulats | Tarda: demanda/oferta (marge) acumulats |', '|---|---|---|---|---|']
     for i, (_, _, mida) in enumerate(MIDES):
         vals = [d['pics'][t]['mides'][i] for t in ('mati', 'tarda')]
         llindar = ['Totes', '≥35', '≥51', '≥64', '≥91'][i]
-        md.append('| ' + mida + ' · ' + llindar + f" | {vals[0]['aules_categoria']} | {vals[0]['pic_categoria']} / {vals[1]['pic_categoria']} | " + ' | '.join(
+        md.append('| ' + mida + ' · ' + llindar + f" | {vals[0]['aules_categoria']} | {vals[0]['ocupades_al_pic']} / {vals[1]['ocupades_al_pic']} | " + ' | '.join(
             f"{v['demanda_acumulada']}/{v['oferta_acumulada']} ({v['marge']:+})" for v in vals) + ' |')
     md += ['## Sessions mogudes',
            'Sessions mogudes: canvi de dia o hora. Aules assignades: abans sense aula; no són canvis. Percentatge i nombre sobre les seves sessions.',
@@ -258,6 +259,11 @@ def main(argv=None):
         for nom_fitxer, text in [('junta.json', json.dumps(dades, ensure_ascii=False, indent=2)),
                                  ('junta.md', md), ('junta.html', html)]:
             (args.sortida / nom_fitxer).write_text(text, encoding='utf-8')
+        for torn in ('mati', 'tarda'):
+            resum = dades['pics'][torn]
+            etiqueta = ' (estimació)' if resum['pitjor']['estimacio'] else ''
+            print(f"{torn}{etiqueta}: pic {resum['pitjor']['classes']}/19; "
+                  f"total taula de mides {resum['total_mides']}/19")
         print(f"Resum escrit a {args.sortida}: junta.json, junta.md i junta.html")
         return 0
     except (OSError, ValueError, KeyError) as exc:
