@@ -158,3 +158,57 @@ def franja_context(semestre, setmana, tipica=None):
     etiqueta = 'setmana típica' if setmana is None else 'setmana'
     valor = setmana or tipica or 'pendent de carregar'
     return f'<div class="franja-context"><strong>{nom} semestre</strong> · <strong>{etiqueta}</strong> {escape(str(valor))}</div>'
+
+
+def estil_respostes():
+    """Regles locals: la portada i les altres parts no hereten aquests retocs."""
+    st.markdown('''<style>
+.st-key-respostes {container-type:inline-size;container-name:respostes;}
+.st-key-respostes .st-key-graella-respostes [data-testid="stHorizontalBlock"] {
+ display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch;
+}
+.st-key-respostes .st-key-graella-respostes [data-testid="stColumn"] {
+ width:100%!important;min-width:0!important;display:flex;flex-direction:column;height:100%;
+}
+.st-key-respostes .st-key-graella-respostes [data-testid="stColumn"] > [data-testid="stVerticalBlock"],
+.st-key-respostes [data-testid="stLayoutWrapper"]:has(> [class*="st-key-resposta-compacta-"]) {
+ display:flex;flex-direction:column;flex:1 1 auto;height:100%;min-width:0;
+}
+.st-key-respostes [class*="st-key-resposta-compacta-"] {
+ display:flex;flex-direction:column;flex:1 1 auto;height:100%;background:var(--targeta,#fff);border-radius:16px;
+}
+.st-key-respostes .resposta-compacta {display:flex;flex-direction:column;gap:8px;min-width:0;}
+.st-key-respostes .resposta-compacta .estat {margin:0;align-self:flex-start;}
+.st-key-respostes .resposta-compacta h2 {
+ font-size:18px!important;line-height:1.3;margin:0;min-height:2.6em;
+}
+.st-key-respostes .xifra-compacta {font-size:28px;font-weight:700;line-height:1.2;overflow-wrap:anywhere;}
+.st-key-respostes .frase-compacta {
+ margin:0;font-size:16px;line-height:1.5;color:#52514e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.st-key-respostes [data-testid="stLayoutWrapper"]:has(> [class*="st-key-enllac-resposta-"]),
+.st-key-respostes [class*="st-key-enllac-resposta-"] {margin-top:auto;flex:0 0 auto;}
+.st-key-respostes button[kind="secondary"] {color:#256abf;border:0;background:transparent;padding-left:0;}
+.st-key-respostes .recompte {font-size:16px;white-space:nowrap;margin:0;padding-top:30px;}
+@container respostes (max-width:850px) {
+ .st-key-respostes .st-key-graella-respostes [data-testid="stHorizontalBlock"] {grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+@container respostes (max-width:480px) {
+ .st-key-respostes .st-key-graella-respostes [data-testid="stHorizontalBlock"] {grid-template-columns:minmax(0,1fr);}
+ .st-key-respostes .st-key-filtres-respostes [data-testid="stHorizontalBlock"] {flex-direction:column;}
+ .st-key-respostes .st-key-filtres-respostes [data-testid="stColumn"] {width:100%!important;flex:1 1 100%!important;}
+ .st-key-respostes .recompte {padding-top:0;}
+}
+</style>''',unsafe_allow_html=True)
+
+
+def targeta_compacta(t, info=None):
+    info = contingut(t) if info is None else info
+    with st.container(border=True,height='stretch',key='resposta-compacta-'+t.id):
+        mostra_avis(t)
+        st.markdown(f'<article class="resposta-compacta" data-resposta="{escape(t.id)}">'
+            f'{estat(info)}<h2>{escape(info["titol"])}</h2>'
+            f'<div class="xifra-compacta">{escape(str(info["c"]["xifra"]))}</div>'
+            f'<p class="frase-compacta" title="{escape(info["frase"])}">{escape(info["frase"])}</p></article>',unsafe_allow_html=True)
+        with st.container(key='enllac-resposta-'+t.id):
+            obre(t)

@@ -27,6 +27,20 @@ def grau_inventat():
                'cap_per_mida':True,'estat_provisional':True}, exemples=['S90001'])
 
 
+def respostes_inventades():
+    from nivell1.troballes import Troballa
+    colors = ['verd','ambre','vermell']
+    return [Troballa(f'pregunta-{i+1}',f'Pregunta inventada {i+1}',str(i+1),
+        'Una frase inventada per comprovar les targetes compactes.', 'Mètode inventat.', '-- prova',
+        pd.DataFrame(), extra={'estat_inventat':colors[i%3]}) for i in range(11)]
+
+
+def info_inventada(t):
+    color = t.extra['estat_inventat']
+    return dict(estat=color, etiqueta={'vermell':'Cal actuar','ambre':'Pendent de validar','verd':'Hi cap'}[color],
+        titol=t.titol, frase=t.frase, c={'xifra':t.xifra})
+
+
 class TestApp(unittest.TestCase):
     def carrega(self):
         return AppTest.from_file(str(ARREL/'app.py')).run(timeout=90)
@@ -373,6 +387,58 @@ detall(t)
         self.assertEqual(fig.layout.yaxis.ticklabelstandoff,12)
         self.assertTrue(fig.data[0].texttemplate.startswith('\u2009\u2009\u2009'))
         self.assertFalse(fig.data[0].cliponaxis)
+
+    def test_respostes_ordre_per_urgencia(self):
+        from presentacio import ordena_respostes, grup_estat
+        resultat = respostes_inventades()
+        infos = {t.id:info_inventada(t) for t in resultat}
+        ordenades = ordena_respostes(resultat, infos)
+        self.assertEqual([t.id for t in ordenades],
+            ['pregunta-3','pregunta-6','pregunta-9','pregunta-2','pregunta-5',
+             'pregunta-8','pregunta-11','pregunta-1','pregunta-4','pregunta-7','pregunta-10'])
+        self.assertEqual(grup_estat(infos['pregunta-2']),'Vigilar')
+
+    def test_respostes_compactes_filtres_i_comptador(self):
+        app = AppTest.from_string("""
+import streamlit as st
+from unittest.mock import patch
+from test_app import respostes_inventades, info_inventada
+from pagines import preguntes
+st.session_state.semestre = 2
+st.session_state.setmana = None
+st.session_state.versio = ()
+with patch('pagines.preguntes.totes',return_value=respostes_inventades()), patch('pagines.preguntes.contingut',side_effect=info_inventada):
+    preguntes.mostra()
+""").run(timeout=90)
+        self.comprova(app)
+        def targetes():
+            return [m.value for m in app.markdown if '<article class="resposta-compacta"' in m.value]
+        self.assertEqual(len(targetes()),11)
+        self.assertEqual([b.key for b in app.button],
+            ['obre-pregunta-3','obre-pregunta-6','obre-pregunta-9','obre-pregunta-2',
+             'obre-pregunta-5','obre-pregunta-8','obre-pregunta-11','obre-pregunta-1',
+             'obre-pregunta-4','obre-pregunta-7','obre-pregunta-10'])
+        self.assertTrue(any('Es mostren 11 de 11' in m.value for m in app.markdown))
+        self.assertFalse(any('class="proposem"' in m.value or 'class="metre"' in m.value for m in app.markdown))
+        self.assertEqual(app.get('button_group')[0].proto.label,'Estat')
+        self.assertEqual(app.multiselect[0].label,'Respostes')
+        app.get('button_group')[0].set_value(['Cal actuar']).run(timeout=90)
+        self.comprova(app)
+        self.assertEqual(len(targetes()),3)
+        self.assertTrue(any('Es mostren 3 de 11' in m.value for m in app.markdown))
+        app.multiselect[0].set_value(['pregunta-3']).run(timeout=90)
+        self.comprova(app)
+        self.assertEqual(len(targetes()),1)
+        self.assertTrue(any('Es mostren 1 de 11' in m.value for m in app.markdown))
+        app.multiselect[0].set_value([]).run(timeout=90)
+        self.assertEqual(len(targetes()),3)
+        app.get('button_group')[0].set_value(['Vigilar']).run(timeout=90)
+        self.assertEqual(len(targetes()),4)
+        self.assertTrue(all('Pendent de validar' in h for h in targetes()))
+        app.get('button_group')[0].set_value([]).run(timeout=90)
+        self.comprova(app)
+        self.assertEqual(len(targetes()),0)
+        self.assertTrue(any('Es mostren 0 de 11' in m.value for m in app.markdown))
 
     def test_canvi_semestre(self):
         app = self.carrega()
