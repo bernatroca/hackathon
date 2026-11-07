@@ -161,3 +161,8 @@ main {padding:0;max-width:none;}
 .st-key-targetes .targeta-cor p {font-size:16px;}
 .st-key-targetes .metre {height:8px;}
 .st-key-targetes .proposem {min-height:0;padding-top:8px;font-size:14px;}
+/* ds vespre: sense barra fantasma a dalt en fer scroll. La capçalera de Streamlit no ocupa lloc
+   ni té fons; els seus botons (obrir el menú) continuen visibles i clicables. */
+header[data-testid="stHeader"] {background:transparent!important;height:0!important;min-height:0!important;box-shadow:none!important;border:0!important;}
+[data-testid="stDecoration"] {display:none!important;}
+[data-testid="stSidebarHeader"] {height:auto!important;min-height:0!important;padding:12px 16px 0!important;margin-bottom:0!important;}
