@@ -20,6 +20,11 @@ Només fa servir la biblioteca estàndard de Python.
 from __future__ import annotations
 
 import json
+import errno
+import importlib
+import subprocess
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import os
 import re
 import time
@@ -51,8 +56,22 @@ class ErrorXat(Exception):
 
 # ---------- configuració ----------
 
-def carrega_env(fitxer: Path = AQUI / ".env") -> None:
+def _arrel_principal() -> Path:
+    arrel = AQUI.parents[1]
+    try:
+        comu = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            cwd=arrel, capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        return Path(comu).parent
+    except (OSError, subprocess.CalledProcessError):
+        return arrel
+
+
+def carrega_env(fitxer: Path | None = None) -> None:
     """Llegeix un .env senzill (CLAU=valor). El que ja és a l'entorn mana."""
+    if fitxer is None:
+        fitxer = _arrel_principal() / ".env"
     if not fitxer.exists():
         return
     for linia in fitxer.read_text(encoding="utf-8").splitlines():
@@ -122,7 +141,8 @@ def valida(entrada: object) -> list[dict]:
                 if tipus == "text" and isinstance(part.get("text"), str):
                     parts.append({"type": "text", "text": part["text"]})
                     continue
-                url = (part.get("image_url") or {}).get("url") if tipus == "image_url" else None
+                imatge = part.get("image_url") if tipus == "image_url" else None
+                url = imatge.get("url") if isinstance(imatge, dict) else None
                 if isinstance(url, str) and len(url) <= MAX_IMATGE and DATA_URI.match(url) and imatges < MAX_IMATGES:
                     imatges += 1
                     parts.append({"type": "image_url", "image_url": {"url": url, "detail": "high"}})
@@ -149,7 +169,11 @@ class ErrorIA(Exception):
 
 def _trossos_api(p: dict, missatges: list[dict]) -> Iterator[tuple[str, object]]:
     """Dona ("tros", text) mentre escriu i ("fi", {tallada, model}) al final."""
-    cos = json.dumps({"model": p["model"], "messages": missatges, "stream": True}).encode()
+    cos = {"model": p["model"], "messages": missatges, "stream": True}
+    disponibles = _eines()
+    if disponibles is not None and disponibles.EINES:
+        cos.update(tools=disponibles.EINES, tool_choice="auto")
+    cos = json.dumps(cos).encode()
     peticio = urllib.request.Request(
         f"{p['url']}/chat/completions",
         data=cos,
@@ -159,16 +183,26 @@ def _trossos_api(p: dict, missatges: list[dict]) -> Iterator[tuple[str, object]]
     try:
         resposta = urllib.request.urlopen(peticio, timeout=TEMPS_MAXIM)
     except urllib.error.HTTPError as e:
+        detall = ""
         try:
-            detall = json.loads(e.read().decode("utf-8", "replace")).get("error", {})
-            detall = detall.get("message") if isinstance(detall, dict) else str(detall)
-        except Exception:
-            detall = ""
-        raise ErrorIA(f"La IA ha respost {e.code}{': ' + detall if detall else ''}.")
-    except (urllib.error.URLError, TimeoutError) as e:
-        raise ErrorIA(f"No s’ha pogut parlar amb la IA ({getattr(e, 'reason', e)}).")
+            dada = json.loads(e.read().decode("utf-8", "replace"))
+            error = dada.get("error") if isinstance(dada, dict) else None
+            missatge = error.get("message") if isinstance(error, dict) else None
+            if isinstance(missatge, str):
+                detall = _sense_claus(missatge)[:300]
+        except (OSError, ValueError):
+            pass
+        finally:
+            e.close()
+        raise ErrorIA(_sense_claus(
+            f"La IA ha respost HTTP {e.code}" + (f": {detall}" if detall else ".")
+        )) from None
+    except (OSError, urllib.error.URLError, TimeoutError) as e:
+        motiu = _sense_claus(str(getattr(e, "reason", e)))
+        raise ErrorIA(f"No s’ha pogut parlar amb la IA ({motiu}).") from None
 
     tallada, model = False, p["model"]
+    crides = {}
     with resposta:
         for cru in resposta:
             linia = cru.decode("utf-8", "replace").strip()
@@ -182,19 +216,32 @@ def _trossos_api(p: dict, missatges: list[dict]) -> Iterator[tuple[str, object]]
             except ValueError:
                 continue
             if e.get("error"):
-                raise ErrorIA(str(e["error"].get("message") if isinstance(e["error"], dict) else e["error"]))
+                raise ErrorIA("La IA ha retornat un error durant la resposta.")
             model = e.get("model") or model
             eleccio = (e.get("choices") or [{}])[0]
-            tros = (eleccio.get("delta") or {}).get("content")
+            delta = eleccio.get("delta") or {}
+            for fragment in delta.get("tool_calls") or []:
+                index = fragment.get("index", 0)
+                crida = crides.setdefault(index, {"id": "", "type": "function",
+                                                   "function": {"name": "", "arguments": ""}})
+                crida["id"] += fragment.get("id") or ""
+                for camp in ("name", "arguments"):
+                    crida["function"][camp] += (fragment.get("function") or {}).get(camp) or ""
+            tros = delta.get("content")
             if tros:
                 yield "tros", tros
             if eleccio.get("finish_reason") == "length":
                 tallada = True
+    if crides:
+        yield "tools", [crides[i] for i in sorted(crides)]
     yield "fi", {"tallada": tallada, "model": model}
 
 
 def _trossos_prova(missatges: list[dict]) -> Iterator[tuple[str, object]]:
     """IA_PROVA=1: una resposta inventada, per provar el xat sense clau ni cost."""
+    # Eina deliberadament falsa: el mode de prova no importa ni executa eines reals.
+    resultat = _executa_prova("eco_prova", {"missatges": len(missatges) - 1})
+    yield "eina", "eco_prova"
     ultima = missatges[-1]["content"]
     text = ultima if isinstance(ultima, str) else " ".join(p["text"] for p in ultima if p["type"] == "text")
     captures = 0 if isinstance(ultima, str) else sum(p["type"] == "image_url" for p in ultima)
@@ -205,7 +252,7 @@ def _trossos_prova(missatges: list[dict]) -> Iterator[tuple[str, object]]:
         f"- Has preguntat: «{pregunta}»\n"
         f"- Captures rebudes: {captures}\n"
         f"- Pantalla que veig: {veu.group(1) if veu else 'cap'}\n"
-        f"- Missatges a la conversa: {len(missatges) - 1}\n\n"
+        f"- Missatges a la conversa: {resultat['resultat']['missatges']}\n\n"
         "Quan posis la clau de la IA al `.env`, aquí sortirà la resposta de veritat."
     )
     for paraula in re.findall(r"\S+\s*", resposta):
@@ -214,12 +261,88 @@ def _trossos_prova(missatges: list[dict]) -> Iterator[tuple[str, object]]:
     yield "fi", {"tallada": False, "model": "prova"}
 
 
+def _eines():
+    """Importació tardana: el servidor també funciona abans que arribin les eines."""
+    try:
+        return importlib.import_module(f"{__package__}.eines")
+    except ModuleNotFoundError as exc:
+        if exc.name == f"{__package__}.eines":
+            return None
+        raise
+
+
+def _executa_prova(nom, args):
+    return {"ok": True, "resultat": args, "id_sessio": [], "consulta": nom}
+
+
+def _executa(crida):
+    try:
+        funcio = crida["function"]
+        args = json.loads(funcio["arguments"])
+        if not isinstance(args, dict):
+            raise ValueError()
+    except (KeyError, TypeError, ValueError):
+        return {"ok": False, "error": "Els arguments de l'eina no són un objecte JSON vàlid."}
+    disponibles = _eines()
+    if disponibles is None:
+        return {"ok": False, "error": "Les eines encara no estan disponibles."}
+    try:
+        return disponibles.executa(funcio["name"], args)
+    except Exception:
+        return {"ok": False, "error": "No s’ha pogut executar l’eina."}
+
+
 def _trossos(p: dict, missatges: list[dict]):
-    return _trossos_prova(missatges) if p["nom"] == "prova" else _trossos_api(p, missatges)
+    if p["nom"] == "prova":
+        yield from _trossos_prova(missatges)
+        return
+    conversa = list(missatges)
+    for _ in range(6):
+        crides, contingut = [], []
+        final = {"tallada": False, "model": p["model"]}
+        for tipus, valor in _trossos_api(p, conversa):
+            if tipus == "tools":
+                crides.extend(valor)
+            elif tipus == "tros":
+                contingut.append(valor)
+                yield tipus, valor
+            elif tipus == "fi":
+                final = valor
+        if not crides:
+            yield "fi", final
+            return
+        conversa.append({"role": "assistant", "content": "".join(contingut) or None,
+                         "tool_calls": crides})
+        for crida in crides:
+            yield "eina", crida["function"]["name"]
+            resultat = _executa(crida)
+            conversa.append({"role": "tool", "tool_call_id": crida["id"],
+                             "content": "<dades>\n" + json.dumps(resultat, ensure_ascii=False)
+                             + "\n</dades>"})
+    yield "tros", "No he pogut acabar la consulta en sis voltes. Pots concretar la pregunta?"
+    yield "fi", {"tallada": False, "model": p["model"]}
+
+
+def _sense_claus(text):
+    for prefix in ("IA", "IA_RESERVA"):
+        clau = os.environ.get(f"{prefix}_CLAU")
+        if clau:
+            text = text.replace(clau, "[clau oculta]")
+    return text
+
+
+def _neteja_secrets(valor):
+    if isinstance(valor, str):
+        return _sense_claus(valor)
+    if isinstance(valor, dict):
+        return {k: _neteja_secrets(v) for k, v in valor.items()}
+    if isinstance(valor, list):
+        return [_neteja_secrets(v) for v in valor]
+    return valor
 
 
 def _sse(dades: dict) -> str:
-    return f"data: {json.dumps(dades, ensure_ascii=False)}\n\n"
+    return f"data: {json.dumps(_neteja_secrets(dades), ensure_ascii=False)}\n\n"
 
 
 def flux(missatges: list[dict]) -> Iterator[str]:
@@ -228,16 +351,29 @@ def flux(missatges: list[dict]) -> Iterator[str]:
     El primer `next()` ja parla amb la IA: si falla abans de començar llença ErrorXat(502),
     i l'adaptador ho torna com a JSON. Després, un error va com a {"error"} dins el flux.
     """
-    errors = []
+    trossos = _amb_reserva(missatges)
+    try:
+        primer = next(trossos)
+    except (ErrorIA, StopIteration) as exc:
+        raise ErrorXat(502, str(exc) or "Cap IA configurada.") from None
+    return _segueix(primer, trossos)
+
+
+def _amb_reserva(missatges):
+    error = "Cap IA configurada."
     for p in proveidors():
-        trossos = _trossos(p, missatges)
+        escrit = False
         try:
-            primer = next(trossos)
-        except (ErrorIA, StopIteration) as e:
-            errors.append(str(e) or "La IA no ha tornat res.")
-            continue  # la de reserva
-        return _segueix(primer, trossos)
-    raise ErrorXat(502, errors[-1] if errors else "Cap IA configurada.")
+            for tipus, valor in _trossos(p, missatges):
+                if tipus == "tros" and valor:
+                    escrit = True
+                yield tipus, valor
+            return
+        except ErrorIA as exc:
+            error = _sense_claus(str(exc)) or "No s’ha pogut obtenir una resposta de la IA."
+            if escrit:
+                raise ErrorIA(error) from None
+    raise ErrorIA(error)
 
 
 def _segueix(primer, trossos) -> Iterator[str]:
@@ -247,7 +383,9 @@ def _segueix(primer, trossos) -> Iterator[str]:
             if tipus == "tros":
                 escrit = True
                 yield _sse({"tros": valor})
-            else:
+            elif tipus == "eina":
+                yield _sse({"eina": valor})
+            elif tipus == "fi":
                 if not escrit:
                     yield _sse({"error": "La IA no ha tornat cap resposta."})
                     return
@@ -259,3 +397,118 @@ def _segueix(primer, trossos) -> Iterator[str]:
 def _amb_primer(primer, resta):
     yield primer
     yield from resta
+
+
+ORIGENS = re.compile(r"^http://(localhost|127\.0\.0\.1)(:\d{1,5})?$")
+
+
+class Handler(BaseHTTPRequestHandler):
+    """Adaptador HTTP; no registra ni el cos ni errors dels proveïdors."""
+
+    def log_message(self, format, *args):
+        pass
+
+    def _capcaleres(self, estat, tipus):
+        self.send_response(estat)
+        self.send_header("Content-Type", tipus)
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Vary", "Origin")
+        origen = self.headers.get("Origin")
+        if origen is not None and ORIGENS.fullmatch(origen):
+            self.send_header("Access-Control-Allow-Origin", origen)
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+
+    def _json(self, estat, dada):
+        self._capcaleres(estat, "application/json; charset=utf-8")
+        self.wfile.write(json.dumps(_neteja_secrets(dada), ensure_ascii=False).encode())
+
+    def _accepta(self):
+        if self.path != "/api/xat":
+            self._json(404, {"error": "Ruta desconeguda."})
+            return False
+        origen = self.headers.get("Origin")
+        if origen is not None and not ORIGENS.fullmatch(origen):
+            self._json(403, {"error": "Origen no permès."})
+            return False
+        return True
+
+    def do_OPTIONS(self):
+        if self._accepta():
+            self._capcaleres(204, "text/plain")
+
+    def do_GET(self):
+        if self._accepta():
+            self._json(200, salut())
+
+    def do_POST(self):
+        if not self._accepta():
+            return
+        try:
+            try:
+                longitud = int(self.headers.get("Content-Length", ""))
+            except ValueError:
+                raise ErrorXat(400, "Falta una longitud vàlida de la petició.")
+            if longitud < 0:
+                raise ErrorXat(400, "La longitud no és vàlida.")
+            if longitud > MAX_COS:
+                raise ErrorXat(413, "La conversa és massa llarga. Comença’n una de nova.")
+            if self.headers.get("Transfer-Encoding"):
+                raise ErrorXat(400, "El format de la petició no és vàlid.")
+            if falta():
+                raise ErrorXat(503, "La IA encara no està a punt.")
+            try:
+                entrada = json.loads(self.rfile.read(longitud))
+            except (ValueError, UnicodeError):
+                raise ErrorXat(400, "La petició no és JSON.")
+            esdeveniments = flux(valida(entrada))
+        except ErrorXat as exc:
+            self._json(exc.estat, {"error": exc.missatge})
+            return
+        self._capcaleres(200, "text/event-stream; charset=utf-8")
+        try:
+            for esdeveniment in esdeveniments:
+                self.wfile.write(esdeveniment.encode())
+                self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
+
+_servidor = None
+_url_reutilitzada = None
+_fil = None
+_pany = threading.Lock()
+
+
+def arrenca(port: int = 8502) -> str:
+    """Arrenca una sola instància local per procés, també amb crides concurrents."""
+    global _servidor, _fil, _url_reutilitzada
+    with _pany:
+        if _url_reutilitzada is not None:
+            return _url_reutilitzada
+        if _servidor is None:
+            carrega_env()
+            try:
+                servidor = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+            except OSError as exc:
+                if exc.errno != errno.EADDRINUSE:
+                    raise
+                url = f"http://127.0.0.1:{port}/api/xat"
+                try:
+                    with urllib.request.urlopen(url, timeout=2) as resposta:
+                        dada = json.load(resposta)
+                    if not isinstance(dada, dict) or dada.get("ok") is not True:
+                        raise ValueError("No és el servidor del xat")
+                except (OSError, ValueError):
+                    raise RuntimeError(
+                        f"El port {port} està ocupat i no respon com un servidor del xat. "
+                        "Allibera el port o tria’n un altre."
+                    ) from None
+                _url_reutilitzada = url
+                return url
+            fil = threading.Thread(target=servidor.serve_forever, daemon=True)
+            fil.start()
+            _servidor, _fil = servidor, fil
+        return f"http://127.0.0.1:{_servidor.server_address[1]}/api/xat"
