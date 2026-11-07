@@ -25,7 +25,7 @@ NOMS = {
     'linia':'Grup de teoria', 'subgrup':'Grup de pràctiques', 'aules_diferents':'Aules diferents',
     'canvis_aula':'Canvis d’aula', 'fora_passadis':'Canvis de passadís', 'passos_solapats':'Classes alhora',
     'hores_separacio':'Hores d’aula per separar classes (h)', 'docent':'Docent',
-    'a_cavall':'Docent amb cursos de diferents torns', 'dies_mati_tarda':'Dies amb matí i tarda', 'dies':'Dies',
+    'docents_recompte':'Docents (recompte)', 'a_cavall':'Docent amb cursos de diferents torns', 'dies_mati_tarda':'Dies amb matí i tarda', 'dies':'Dies',
     'seminaris':'Inclou seminaris', 'oferta_hores':'Hores disponibles (h)', 'demanda_hores':'Hores necessàries (h)',
     'nou_hores':'Hores del grau nou (h)', 'marge_hores':'Hores lliures abans del grau nou (h)',
     'saldo_hores':'Hores lliures després del grau nou (h)', 'variant':'Escenari',
@@ -33,7 +33,32 @@ NOMS = {
 }
 
 
+# Dades que no són necessàries per interpretar cap xifra de la part 1.
+# Els exemples id_sessio es conserven només al desplegable informàtic.
+COLUMNES_OMESES = frozenset({
+    'docent', 'docents', 'id_docent', 'docent_id', 'codi', 'codi_assignatura',
+    'assignatura', 'nom_assignatura', 'id_sessio', 'id_compartida', 'activitat_id',
+    'unitat', 'exemples',
+})
+
+
+def filtra_columnes(df):
+    return df.drop(columns=[c for c in df.columns if str(c).lower() in COLUMNES_OMESES]).copy()
+
+
+def resum_docents(df):
+    """Una fila per docent al contracte; no s'infereix cap titulació absent."""
+    if 'dies_mati_tarda' not in df:
+        return pd.DataFrame({'docents_recompte':[len(df)]})
+    return df.groupby('dies_mati_tarda',dropna=False).size().reset_index(name='docents_recompte')
+
+
+def taula_presentacio(t):
+    return resum_docents(t.taula) if t.id == 'docents-cavall' else filtra_columnes(t.taula)
+
+
 def mostra_taula(df):
+    df = filtra_columnes(df)
     dades = df.rename(columns={c:NOMS.get(c,str(c).replace('_',' ').capitalize()) for c in df.columns}).copy()
     numeriques = list(dades.select_dtypes(include='number').columns)
     estil = dades.style.format({c:numero for c in numeriques}, na_rep='—')
@@ -47,7 +72,9 @@ def mostra_taula(df):
 def dades_troballa(t):
     with st.expander('Veure les dades', expanded=False):
         st.caption('Totes les files de la setmana indicada. Les unitats figuren als noms de columna; pots desplaçar-te per la taula.')
-        mostra_taula(t.taula)
+        mostra_taula(taula_presentacio(t))
+        if t.id == 'docents-cavall':
+            st.caption('Recompte per nombre de dies amb matí i tarda; el resultat no inclou titulació i curs.')
         if t.id == 'hi-cap-mati':
             extra = t.extra or {}
             for camp,nom in [('torns','Balanç a la setmana més plena de cada torn'),

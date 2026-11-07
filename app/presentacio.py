@@ -100,7 +100,7 @@ def context(t, altres=None):
     altres = altres or {}
     extra = t.extra or {}
     c = dict(xifra=t.xifra, places=numero(PLACES_GRAU_NOU), disponibles=numero(AULES_DISPONIBLES),
-             hores_noves='—', hores_lliures='—', proporcio='una part de les', sense_aula='—',
+             hores_noves='—', hores_lliures='—', marge_semestre='—', etiqueta_setmana='a la setmana més plena', proporcio='una part de les', sense_aula='—',
              dia='dia no indicat', pic='—', ocupacio='—')
     c['percent'] = None
     if t.id == 'hi-cap-mati':
@@ -139,6 +139,9 @@ def context(t, altres=None):
             c['percent'] = float(n) / total * 100
     elif t.id == 'marge-grau-nou':
         df = t.taula
+        total_semestre = extra.get('marge_h_semestre', valor(t.xifra))
+        if total_semestre is not None:
+            c['marge_semestre'] = numero(total_semestre)
         if {'llindar', 'seminaris', 'nou_hores', 'marge_hores'}.issubset(df.columns):
             base = df[(df.llindar == 0) & ~df.seminaris]
             if not base.empty:
@@ -147,19 +150,29 @@ def context(t, altres=None):
                          xifra=f'{numero(r.nou_hores)} h', marge_n=float(r.marge_hores), hores_noves_n=float(r.nou_hores))
                 if r.marge_hores > 0:
                     c['percent'] = r.nou_hores / r.marge_hores * 100
+        necessitat = extra.get('demanda_h_setmana', c.get('hores_noves_n'))
+        lliures = extra.get('lliures_h_setmana', c.get('marge_n'))
+        if necessitat is not None:
+            c.update(hores_noves=numero(necessitat), hores_noves_n=float(necessitat), xifra=f'{numero(necessitat)} h')
+        if lliures is not None:
+            c.update(hores_lliures=numero(lliures), marge_n=float(lliures))
+        if necessitat is not None and lliures is not None:
+            c['percent'] = float(necessitat)/float(lliures)*100 if lliures > 0 else None
         c['falla'] = not extra.get('cap_per_mida', False)
     return c
 
 
-def text(t, altres=None):
+def text(t, altres=None, *, setmana_triada=None):
     c = context(t, altres)
+    if setmana_triada is not None:
+        c['etiqueta_setmana'] = f'a la setmana seleccionada ({setmana_triada})'
     plantilla = TEXTOS.get(t.id, dict(estat='ambre', etiqueta='Vigilar', titol=t.titol,
         frase='Resultat disponible: {xifra}.', proposem='Revisar el resultat amb Gestió Acadèmica.'))
     resultat = {k: v.format_map(c) for k, v in plantilla.items()}
     if c.get('falla'):
         resultat.update(estat='vermell', etiqueta='Cal actuar')
         if t.id == 'marge-grau-nou':
-            resultat['frase'] = f"Necessita {c['hores_noves']} h d’aula a la setmana i en queden {c['hores_lliures']} h lliures. Algunes mides d’aula no cobreixen la demanda."
+            resultat['frase'] += " Algunes mides d’aula no cobreixen la demanda."
     if t.id == 'hi-cap-mati':
         resultat.update(etiqueta='Cal actuar' if c['falla'] else 'Pendent de validar',
             estat='vermell' if c['falla'] else 'ambre',

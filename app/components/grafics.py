@@ -7,7 +7,7 @@ from components.format import numero
 from servei import AULES_DISPONIBLES, AULES_RESERVA, inventari
 from presentacio import DIES, context, valor
 from textos import PROBLEMES
-from components.taules import dades_troballa
+from components.taules import dades_troballa, resum_docents
 
 
 def quadrets(t):
@@ -23,7 +23,7 @@ def quadrets(t):
 
 
 def figura(fig, clau):
-    fig.update_layout(template='plotly_white', height=fig.layout.height or 350, margin=dict(l=12,r=65,t=35,b=25),
+    fig.update_layout(template='plotly_white', height=fig.layout.height or 350, margin=dict(l=12,r=150 if any(getattr(t, 'orientation', None) == 'h' for t in fig.data) else 65,t=35,b=25),
         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
         font=dict(family='-apple-system, Segoe UI, system-ui, sans-serif',color='#0b0b0b',size=15),
         separators=',.', showlegend=False, dragmode=False)
@@ -41,10 +41,10 @@ def barres(labels, values, clau, unitat=''):
         return
     fig = go.Figure(go.Bar(x=df.valor,y=df.nom,orientation='h',width=.6,marker=dict(color='#2a78d6',cornerradius=4),
         text=[f'{numero(v)}' + (' cas' if v == 1 else ' casos') if unitat == ' casos' else f'{numero(v)}{unitat}' for v in df.valor],textposition='outside',cliponaxis=False,
-        hovertemplate='%{y}: %{text}<extra></extra>'))
+        texttemplate='\u2009\u2009\u2009%{text}', hovertemplate='%{y}: %{text}<extra></extra>'))
     fig.update_layout(height=60+36*len(df))
     fig.update_xaxes(visible=False)
-    fig.update_yaxes(autorange='reversed',ticks='')
+    fig.update_yaxes(autorange='reversed',ticks='',ticklabelstandoff=12)
     figura(fig,clau)
     if retallat:
         st.caption('Es mostren els 8 casos amb el valor més alt.')
@@ -114,6 +114,15 @@ def _grafics(t, clau='detall', altres=None):
         dies = df.groupby('dia',sort=False).demanda.max()
         barres([DIES.get(d,d) for d in dies.index],dies.values,clau,' aules')
         st.caption('Demanda màxima d’aules de cada dia de la setmana seleccionada.')
+        return
+    if t.id == 'docents-cavall':
+        resum = resum_docents(df)
+        if 'dies_mati_tarda' in resum:
+            noms = resum.dies_mati_tarda.map(lambda n: f'{numero(n)} dia' if n == 1 else f'{numero(n)} dies')
+        else:
+            noms = ['Total de docents']
+        barres(noms,resum.docents_recompte,clau,' docents')
+        st.caption('Recompte de docents pel nombre de dies amb matí i tarda de la setmana indicada.')
         return
     etiquetes = {'fora-torn':('cohort','sessions',' classes'), 'aforament':('aula','exces',' alumnes de més'),
         'hores-mortes':('cohort','hores',' h'), 'canvis-aula':('cohort','fora_passadis',' canvis'),
