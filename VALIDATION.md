@@ -51,6 +51,29 @@
 3. [cap @ /] Torna a posar el 2n semestre → tornen a sortir 2.008 i 74 %.
 4. [cap @ /] Mira el menú → hi ha «Part 2 · Proposta d'horari» sense «aviat», i «Imprevistos» i «Pregunta-ho» surten marcats com «aviat». (reprova)
 
+## Canvis visuals
+
+1. [cap @ /] Mira la pàgina sencera → fons clar, menú blanc a l'esquerra i cap barra fosca de Streamlit; colors i tipografia com a la maqueta B1.
+2. [cap @ /] Mira sota el títol «Com estem avui» → hi ha una franja visible amb el semestre i la setmana que es mostren (p. ex. «2n semestre · setmana típica 2027-W05»).
+3. [cap @ /] Mira l'etiqueta d'estat del bloc gran → és un cercle amb icona (✓, ! o ✕) i text al costat, igual que a la maqueta B1, no un caràcter solt.
+4. [cap @ /] Llegeix el bloc gran → diu «Hi ha marge d'hores» amb el matí i la tarda en % enters, i «el més ajustat: el matí en conjunt» (no «aules de més de 0 places»).
+5. [cap @ /] Mira els quadrets → 15 ocupats, 4 lliures i 2 de reserva amb vora discontínua, i la llegenda no parteix cap paraula.
+6. [cap @ /] Fes la finestra de 1024 px d'ample amb el menú obert → el bloc gran no desborda ni talla els quadrets per la dreta.
+7. [cap @ /] Mira les 4 targetes → les de cada fila fan la mateixa alçada i «Proposem» i «Com ho sabem →» queden a la mateixa línia.
+8. [cap @ /] Mira els enllaços «Com ho sabem →» → són d'un blau fosc que es llegeix bé sobre blanc.
+9. [cap @ /?resposta=fora-torn] Obre aquesta adreça → s'obre directament el detall «Classes al torn equivocat».
+10. [cap @ /?resposta=fora-torn] Intenta fer zoom amb la roda o arrossegar el gràfic → no es mou ni s'amplia; en passar el ratolí per sobre d'una barra surt el valor.
+11. [cap @ /?resposta=fora-torn] Mira les barres → són primes (no blocs gruixuts) i cada una porta el número escrit al final.
+12. [cap @ /?resposta=fora-torn] Obre «Veure les dades» sota el gràfic → surt una taula amb noms de columna planers i números alineats a la dreta.
+13. [cap @ /?resposta=fora-torn] Llegeix «Com ho hem calculat» → frases planeres sense «cohort», «PLAB» ni «llindar»; el SQL és dins «Detalls informàtics».
+14. [cap @ /?resposta=fora-torn] Clica «← Torna a les respostes» → tornes a la portada i l'adreça perd el `?resposta=`.
+15. [cap @ /?resposta=hi-cap-mati] Mira el gràfic → 5 barres (dilluns a divendres) amb el número a sobre i una línia discontínua vermella a 19.
+16. [cap @ /respostes] Mira la graella → 2 columnes, targetes de la mateixa alçada i botons alineats.
+17. [cap @ /respostes] Obre «Com fem servir les aules?» → el plànol té el % escrit dins de cada aula i el text es llegeix bé tant a les clares com a les fosques.
+18. [cap @ /respostes] Prem Tab fins arribar a una aula del plànol → l'aula queda marcada amb un contorn blau.
+19. [cap @ /] Canvia el semestre a «Opcions» → mentre calcula, el contingut es veu atenuat (no desapareix) i surt «Calculant…».
+20. [cap @ /] Fes la finestra de mòbil (390 px) → una sola columna, sense espais buits grans sota «Proposem».
+
 ## Part 2 · Proposta d'horari
 
 1. [cap @ /part2] Obre «Part 2 · Proposta d'horari» al menú → surt la pàgina amb el selector «Proposta», el de «Setmana de la graella» i cap error vermell.
