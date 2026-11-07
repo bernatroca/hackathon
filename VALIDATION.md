@@ -88,3 +88,13 @@
 10. [cap @ /part2] Clica «Descarrega l'horari de l'aula per al jurat» → es baixa un fitxer HTML que s'obre sol al navegador amb la mateixa graella.
 11. [cap @ /part2] Canvia «Setmana de la graella» a la setmana del 15 de març → les dues graelles es tornen a dibuixar sense error.
 12. [cap @ /part2] Llegeix tots els textos de la pàgina → no hi surten sigles tècniques sense explicar, com «R1-TORN», «PAUL» o «TE».
+
+## Resum per a la Junta
+
+1. [cap @ /junta] Obre «Resum per a la Junta» al menú, just sota «Part 2 · Proposta d'horari» → surt la pàgina amb el selector de proposta i cap error vermell.
+2. [cap @ /junta] Mira el selector sense tocar-lo → hi ha la «5.1» triada i l'avís «El resum definitiu sortirà amb la proposta del 5.2».
+3. [cap @ /junta] Llegeix «Pic de classes alhora» amb la 5.1 → el matí i la tarda no passen de 19 aules, perquè la 5.1 és vàlida; si surt «Falten aules», anota-ho (correcció en marxa).
+4. [cap @ /junta] Llegeix «Sessions mogudes per titulació i curs» amb la 5.1 → totes surten a 0 % de canvis de dia o d'hora, perquè la 5.1 no mou cap hora; si en surten al 100 %, anota-ho (correcció en marxa).
+5. [cap @ /junta] Mira com s'ordenen les titulacions → en percentatge de les seves sessions, amb el nombre al costat, mai només amb el nombre.
+6. [cap @ /junta] Clica el botó de descarregar el resum → es baixa un HTML d'una pàgina que, imprès en PDF des del navegador, cap en un A4.
+7. [cap @ /junta] Llegeix tota la pàgina com si fossis de la Junta → no hi surten sigles tècniques sense explicar.

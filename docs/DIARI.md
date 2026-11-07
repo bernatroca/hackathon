@@ -199,3 +199,8 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 ### [ds 18:24] IA · n2-dades-2 unit: resum per a la Junta
 - `python -m nivell2.junta <proposta>` escriu junta.json, junta.md i junta.html (una pàgina A4 per imprimir) en uns 2 s. Té 8 proves verdes, inclosa la xifra de l'enunciat del pic del matí. Els resums es queden a resultats/, fora de git.
 - Llançat n2-frontend-3: la pàgina «Resum per a la Junta» a l'app. Hem avisat la sessió Part 1 que toca la navegació d'app/app.py.
+
+### [ds 18:30] PROBLEMA · Dues xifres de la Junta confonien
+- n2-frontend-3 ja ha posat la pàgina «Resum per a la Junta» a l'app (33 proves verdes, comprovada al navegador).
+- En provar-la amb el 5.1 hem vist dos errors. Comptava com a canvi posar aula a una classe que no en tenia (i sortien titulacions amb el 100 % «mogudes»). I el pic comptava totes les classes, no només les aules ordinàries (deia «falten aules» amb una proposta vàlida).
+- Com ho resolem: n2-dades-3 les corregeix amb el criteri del verificador (canvi d'aula només si ja en tenia, i pic d'aules ordinàries per franja d'una hora).
