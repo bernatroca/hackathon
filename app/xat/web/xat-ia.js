@@ -154,7 +154,7 @@
 
     try {
       const r = await pregunta_(perAlServidor());
-      estat.missatges = [...estat.missatges, { role: 'assistant', content: r.text }];
+      estat.missatges = [...estat.missatges, { role: 'assistant', content: r.text, consultes: r.consultes }];
       if (r.tallada) estat.error = 'La resposta s’ha tallat per llarga.';
     } catch (e) {
       /* La pregunta que ha fallat no es queda: el text i les captures tornen a la caixa. */
@@ -194,6 +194,7 @@
     const lector = cos.getReader();
     const descodifica = new TextDecoder();
     let text = '';
+    let consultes = [];
     let pendent = '';
     let darrer = 0;
     for (;;) {
@@ -211,6 +212,7 @@
           continue;
         }
         if (e.error) throw new Error(e.error);
+        if (Array.isArray(e.consultes)) consultes = e.consultes;
         if (typeof e.tros === 'string') {
           text += e.tros;
           /* Com a molt vint cops per segon: pintar-ho a cada tros no cal. */
@@ -221,11 +223,11 @@
             pintaConversa();
           }
         }
-        if (e.fi) return { text, tallada: !!e.tallada, model: e.model };
+        if (e.fi) return { text, consultes, tallada: !!e.tallada, model: e.model };
       }
       if (done) break;
     }
-    if (text) return { text, tallada: true };
+    if (text) return { text, consultes, tallada: true };
     throw new Error('La resposta s’ha tallat abans de començar.');
   }
 
@@ -396,7 +398,13 @@
       const fa = e.target.closest('[data-fa]');
       if (fa) {
         const accio = fa.dataset.fa;
-        if (accio === 'tanca') tanca();
+        if (accio === 'copia-consulta') {
+          const consulta = fa.closest('.xatia-consulta').querySelector('.xatia-consulta-sql').textContent;
+          if (navigator.clipboard) navigator.clipboard.writeText(consulta).then(() => {
+            fa.textContent = 'Copiat';
+          }).catch(() => { fa.textContent = 'Selecciona el codi per copiar'; });
+          else fa.textContent = 'Selecciona el codi per copiar';
+        } else if (accio === 'tanca') tanca();
         else if (accio === 'gran') posaGran(!estat.gran);
         else if (accio === 'nova') conversaNova();
         else if (accio === 'captura') el.fitxer.click();
@@ -485,6 +493,26 @@
 
   /* ---------- pintar ---------- */
 
+  function htmlConsultes(consultes) {
+    if (!Array.isArray(consultes) || !consultes.length) return '';
+    const files = consultes.map((c) => {
+      if (!c || typeof c !== 'object') return '';
+      const args = c.args && typeof c.args === 'object' && !Array.isArray(c.args) ? c.args : {};
+      const argumentsCurts = Object.entries(args).map(([clau, valor]) => {
+        const text = typeof valor === 'string' ? valor : JSON.stringify(valor);
+        const curt = String(text).length > 80 ? String(text).slice(0, 77) + '…' : String(text);
+        return escapa(clau) + '=' + escapa(curt);
+      }).join(', ');
+      const ids = Array.isArray(c.id_sessio) ? c.id_sessio.slice(0, 10) : [];
+      const mes = Number.isInteger(c.total_id) ? Math.max(0, c.total_id - ids.length) : 0;
+      const consulta = c.consulta ? `<div class="xatia-consulta-codi"><code class="xatia-consulta-sql">${escapa(String(c.consulta))}</code><button type="button" data-fa="copia-consulta" aria-label="Copia la consulta">Copia</button></div>` : '';
+      const identificadors = ids.length || mes ? `<div class="xatia-consulta-ids">Sessions: ${ids.map((id) => `<code>${escapa(String(id))}</code>`).join(', ')}${mes ? ' · i ' + escapa(String(mes)) + ' més' : ''}</div>` : '';
+      const error = c.ok === false ? `<div class="xatia-consulta-error">error: ${escapa(String(c.error || 'No s’ha pogut comprovar.'))}</div>` : '';
+      return `<div class="xatia-consulta"><div><strong>${escapa(String(c.eina || 'Consulta'))}</strong>${argumentsCurts ? ' · ' + argumentsCurts : ''}</div>${consulta}${identificadors}${error}</div>`;
+    }).join('');
+    return `<details class="xatia-consultes" open><summary>Com es comprova · ${escapa(String(consultes.length))} consultes</summary>${files}</details>`;
+  }
+
   function htmlMissatge(m) {
     if (m.role === 'user') {
       const captures = m.imatges && m.imatges.length
@@ -492,7 +520,7 @@
         : m.fotos ? `<span class="xatia-nota">${m.fotos === 1 ? 'amb una captura' : `amb ${m.fotos} captures`}</span>` : '';
       return `<div class="xatia-missatge xatia-missatge--jo">${captures}${escapa(m.content)}</div>`;
     }
-    return `<div class="xatia-missatge xatia-missatge--ia">${markdown(m.content)}</div>`;
+    return `<div class="xatia-missatge xatia-missatge--ia">${markdown(m.content)}${htmlConsultes(m.consultes)}</div>`;
   }
 
   function pintaConversa() {
