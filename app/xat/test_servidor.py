@@ -467,6 +467,52 @@ def test_consultes_ordre_i_separacio(monkeypatch, api):
     assert 'consultes' not in json.dumps(historials)
 
 
+@pytest.mark.parametrize('intents, esperats', [
+    # Els errors desapareixen encara que siguin posteriors a l'èxit.
+    ([('consulta', False, {'mal': 1}), ('consulta', True, {'be': 1}),
+      ('consulta', False, {'mal': 2})], [1]),
+    # Cada eina sense èxits conserva només l'últim error, en ordre global.
+    ([('consulta', False, {'mal': 1}), ('altra', False, {}),
+      ('consulta', False, {'mal': 2})], [1, 2]),
+    # Un èxit d'una eina no amaga els errors d'una altra.
+    ([('consulta', False, {}), ('altra', True, {})], [0, 1]),
+    # L'ordre de les claus JSON, també niades, no diferencia arguments.
+    ([('consulta', True, {'a': {'x': 1, 'y': 2}, 'b': [1, 2]}),
+      ('consulta', True, {'b': [1, 2], 'a': {'y': 2, 'x': 1}}),
+      ('consulta', True, {'a': {'x': 1, 'y': 2}, 'b': [2, 1]}),
+      ('altra', True, {'a': {'x': 1, 'y': 2}, 'b': [1, 2]})], [0, 2, 3]),
+])
+def test_consultes_filtrades_nomes_al_navegador(monkeypatch, intents, esperats):
+    historials = []
+    resultats = [{'ok': ok, 'consulta': f'consulta {i}', 'id_sessio': [],
+                  **({} if ok else {'error': f'error {i}'})}
+                 for i, (_, ok, _) in enumerate(intents)]
+
+    def ia(p, missatges):
+        historials.append(list(missatges))
+        i = len(historials) - 1
+        if i < len(intents):
+            nom, _, args = intents[i]
+            yield 'tools', [crida(nom, json.dumps(args), f'c{i}')]
+        else:
+            yield 'tros', 'Resposta inventada'
+        yield 'fi', {'tallada': False, 'model': 'fals'}
+
+    executa = Mock(side_effect=resultats)
+    monkeypatch.setattr(s, '_trossos_api', ia)
+    monkeypatch.setattr(s, '_eines', lambda: SimpleNamespace(executa=executa))
+    resultat = events()
+    assert resultat[-1]['fi']
+    assert resultat[-2] == {'consultes': [
+        s._resum_consulta(intents[i][0], intents[i][2], resultats[i]) for i in esperats]}
+    assert sum('consultes' in e for e in resultat) == 1
+    assert sum('eina' in e for e in resultat) == len(intents)
+    assert executa.call_count == len(intents)
+    tools = [m for m in historials[-1] if m['role'] == 'tool']
+    assert [m['tool_call_id'] for m in tools] == [f'c{i}' for i in range(len(intents))]
+    assert [json.loads(m['content'][8:-9]) for m in tools] == resultats
+
+
 def test_consultes_ids_niats_i_limit():
     resultat = {'ok': True, 'id_sessio': [], 'resultat': {'horaris': [
         {'files': [{'id_sessio': 'S1'}, {'id_sessio': ['S2', 'S1']}]},
