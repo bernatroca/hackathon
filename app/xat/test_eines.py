@@ -319,3 +319,82 @@ def test_normalitza_nomes_literals_exactes():
 def test_descripcio_sql_format_dia_hora():
     desc = next(d['function']['description'] for d in e.EINES if d['function']['name'] == 'consulta_sql')
     assert "dia: L, M, X, J o V (X = dimecres); h_ini 'HH:MM'; ini_min = minuts des de mitjanit" in desc
+
+
+@pytest.mark.parametrize('setmana', [None, '', ' ', 'típica', 'tipica', 'típica del semestre', 'typical', 'normal', 'TÍPICA'])
+def test_setmana_tipica_formats(paquet, setmana):
+    calls = [('horari_grup', {'grup': '81'}),
+             ('ocupacio_aula', {'aula': 'Q9/0001'}),
+             ('aules_lliures', {'dia': 'L', 'hora_ini': '16', 'durada_min': 60, 'places_min': 20, 'tipus': 'Seminaris'})]
+    for nom, args in calls:
+        esperat = e.executa(nom, args)
+        r = e.executa(nom, dict(args, setmana=setmana))
+        assert esperat['ok'] and r['ok'], r
+        assert r['resultat'] == esperat['resultat']
+
+
+@pytest.mark.parametrize('setmana', [7, '7', 'W07', 'setmana 7', '2027-W07', '2027-02-17'])
+def test_setmana_numero_i_data(paquet, setmana):
+    assert e._setmana(paquet[0], setmana) == dt.date(2027, 2, 15)
+    for nom, args in [('horari_grup', {'grup': '81'}), ('ocupacio_aula', {'aula': 'Q9/0001'}),
+                      ('aules_lliures', {'dia': 'L', 'hora_ini': '16', 'durada_min': 60, 'places_min': 20, 'tipus': 'Seminaris'})]:
+        r = e.executa(nom, dict(args, setmana=setmana))
+        esperat = e.executa(nom, dict(args, setmana='2027-W07'))
+        assert r['ok'] and esperat['ok'], r
+        assert r['resultat'] == esperat['resultat']
+
+
+@pytest.mark.parametrize('setmana', ['xyz', 'W00', 'W54', '2027-W53', '2027-02-30', True, [], 7.5])
+def test_setmana_error_especific(paquet, setmana):
+    for nom, args in [('horari_grup', {'grup': '81'}), ('ocupacio_aula', {'aula': 'Q9/0001'}),
+                      ('aules_lliures', {'dia': 'L', 'hora_ini': '16', 'durada_min': 60, 'places_min': 20})]:
+        r = e.executa(nom, dict(args, setmana=setmana))
+        assert not r['ok']
+        assert 'setmana' in r['error'] and '2027-W07' in r['error']
+
+
+@pytest.mark.parametrize('nom,args,parametre,acceptat', [
+    ('horari_grup', {'grup': '81', 'dia': 'dissabte'}, 'dia', 'L, M, X, J o V'),
+    ('ocupacio_aula', {'aula': 'Q9/0001', 'dia': 'xyz', 'setmana': '2027-W07'}, 'dia', 'L, M, X, J o V'),
+    ('horari_grup', {'grup': 'xyz'}, 'grup', 'TE/81'),
+    ('horari_grup', {'grup': '999'}, 'grup', 'existent'),
+    ('horari_grup', {'grup': '81', 'proposta': 'xyz'}, 'proposta', 'avui'),
+    ('horari_grup', {'grup': '81', 'titulacio': 'xyz'}, 'titulacio', 'codi'),
+    ('horari_grup', {'grup': '81', 'curs': []}, 'curs', '1r'),
+    ('ocupacio_aula', {'aula': 'xyz'}, 'aula', 'inventari'),
+    ('aules_lliures', {'dia': 'L', 'hora_ini': 'xyz', 'durada_min': 60, 'places_min': 20}, 'hora_ini', '16:00'),
+    ('aules_lliures', {'data': 'xyz', 'hora_ini': '16', 'durada_min': 60, 'places_min': 20}, 'data', 'AAAA-MM-DD'),
+    ('aules_lliures', {'dia': 'L', 'hora_ini': '16', 'durada_min': -1, 'places_min': 20}, 'durada_min', 'enter positiu'),
+    ('aules_lliures', {'dia': 'L', 'hora_ini': '16', 'durada_min': 60, 'places_min': -1}, 'places_min', 'enter'),
+    ('aules_lliures', {'dia': 'L', 'hora_ini': '16', 'durada_min': 60, 'places_min': 20, 'tipus': []}, 'tipus', 'inventari'),
+    ('horari_grup', {}, 'grup', 'paràmetres'),
+])
+def test_parametres_errors_especifics(paquet, nom, args, parametre, acceptat):
+    r = e.executa(nom, args)
+    assert not r['ok']
+    assert parametre in r['error'] and acceptat in r['error']
+    assert 'No s’ha pogut completar' not in r['error']
+
+
+@pytest.mark.parametrize('canvi,camp', [
+    ({'tipus': 'imprevist', 'aules_tancades': 'xyz'}, 'aules_tancades'),
+    ({'tipus': 'imprevist', 'sessions_cancel_lades': [{}]}, 'id_sessio'),
+    ({'tipus': 'moure', 'id_sessio': 'xyz', 'hora_ini': '16'}, 'id_sessio'),
+])
+def test_canvi_errors_parametres(paquet, canvi, camp):
+    r = e.executa('prova_canvi', {'apartat': '5.2', 'canvi': canvi})
+    assert not r['ok'] and camp in r['error']
+    assert 'No s’ha pogut completar' not in r['error']
+
+
+def test_descripcio_setmana_i_error_inesperat(monkeypatch):
+    for definicio in e.EINES:
+        setmana = definicio['function']['parameters']['properties'].get('setmana')
+        if setmana:
+            assert setmana['description'] == "buit o 'típica' = setmana típica; o 2027-W07; o una data"
+            assert 'integer' in setmana['type']
+    def falla(grup):
+        raise RuntimeError('Error intern inventat')
+    monkeypatch.setitem(e._HANDLERS, 'horari_grup', falla)
+    r = e.executa('horari_grup', {'grup': '81'})
+    assert not r['ok'] and 'No s’ha pogut completar' in r['error']
