@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<title>Triada · forma B amb colors per estat</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1d5fae}a:hover{color:#174c8c}
+</style>
+</helmet>
+<div style="width: 1200px; height: 840px; box-sizing: border-box; padding: 36px 44px; background: #f4f3ef; font-family: Inter, system-ui, sans-serif; color: #1a1a18; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 24px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h1 style="margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.01em">Grup 99 · 1r curs</h1>
+<p style="margin: 0; font-size: 15px; color: #52514e">Setmana tipus amb la proposta. El color diu què passa amb cada classe.</p>
+</div>
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<sc-for list="{{legend}}" as="l" hint-placeholder-count="4">
+<span style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; padding: 5px 11px; border-radius: 999px; background: #ffffff; border: 1px solid #e6e5e0"><i style="width: 10px; height: 10px; border-radius: 3px; background: {{l.dot}}; display: inline-block"></i>{{l.label}}</span>
+</sc-for>
+</div>
+</div>
+<div style="background: #ffffff; border: 1px solid #e6e5e0; border-radius: 16px; padding: 14px 16px 16px; display: grid; grid-template-columns: {{cols}}; column-gap: 10px; flex: 1; min-height: 0">
+<div></div>
+<sc-for list="{{days}}" as="day" hint-placeholder-count="5">
+<div style="font-size: 14px; font-weight: 600; padding: 4px 4px 10px; border-bottom: 1px solid #e6e5e0">{{day.nom}}</div>
+</sc-for>
+<div style="display: grid; grid-template-rows: repeat(12, 48px); padding-top: 6px">
+<sc-for list="{{hours}}" as="h" hint-placeholder-count="12">
+<div style="font-size: 12px; color: {{h.ink}}; font-weight: {{h.weight}}; transform: translateY(-7px)">{{h.label}}</div>
+</sc-for>
+</div>
+<sc-for list="{{days}}" as="day" hint-placeholder-count="5">
+<div style="display: grid; grid-template-rows: repeat(12, 48px); grid-template-columns: {{day.cols}}; column-gap: 6px; padding-top: 6px; background-image: repeating-linear-gradient(to bottom, #efeee9 0 1px, transparent 1px 48px, #d9d8d2 48px 49px, transparent 49px 96px); background-position: 0 6px">
+<sc-for list="{{day.items}}" as="it" hint-placeholder-count="3">
+<div style="grid-row: {{it.row}}; grid-column: {{it.col}}; margin: 3px 0; border-radius: 10px; padding: 8px 10px; background: {{it.bg}}; display: flex; flex-direction: column; gap: 3px; min-width: 0; position: relative">
+<b style="font-size: 14px; font-weight: 600; line-height: 1.25; color: #1a1a18">{{it.nom}}</b>
+<span style="font-size: 12px; color: #3d3c39">{{it.s}}–{{it.e}} · {{it.aula}}</span>
+<span style="font-size: 12px; color: #52514e">{{it.tipus}} · {{it.grup}}</span>
+<sc-if value="{{it.nota}}" hint-placeholder-val="{{ false }}"><span style="font-size: 12px; font-weight: 500; color: {{it.notaInk}}">{{it.nota}}</span></sc-if>
+</div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1200,"height":840}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const DIES = ['Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres'];
+    const T0 = 510, SLOT = 30;
+    const EST = {
+      cap: { bg: '#eef4fc', ink: '#1d5fae', label: 'Sense canvis', dot: '#2a78d6' },
+      aula: { bg: '#edf6ef', ink: '#1f6b33', label: 'Aula assignada', dot: '#2f8f46' },
+      canvia: { bg: '#fff4e5', ink: '#8f4c00', label: 'Canvia', dot: '#e8820c' },
+      especial: { bg: '#fdeeee', ink: '#a12c2c', label: 'Cas especial', dot: '#d03b3b' }
+    };
+    const EV = [
+      { d: 0, s: '08:30', e: '10:30', nom: 'Fonaments de Programació', tipus: 'Teoria', grup: 'Grup 99', aula: 'Q9/0101', est: 'aula' },
+      { d: 0, s: '10:30', e: '11:30', nom: 'Càlcul', tipus: 'Problemes', grup: 'Subgrup 991', aula: 'Q9/0103', est: 'cap' },
+      { d: 0, s: '10:30', e: '11:30', nom: 'Física', tipus: 'Problemes', grup: 'Subgrup 992', aula: 'Q9/0204', est: 'cap' },
+      { d: 0, s: '12:00', e: '13:30', nom: 'Àlgebra Lineal', tipus: 'Teoria', grup: 'Grup 99', aula: 'Q9/0101', est: 'aula' },
+      { d: 1, s: '08:30', e: '10:30', nom: 'Física', tipus: 'Teoria', grup: 'Grup 99', aula: 'Q9/0101', est: 'cap' },
+      { d: 1, s: '11:00', e: '13:00', nom: 'Empresa i Societat', tipus: 'Teoria', grup: 'Grup 99', aula: 'Q9/0102', est: 'canvia', nota: 'Abans: dijous 12:30' },
+      { d: 2, s: '08:30', e: '10:30', nom: 'Càlcul', tipus: 'Teoria', grup: 'Grup 99', aula: 'Q9/0101', est: 'aula' },
+      { d: 2, s: '10:30', e: '12:30', nom: 'Fonaments de Programació', tipus: 'Pràctiques', grup: 'Subgrup 991', aula: 'Lab Q9/0410', est: 'cap' },
+      { d: 2, s: '10:30', e: '12:30', nom: 'Fonaments de Programació', tipus: 'Pràctiques', grup: 'Subgrup 992', aula: 'Lab Q9/0411', est: 'cap' },
+      { d: 3, s: '09:30', e: '11:30', nom: 'Àlgebra Lineal', tipus: 'Problemes', grup: 'Grup 99', aula: 'Q9/0204', est: 'aula' },
+      { d: 3, s: '12:00', e: '14:00', nom: 'Química Bàsica', tipus: 'Teoria', grup: 'Grup 99', aula: 'Q9/0301', est: 'especial', nota: 'Aula més gran: el grup ha crescut' },
+      { d: 4, s: '08:30', e: '10:30', nom: 'Empresa i Societat', tipus: 'Seminari', grup: 'Subgrup 991', aula: 'Q9/0305', est: 'cap' },
+      { d: 4, s: '08:30', e: '10:30', nom: 'Química Bàsica', tipus: 'Seminari', grup: 'Subgrup 992', aula: 'Q9/0306', est: 'cap' },
+      { d: 4, s: '11:00', e: '12:00', nom: 'Física', tipus: 'Problemes', grup: 'Grup 99', aula: 'Q9/0204', est: 'aula' }
+    ];
+    const min = (h) => { const p = h.split(':'); return Number(p[0]) * 60 + Number(p[1]); };
+    const days = DIES.map((nom, d) => {
+      const list = EV.filter((e) => e.d === d).map((e) => ({ ...e, a: min(e.s), b: min(e.e) })).sort((x, y) => x.a - y.a || x.b - y.b);
+      const ends = [];
+      list.forEach((e) => { let k = ends.findIndex((t) => t <= e.a); if (k < 0) { k = ends.length; ends.push(0); } ends[k] = e.b; e.lane = k; });
+      const lanes = Math.max(1, ends.length);
+      const items = list.map((e) => {
+        const ov = list.some((o) => o !== e && o.a < e.b && e.a < o.b);
+        return {
+          ...e, bg: EST[e.est].bg, nota: e.nota || '', notaInk: EST[e.est].ink,
+          row: ((e.a - T0) / SLOT + 1) + ' / ' + ((e.b - T0) / SLOT + 1), col: ov ? (e.lane + 1) + ' / span 1' : '1 / span ' + lanes
+        };
+      });
+      return { nom, lanes, cols: 'repeat(' + lanes + ', minmax(0, 1fr))', items };
+    });
+    const cols = '56px ' + days.map((d) => 'minmax(0, ' + d.lanes + 'fr)').join(' ');
+    const hours = [];
+    for (let i = 0; i < 12; i++) {
+      const t = T0 + i * SLOT, h = Math.floor(t / 60), m = t % 60;
+      hours.push({ label: (h < 10 ? '0' : '') + h + ':' + (m ? '30' : '00'), ink: m ? '#8a8984' : '#3d3c39', weight: m ? 400 : 600 });
+    }
+    const legend = ['cap', 'aula', 'canvia', 'especial'].map((k) => ({ label: EST[k].label, dot: EST[k].dot }));
+    return { days, cols, hours, legend };
+  }
+}
+</script>
+</body>
+</html>

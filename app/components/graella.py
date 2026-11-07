@@ -142,11 +142,11 @@ def nom_grup(grup, tipus):
 
 # Un únic estat per bloc: els casos especials prevalen sobre els altres canvis.
 ESTATS = {
-    'totes': ('▦', 'Totes', '#2a78d6', '#e8f1fc', '#1d5fae'),
-    'aula-nova': ('✓', 'Aula assignada', '#2f8f46', '#e9f4ec', '#1f6b33'),
-    'canvi': ('!', 'Canvia', '#e8820c', '#fff1e0', '#9a5200'),
-    'relaxada': ('×', 'Cas especial', '#d03b3b', '#fbe9e9', '#a12c2c'),
-    'igual': ('●', 'Sense canvis', '#2a78d6', '#e8f1fc', '#1d5fae'),
+    'totes': ('Totes', '#2a78d6', '#eef4fc', '#1d5fae'),
+    'igual': ('Sense canvis', '#2a78d6', '#eef4fc', '#1d5fae'),
+    'aula-nova': ('Aula assignada', '#2f8f46', '#edf6ef', '#1f6b33'),
+    'canvi': ('Canvia', '#e8820c', '#fff4e5', '#8f4c00'),
+    'relaxada': ('Cas especial', '#d03b3b', '#fdeeee', '#a12c2c'),
 }
 
 
@@ -182,8 +182,8 @@ def recomptes_estat(celles):
 
 def llegenda_html():
     return '<ul class="p2-llegenda">' + ''.join(
-        f'<li style="color:{text}">{icona} {nom}</li>'
-        for clau, (icona, nom, color, fons, text) in ESTATS.items() if clau != 'totes') + '</ul>'
+        f'<li><i aria-hidden="true" style="background:{color}"></i>{nom}</li>'
+        for clau, (nom, color, _, _) in ESTATS.items() if clau != 'totes') + '</ul>'
 
 
 # Estils compartits entre els botons Streamlit i la prova HTML inventada.
@@ -191,7 +191,7 @@ CSS_FILTRES = """
 :is(.st-key-p2-filtres,.p2-filtres){display:flex;flex-wrap:wrap;gap:8px;min-width:0;}
 .st-key-p2-filtres [data-testid="stHorizontalBlock"]{gap:8px;flex-wrap:wrap;}
 .st-key-p2-filtres [data-testid="stColumn"]{width:auto!important;flex:0 0 auto!important;min-width:0!important;}
-:is(.st-key-p2-filtres,.p2-filtres) button{display:inline-flex;align-items:center;gap:8px;background:#fff;color:#1a1a18;border:1px solid #d4d3cd;border-radius:999px;padding:5px 10px;min-height:32px;font:14px/1.35 system-ui;box-shadow:none;}
+:is(.st-key-p2-filtres,.p2-filtres) button{display:inline-flex;align-items:center;gap:8px;background:#fff;color:#1a1a18;border:1px solid #e6e5e0;border-radius:999px;padding:5px 10px;min-height:32px;font:14px/1.35 system-ui;box-shadow:none;}
 :is(.st-key-p2-filtres,.p2-filtres) button p{font-size:14px;white-space:nowrap;font-weight:inherit;}
 :is(.st-key-p2-filtres,.p2-filtres) button::before{content:"";display:block;flex:none;width:10px;height:10px;border-radius:3px;background:var(--p2-filtre-color);}
 :is(.st-key-p2-filtres,.p2-filtres) button:is([kind="primary"],[aria-pressed="true"]){background:#fff;color:#1a1a18;border-color:#1a1a18;font-weight:700;outline:none;}
@@ -199,7 +199,7 @@ CSS_FILTRES = """
 :is(.st-key-p2-filtres,.p2-filtres) button:focus-visible{outline:2px solid #1a1a18;outline-offset:2px;}
 """ + ''.join(
     f'.st-key-p2-filtre-{clau},.p2-filtre-{clau}' + '{--p2-filtre-color:' + color + ';}'
-    for clau, (_, _, color, _, _) in ESTATS.items())
+    for clau, (_, color, _, _) in ESTATS.items())
 
 
 def filtres_html(celles, actiu='totes'):
@@ -208,230 +208,136 @@ def filtres_html(celles, actiu='totes'):
     return '<div class="p2-filtres" role="group" aria-label="Quines classes vols veure">' + ''.join(
         f'<button class="p2-filtre-{clau}" data-filtre="{clau}" aria-pressed="{str(clau == actiu).lower()}">'
         f'{nom} ({sum(comptes.values()) if clau == "totes" else comptes[clau]})</button>'
-        for clau, (_, nom, *_) in ESTATS.items()) + '</div>'
+        for clau, (nom, *_) in ESTATS.items()) + '</div>'
 
 
 # El prefix evita que l'HTML exportat alteri altres components de l'app.
 CSS = """
 .p2-horari{container:p2-graella / inline-size;width:100%;max-width:100%;min-width:0;color:#1a1a18;font:13px/1.35 system-ui}
-.p2-horari .horari-scroll{width:100%;max-width:100%;min-width:0;overflow-x:auto;overscroll-behavior-x:contain;border-radius:14px;background:#fff;}
+.p2-horari .horari-scroll{width:100%;max-width:100%;min-width:0;overflow-x:auto;overscroll-behavior-x:contain;border:1px solid #e6e5e0;border-radius:16px;background:#fff;}
 .p2-horari .horari-scroll:focus-visible{outline:3px solid #2a78d6;outline-offset:2px;}
-.p2-horari .horari{position:relative;isolation:isolate;border-collapse:separate;border-spacing:0;table-layout:fixed;width:100%;background:#fff;}
-.p2-horari .horari th,.p2-horari .horari td{box-sizing:border-box;border:1px solid #e6e5e0;border-width:0 1px 0 0;padding:4px;vertical-align:top;}
-.p2-horari .horari th{background:#f4f3ef;font-weight:600;}
-.p2-horari .horari tbody{background-color:#fff;background-repeat:no-repeat;}
-.p2-horari .horari tbody tr{height:32px;}
-.p2-horari .horari tbody tr.mitja-hora{background-image:linear-gradient(#e6e5e0,#e6e5e0);background-size:100% 1px;background-repeat:no-repeat;}
-.p2-horari .horari tbody tr.hora-plena{background-image:linear-gradient(#c9c8c2,#c9c8c2);background-size:100% 2px;background-repeat:no-repeat;}
-.p2-horari .horari tbody th,.p2-horari .horari thead th:first-child{position:sticky;left:0;z-index:2;background:#f4f3ef;}
-.p2-horari .horari thead th{border-bottom:1px solid #e6e5e0;}
-
-.p2-horari .horari .hora{width:72px;}
-.p2-horari .horari tbody th{font-size:11px;color:#52514e;font-weight:400;}
-.p2-horari .horari caption{text-align:left;font-size:16px;font-weight:600;padding:10px 12px;}
-.p2-horari .classe{position:relative;z-index:1;color:#1a1a18;background:#fff;border:1px solid #e6e5e0;border-left:5px solid #2a78d6;border-radius:8px;padding:6px;min-width:0;height:100%;box-sizing:border-box;word-break:normal;overflow-wrap:normal;hyphens:none;}
-.p2-horari .classe.aula-nova{border-left-color:#2f8f46;}
-.p2-horari .classe.canvi{border-left-color:#e8820c;}
-.p2-horari .classe.relaxada{border-left-color:#d03b3b;}
-.p2-horari .classe b{display:block;color:#1a1a18;font-size:14px;font-weight:700;white-space:normal;word-break:normal;overflow-wrap:normal;hyphens:none;font-family:system-ui,sans-serif;font-variant-ligatures:none;letter-spacing:normal;word-spacing:normal;text-transform:none;}
-.p2-horari .classe small{display:block;margin-top:3px;color:#52514e;font-size:12px;}
-.p2-horari .classe .estat{display:inline-flex;align-items:center;gap:4px;white-space:normal;font-size:12px;line-height:1.25;font-weight:600;border-radius:999px;padding:2px 7px;margin-top:5px;background:#e8f1fc;color:#1d5fae;}
-.p2-horari .classe.aula-nova .estat{background:#e9f4ec;color:#1f6b33;}
-.p2-horari .classe.canvi .estat{background:#fff1e0;color:#9a5200;}
-.p2-horari .classe.relaxada .estat{background:#fbe9e9;color:#a12c2c;}
-.p2-horari .classe .estat svg{width:14px;height:14px;flex:none;}
+.p2-horari .horari{position:relative;isolation:isolate;display:grid;column-gap:10px;row-gap:0;padding:14px 16px 16px;box-sizing:border-box;background:#fff;}
+.p2-horari .horari-titol{grid-column:1/-1;margin:0 0 10px;font-size:16px;font-weight:600;}
+.p2-horari .dia-cap{font-size:14px;font-weight:600;padding:4px 4px 10px;border-bottom:1px solid #e6e5e0;}
+.p2-horari .hora-cap,.p2-horari .hores{position:sticky;left:0;z-index:2;background:#fff;box-shadow:-16px 0 #fff,10px 0 #fff;}
+.p2-horari .hora-cap{font-size:12px;color:#52514e;}
+.p2-horari .hores,.p2-horari .dia-horari{display:grid;grid-template-rows:var(--files);padding-top:6px;min-width:0;align-content:start;}
+.p2-horari .hora{font-size:12px;color:#8a8984;font-weight:400;transform:translateY(-7px);font-variant-numeric:tabular-nums;}
+.p2-horari .hora-plena{color:#3d3c39;font-weight:600;}
+.p2-horari .dia-horari{column-gap:6px;background-image:var(--linies);background-position:0 6px;background-repeat:repeat;}
+.p2-horari .classe{position:relative;z-index:1;color:#1a1a18;border:0;border-radius:10px;padding:8px 10px;margin:3px 0;min-width:0;min-height:0;box-sizing:border-box;word-break:normal;overflow-wrap:normal;hyphens:none;}
+.p2-horari .classe b{display:block;color:#1a1a18;font-size:14px;font-weight:600;line-height:1.25;white-space:normal;word-break:normal;overflow-wrap:normal;hyphens:none;font-family:system-ui,sans-serif;font-variant-ligatures:none;letter-spacing:normal;word-spacing:normal;text-transform:none;}
+.p2-horari .classe summary{display:flex;flex-direction:column;gap:3px;cursor:pointer;list-style:none;}
+.p2-horari .classe summary::-webkit-details-marker{display:none;}
+.p2-horari .classe small{display:block;font-size:12px;color:#52514e;}
+.p2-horari .classe .ubicacio{color:#3d3c39;}
+.p2-horari .classe .nota{font-size:12px;font-weight:500;}
 .p2-horari .classe.apagada{opacity:.25;}
 .p2-horari .classe summary:focus-visible{outline:3px solid #2a78d6;outline-offset:2px;}
-.p2-horari .classe summary{cursor:pointer;list-style:none;}
-.p2-horari .classe summary::-webkit-details-marker{display:none;}
+.p2-horari .classe[open]{z-index:3;align-self:start;min-height:calc(100% - 6px);box-shadow:0 4px 12px #0002;}
 .p2-horari .classe .detall{padding-top:6px;border-top:1px solid #e6e5e0;margin-top:6px;}
-"""
+.p2-llegenda{display:flex;flex-wrap:wrap;gap:8px;padding:0;list-style:none;font:13px/1.35 system-ui;color:#1a1a18;}
+.p2-llegenda li{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border:1px solid #e6e5e0;border-radius:999px;background:#fff;}
+.p2-llegenda i{display:inline-block;width:10px;height:10px;border-radius:3px;}
+""" + ''.join(
+    f'.p2-horari .classe.{clau}' + '{background:' + fons + ';}'
+    + f'.p2-horari .classe.{clau} .nota' + '{color:' + text + ';}'
+    for clau, (_, _, fons, text) in ESTATS.items() if clau != 'totes')
 
-# El fons del tbody travessa també les cel·les amb rowspan. Mesurem les files
-# perquè un nom llarg o un límit parcial pot alterar-ne l'alçada. No s'afegeix
-# cap element (ni pseudo-element) al model de columnes de la taula.
-LINIES_JS = """
-function preparaLiniesHorari(arrel, host) {
-  const cossos=[...arrel.querySelectorAll('table.horari tbody')].filter(c=>c.rows);
-  if(!cossos.length)return ()=>{};
-  let frame,acabat=false;
-  const dibuixa=()=>{
-    if(acabat)return;
-    for(const cos of cossos){
-      const rect=cos.getBoundingClientRect();
-      if(!rect.height)continue;
-      const imatges=[],mides=[],posicions=[];
-      const linia=(y,color,gruix)=>{
-        imatges.push(`linear-gradient(${color},${color})`);
-        mides.push(`100% ${gruix}px`);posicions.push(`0 ${y}px`);
-      };
-      for(const fila of cos.rows){
-        const plena=fila.classList.contains('hora-plena');
-        if(plena||fila.classList.contains('mitja-hora')){
-          linia(fila.getBoundingClientRect().top-rect.top,
-                plena?'#c9c8c2':'#e6e5e0',plena?2:1);
-        }
-      }
-      linia(rect.height-1,'#e6e5e0',1);
-      cos.style.backgroundImage=imatges.join(',');
-      cos.style.backgroundSize=mides.join(',');
-      cos.style.backgroundPosition=posicions.join(',');
-    }
-  };
-  const programa=()=>{
-    if(acabat)return;
-    host.cancelAnimationFrame(frame);frame=host.requestAnimationFrame(dibuixa);
-  };
-  const observer=new host.ResizeObserver(programa);
-  cossos.forEach(cos=>observer.observe(cos));
-  host.document.fonts?.ready.then(programa);
-  programa();
-  return ()=>{acabat=true;observer.disconnect();host.cancelAnimationFrame(frame);};
-}
-"""
+# La guia compartida encara invoca aquest punt d'entrada. Les línies ara són
+# fons CSS de cada dia i no necessiten mesurar files ni observar redimensions.
+LINIES_JS = "function preparaLiniesHorari() { return ()=>{}; }"
 
-
-def script_linies_html():
-    return '<script>' + LINIES_JS + 'preparaLiniesHorari(document,window);</script>'
-
-
-MIN_CARRIL = 150
-AMPLE_HORES = 72
-
-
-def amplada_bloc(carrils, dies):
-    return AMPLE_HORES + MIN_CARRIL * sum(carrils[d][0] for d in dies)
+MIN_CARRIL = 120
+AMPLE_HORES = 56
 
 
 def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='totes', estils=True):
-    """Una cel·la amb rowspan per sessió; carrils paral·lels si se solapen.
+    """Una setmana en CSS Grid: 48 px per mitja hora, minuts exactes i carrils.
 
-    Les files parcials respecten els minuts exactes: dues classes consecutives
-    no creen carrils perquè comparteixin una mitja hora visual.
+    Només les classes amb coincidències ocupen un carril; les altres s'estenen
+    per tot el dia, com a la referència de disseny.
     """
     celles = agrupa_compartides(celles)
+    estil = f'<style>{CSS}</style>' if estils else ''
     if not celles:
-        return (f'<style>{CSS}</style>' if estils else '') + '<div class="p2-horari"><p class="p2-buit" role="status">No hi ha classes aquesta setmana.</p></div>'
-    # El rang pertany a tota la setmana visible i es conserva en cada bloc.
+        return estil + '<div class="p2-horari"><p class="p2-buit" role="status">No hi ha classes aquesta setmana.</p></div>'
     inici_dia = min(c.ini for c in celles) // 30 * 30
     final_dia = (max(c.fi for c in celles) + 29) // 30 * 30
-    franges = tuple(range(inici_dia, final_dia, 30))
-    # Els límits exactes eviten solapaments inventats per l'arrodoniment.
-    limits = sorted({*franges, final_dia} | {
-        minut for c in celles for minut in (c.ini, c.fi)})
-    files = {minut: i for i, minut in enumerate(limits)}
     carrils = {}
     for dia in DIES:
-        ocupats = []
-        entrades = []
-        for c in sorted((c for c in celles if c.dia == dia), key=lambda c: (c.ini, c.fi, c.id_sessio)):
-            inici = files[c.ini]
-            final = files[c.fi]
-            if final <= inici:
-                continue
-            carril = next((i for i, fi in enumerate(ocupats) if fi <= inici), len(ocupats))
+        ocupats, entrades = [], []
+        classes = sorted((c for c in celles if c.dia == dia), key=lambda c: (c.ini, c.fi, c.id_sessio))
+        for c in classes:
+            carril = next((i for i, fi in enumerate(ocupats) if fi <= c.ini), len(ocupats))
             if carril == len(ocupats):
-                ocupats.append(final)
+                ocupats.append(c.fi)
             else:
-                ocupats[carril] = final
-            entrades.append((inici, final, carril, c))
+                ocupats[carril] = c.fi
+            coincideix = any(o is not c and o.ini < c.fi and c.ini < o.fi for o in classes)
+            entrades.append((carril, coincideix, c))
         carrils[dia] = (max(1, len(ocupats)), entrades)
-    # Una classe sense altres subgrups simultanis aprofita tot el dia.
-    # Reservem cada espai que ocupa, inclosos els colspans, per no emetre
-    # cel·les buides que desplacin les columnes de les files següents.
-    cobertes = {}
-    inicis = {}
+    columnes = '56px ' + ' '.join(f'minmax(0, {n}fr)' for n, _ in carrils.values())
+    # Incloem el padding, els espais entre dies i entre carrils al mínim.
+    ample = AMPLE_HORES + 32 + 5 * 10 + sum(n * MIN_CARRIL + (n - 1) * 6 for n, _ in carrils.values())
+    primer = '#d9d8d2' if inici_dia % 60 == 0 else '#efeee9'
+    segon = '#efeee9' if inici_dia % 60 == 0 else '#d9d8d2'
+    linies = f'repeating-linear-gradient(to bottom,{primer} 0 1px,transparent 1px 48px,{segon} 48px 49px,transparent 49px 96px)'
+    html = (estil + '<div class="p2-horari"><div class="p2-setmana">'
+        f'<div class="horari-scroll" tabindex="0" role="region" aria-label="{escape(titol, quote=True)} · Dilluns – Divendres">'
+        f'<div class="horari" style="min-width:{ample}px;grid-template-columns:{columnes};--files:repeat({final_dia-inici_dia},1.6px);--linies:{linies}">'
+        f'<div class="horari-titol">{escape(titol)}</div><div class="dia-cap hora-cap">Hora</div>')
+    html += ''.join(f'<div class="dia-cap" role="heading" aria-level="3">{nom}</div>' for nom in NOMS_DIES)
+    html += '<div class="hores" aria-label="Hores">'
+    for inici in range(inici_dia, final_dia, 30):
+        plena = ' hora-plena' if inici % 60 == 0 else ''
+        html += f'<div class="hora{plena}" data-minut="{inici}" style="grid-row:{inici-inici_dia+1}/span 30">{fmt(inici)}</div>'
+    html += '</div>'
     for dia, (n, entrades) in carrils.items():
-        for primera, final, carril, c in entrades:
-            ample = 1
-            while carril + ample < n:
-                seguent = carril + ample
-                if any(i < final and primera < f and k == seguent for i, f, k, _ in entrades):
-                    break
-                ample += 1
-            inicis[dia, primera, carril] = (final, ample, c)
-            for fila in range(primera, final):
-                for columna in range(carril, carril + ample):
-                    cobertes[dia, fila, columna] = True
-    def bloc(dies, *, carril_unic=None):
-        # En una pantalla més estreta que un dia, els subgrups també s'apilen.
-        # Cada classe ampla es mostra només al primer dels seus carrils.
-        ample_bloc = (AMPLE_HORES + MIN_CARRIL if carril_unic is not None
-                      else amplada_bloc(carrils, dies))
-        noms = ' – '.join(NOMS_DIES[DIES.index(d)] for d in (dies[0], dies[-1])) if len(dies) > 1 else NOMS_DIES[DIES.index(dies[0])]
-        etiqueta = f'{titol} · {noms}'
-        if carril_unic is not None:
-            etiqueta += f' · Carril {carril_unic + 1}'
-        html = (f'<div class="horari-scroll" tabindex="0" role="region" aria-label="{escape(etiqueta, quote=True)}">'
-                f'<table class="horari" style="min-width:{ample_bloc}px"><caption>{escape(etiqueta)}</caption>'
-                '<colgroup><col class="hora">')
-        for dia in dies:
-            n = 1 if carril_unic is not None else carrils[dia][0]
-            html += '<col class="carril">' * n
-        html += '</colgroup><thead><tr><th scope="col">Hora</th>'
-        html += ''.join(f'<th scope="col" colspan="{1 if carril_unic is not None else carrils[d][0]}">{NOMS_DIES[DIES.index(d)]}</th>' for d in dies)
-        html += '</tr></thead><tbody>'
-        for fila, inici in enumerate(limits[:-1]):
-            alt = (limits[fila + 1] - inici) / 30 * 32
-            linia = 'hora-plena' if inici % 60 == 0 else 'mitja-hora' if inici % 30 == 0 else 'fraccio'
-            html += f'<tr class="{linia}" data-minut="{inici}" style="height:{alt:g}px">'
-            if inici in franges:
-                html += f'<th scope="row" rowspan="{files[min(inici+30, final_dia)]-fila}">{fmt(inici)}–{fmt(inici+30)}</th>'
-            for dia in dies:
-                n = carrils[dia][0] if carril_unic is None else carril_unic + 1
-                carril = 0 if carril_unic is None else carril_unic
-                while carril < n:
-                    entrada = inicis.get((dia, fila, carril))
-                    if entrada is None:
-                        coberta = (dia, fila, carril) in cobertes
-                        if carril_unic is not None:
-                            # Només ometem els rowspans que comencen en aquest carril.
-                            coberta = any(d == dia and k == carril and primera < fila < final
-                                          for (d, primera, k), (final, _, _) in inicis.items())
-                        if coberta:
-                            carril += 1
-                            continue
-                        ample_buit = 1
-                        while (carril + ample_buit < n
-                               and (dia, fila, carril + ample_buit) not in cobertes):
-                            ample_buit += 1
-                        html += f'<td colspan="{ample_buit}"></td>'
-                        carril += ample_buit
-                        continue
-                    final, ample, c = entrada
-                    if carril_unic is not None:
-                        ample = 1
-                    estat = estat_cella(c)
-                    marques = (' ' + estat if estat != 'igual' else '')
-                    if filtre != 'totes' and filtre != estat:
-                        marques += ' apagada'
-                    ubicacio = c.aula or ('Aula no indicada a les dades' if originals else 'Pendent d’assignar aula')
-                    grup = ' / '.join(c.grups_compartits) or nom_grup(c.grup, c.tipus)
-                    detall = f'{fmt(c.ini)}–{fmt(c.fi)} · {grup} · {ubicacio}'
-                    avis = ' '.join(c.relaxacions)
-                    if c.setmana_diferent:
-                        avis = 'Setmana diferent. ' + avis
-                    if c.canvi or c.aula_assignada:
-                        abans = c.abans or ('Aula assignada.' if c.aula_assignada else 'Canvi de dia, hora o aula.')
-                        avis = abans + (' · ' + avis if avis else '')
-                    icona, nom, *_ = ESTATS[estat]
-                    pastilla = f'<span class="estat"><span aria-hidden="true">{icona}</span>{nom}</span>'
-                    compartida = '<small>Classe compartida</small>' if c.compartida else ''
-                    nom_assignatura = escape(c.assignatura).replace('’', '&#8217;').replace('‘', '&#8216;')
-                    contingut = f'<b>{nom_assignatura}</b><small>{escape(detall)}</small>{compartida}{pastilla}'
-                    classe = (f'<details class="classe{marques}" data-estat="{estat}" title="{escape(avis, quote=True)}">'
-                        f'<summary>{contingut}</summary><small class="detall">{escape(avis or "Es manté la classe de les dades originals.")}</small></details>')
-                    html += f'<td rowspan="{final-fila}" colspan="{ample}">{classe}</td>'
-                    carril += ample
-            html += '</tr>'
-        return html + '</tbody></table></div>'
-
-    # Una sola setmana seguida, també quan falta amplada a la pantalla.
-    return (f'<style>{CSS if estils else ""}</style><div class="p2-horari">'
-            '<div class="p2-setmana">' + bloc(DIES) + '</div></div>')
+        html += (f'<section class="dia-horari" aria-label="{NOMS_DIES[DIES.index(dia)]}" '
+                 f'data-carrils="{n}" style="grid-template-columns:repeat({n},minmax(0,1fr))">')
+        for carril, coincideix, c in entrades:
+            estat = estat_cella(c)
+            nom, _, _, _ = ESTATS[estat]
+            marques = estat + (' apagada' if filtre not in ('totes', estat) else '')
+            columna = f'{carril+1}/span 1' if coincideix else f'1/span {n}'
+            ubicacio = c.aula or ('Aula no indicada a les dades' if originals else 'Pendent d’assignar aula')
+            grup = ' / '.join(c.grups_compartits) or nom_grup(c.grup, c.tipus)
+            # El format antic de nom_grup es conserva als altres usos de la pàgina.
+            grup = ' / '.join(g.split(' · ', 1)[0] for g in grup.split(' / '))
+            tipus = TIPUS.get(c.tipus, c.tipus)
+            avisos = list(c.relaxacions)
+            if c.setmana_diferent:
+                avisos.insert(0, 'Setmana diferent.')
+            if c.canvi or c.aula_assignada:
+                avisos.append(c.abans or ('Aula assignada.' if c.aula_assignada else 'Canvi de dia, hora o aula.'))
+            avis = ' · '.join(avisos)
+            nota = ''
+            if estat == 'relaxada':
+                nota = avisos[0]
+            elif estat == 'canvi':
+                nota = c.abans.split(' · ', 1)[0] if c.abans else 'Canvi de dia, hora o aula.'
+            if len(nota) > 78:
+                nota = nota[:75].rsplit(' ', 1)[0] + '…'
+            etiqueta = f'{nom} · {c.assignatura} · {fmt(c.ini)}–{fmt(c.fi)} · {ubicacio} · {tipus} · {grup}'
+            if avis:
+                etiqueta += ' · ' + avis
+            if c.compartida:
+                etiqueta += ' · Classe compartida'
+            nom_assignatura = escape(c.assignatura).replace('’', '&#8217;').replace('‘', '&#8216;')
+            contingut = (f'<b>{nom_assignatura}</b><small class="ubicacio">{fmt(c.ini)}–{fmt(c.fi)} · {escape(ubicacio)}</small>'
+                        f'<small>{escape(tipus)} · {escape(grup)}</small>')
+            if nota:
+                contingut += f'<small class="nota">{escape(nota)}</small>'
+            html += (f'<details class="classe {marques}" data-estat="{estat}" '
+                f'style="grid-row:{c.ini-inici_dia+1}/span {c.fi-c.ini};grid-column:{columna}" '
+                f'title="{escape(etiqueta, quote=True)}" aria-label="{escape(etiqueta, quote=True)}">'
+                f'<summary>{contingut}</summary><small class="detall">{escape(avis or nom)}</small></details>')
+        html += '</section>'
+    return html + '</div></div></div></div>'
 
 
 def exporta_aula_html(base, proposta, setmana, aula, **kwargs):
     titol = f'Aula {aula} · setmana del {dilluns(setmana):%d/%m/%Y}'
     contingut = taula_html(celles_aula(base, proposta, setmana, aula, **kwargs), titol)
-    return '<!doctype html><html lang="ca"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' + escape(titol) + '</title><body><h1>' + escape(titol) + '</h1>' + llegenda_html() + contingut + script_linies_html() + '</body></html>'
+    return '<!doctype html><html lang="ca"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' + escape(titol) + '</title><body><h1>' + escape(titol) + '</h1>' + llegenda_html() + contingut + '</body></html>'

@@ -24,9 +24,43 @@ from components.graella import (celles_grup, celles_aula, exporta_aula_html,
     setmana_tipica, grups, taula_html, FRANGES)
 
 
-def primera_taula(html):
-    """Separa la graella setmanal dels estils i del peu de l’exportació."""
-    return html.split('</table>', 1)[0] + '</table>'
+def contingut_graella(html):
+    """Separa el contingut de la graella dels estils de l'exportació."""
+    return html.split('</style>', 1)[-1]
+
+
+def estructura_graella(html):
+    from html.parser import HTMLParser
+
+    class Graella(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.dies, self.classes, self.hores, self.caps = [], [], [], []
+            self.dia = None
+
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            classes = attrs.get('class', '').split()
+            if 'dia-horari' in classes:
+                self.dia = attrs
+                self.dies.append(attrs)
+            if 'classe' in classes:
+                self.classes.append((self.dia, attrs))
+            if 'hora' in classes:
+                self.hores.append(attrs)
+            if 'dia-cap' in classes and 'hora-cap' not in classes:
+                self.caps.append(attrs)
+
+    graella = Graella()
+    graella.feed(html)
+    return graella
+
+
+def posicio_classe(attrs):
+    import re
+    fila, durada, columna, ample = map(int, re.search(
+        r'grid-row:(\d+)/span (\d+);grid-column:(\d+)/span (\d+)', attrs['style']).groups())
+    return fila, fila + durada, columna, columna + ample
 
 
 class TestGraellaResponsive(unittest.TestCase):
@@ -35,67 +69,36 @@ class TestGraellaResponsive(unittest.TestCase):
         from components.graella import Cella
         mati = Cella('INVENTADA-MATI', 'L', 548, 803, '', 'Assignatura Inventada',
                      'Teoria', 'TE/81', False, False)
-        html = taula_html([mati])
-        assert '09:00–09:30' in html and '13:00–13:30' in html
-        assert '08:30–09:00' not in html and '13:30–14:00' not in html
         tarda = replace(mati, id_sessio='INVENTADA-TARDA', ini=905, fi=1010, dia='X')
-        html = taula_html([tarda])
-        assert '15:00–15:30' in html and '16:30–17:00' in html
-        assert '14:30–15:00' not in html and '17:00–17:30' not in html
-        html = taula_html([mati, tarda])
-        assert '09:00–09:30' in html and '16:30–17:00' in html
+        for classes, inici, final in (([mati], 540, 810), ([tarda], 900, 1020), ([mati, tarda], 540, 1020)):
+            graella = estructura_graella(taula_html(classes))
+            assert [int(h['data-minut']) for h in graella.hores] == list(range(inici, final, 30))
         buit = taula_html([])
-        assert 'No hi ha classes aquesta setmana.' in buit and '<table' not in buit
+        assert 'No hi ha classes aquesta setmana.' in buit and 'class="horari"' not in buit
 
     def test_linies_continues_alineades_amb_files_exactes(self):
         from components.graella import Cella, CSS
         c = Cella('INVENTADA-LINIES', 'L', 555, 645, '', 'Assignatura Inventada',
                   'Teoria', 'TE/81', False, False)
-        html = primera_taula(taula_html([c]))
-        assert 'class="hora-plena" data-minut="540"' in html
-        assert 'class="mitja-hora" data-minut="570"' in html
-        assert 'class="fraccio" data-minut="555"' in html
-        assert 'class="hora-plena" data-minut="600"' in html
-        import re
-        assert not re.search(r'::(?:before|after)\s*\{', CSS)
-        assert 'tbody{background-color:#fff;background-repeat:no-repeat;' in CSS
-        assert 'background-image:linear-gradient(#e6e5e0,#e6e5e0)' in CSS
-        assert 'background-image:linear-gradient(#c9c8c2,#c9c8c2)' in CSS
-        assert 'background-size:100% 2px' in CSS
-        assert '.classe{position:relative;z-index:1;' in CSS
+        html = taula_html([c])
+        graella = estructura_graella(html)
+        assert [h['class'] for h in graella.hores] == ['hora hora-plena', 'hora', 'hora hora-plena', 'hora']
+        assert posicio_classe(graella.classes[0][1]) == (16, 106, 1, 2)
+        assert '--files:repeat(120,1.6px)' in html
+        assert '#d9d8d2 0 1px,transparent 1px 48px,#efeee9 48px 49px' in html
+        assert '.dia-horari{column-gap:6px;background-image:var(--linies)' in CSS
+        assert 'background-position:0 6px' in CSS
+        assert 'tbody' not in CSS and '<td' not in html
+        assert 'position:sticky;left:0' in CSS
 
-    def test_fons_de_linies_segueix_alcades_renderitzades_sense_crear_celles(self):
-        import shutil
-        import subprocess
-        from components.graella import LINIES_JS
-        node = shutil.which('node')
-        if not node:
-            self.skipTest('Node no disponible per comprovar el fons de línies')
-        harness = r'''
-const assert=require('node:assert/strict');
-let top=200,height=180,desconnectat=false,callback;
-const fila=(tipus,y)=>({y,classList:{contains:c=>c===tipus},getBoundingClientRect(){return {top:this.y};}});
-const files=[fila('hora-plena',200),fila('fraccio',212),fila('mitja-hora',260),fila('hora-plena',310)];
-const cos={rows:files,style:{},getBoundingClientRect:()=>({top,height})};
-const ocult={rows:[],style:{},getBoundingClientRect:()=>({height:0})};
-const arrel={querySelectorAll:s=>{assert.equal(s,'table.horari tbody');return [cos,ocult];}};
-// Sense APIs d'inserció al DOM: el decorador només pot modificar el fons.
-const host={document:{},requestAnimationFrame:f=>{f();return 1;},cancelAnimationFrame:()=>{},
- ResizeObserver:class{constructor(f){callback=f;}observe(){}disconnect(){desconnectat=true;}}};
-const neteja=preparaLiniesHorari(arrel,host);
-assert.equal(cos.style.backgroundPosition,'0 0px,0 60px,0 110px,0 179px');
-assert.equal(cos.style.backgroundSize,'100% 2px,100% 1px,100% 2px,100% 1px');
-assert.equal(cos.style.backgroundImage.split('linear-gradient').length-1,4);
-assert.deepEqual(ocult.style,{});
-// Un canvi de mida (noms llargs, detall desplegat o canvi de variant).
-top=250;height=200;[250,270,320,390].forEach((y,i)=>files[i].y=y);callback();
-assert.equal(cos.style.backgroundPosition,'0 0px,0 70px,0 140px,0 199px');
-neteja();assert.ok(desconnectat);
-const fons=cos.style.backgroundPosition;files[2].y=360;callback();
-assert.equal(cos.style.backgroundPosition,fons);
-'''
-        subprocess.run([node, '-e', LINIES_JS + harness], check=True,
-                       capture_output=True, text=True)
+    def test_linies_comencen_amb_el_color_de_la_mitja_hora(self):
+        from components.graella import Cella
+        c = Cella('INVENTADA-MITJA', 'L', 510, 630, '', 'Assignatura Inventada',
+                  'Teoria', 'TE/81', False, False)
+        html = taula_html([c])
+        assert '#efeee9 0 1px,transparent 1px 48px,#d9d8d2 48px 49px' in html
+        assert [h['class'] for h in estructura_graella(html).hores] == [
+            'hora', 'hora hora-plena', 'hora', 'hora hora-plena']
 
     def test_apostrof_tipografic_i_recte_sense_perdre_text(self):
         from html.parser import HTMLParser
@@ -124,7 +127,7 @@ assert.equal(cos.style.backgroundPosition,fons);
             c = Cella('INVENTADA-APOSTROF', 'L', 570, 690, '', nom,
                       'Teoria', 'TE/81', False, False)
             parser = Noms()
-            parser.feed(primera_taula(taula_html([c])))
+            parser.feed(contingut_graella(taula_html([c])))
             assert parser.noms == [nom]
         assert 'font-family:system-ui,sans-serif' in CSS
         assert 'word-spacing:normal' in CSS and 'letter-spacing:normal' in CSS
@@ -158,108 +161,41 @@ assert.equal(cos.style.backgroundPosition,fons);
         assert 'Com funciona? Guia pas a pas' in prova_guia_html()
         assert 'prova-obre-menu' in html and 'data-testid="stSidebar"' in html
 
-    def test_columnes_i_rowspans_de_la_setmana(self):
+    def test_columnes_i_posicions_exactes_de_la_setmana(self):
         from dataclasses import replace
-        from html.parser import HTMLParser
         from components.graella import Cella
         from components.prova_graella import setmana_inventada
-
-        class Taules(HTMLParser):
-            def __init__(self):
-                super().__init__()
-                self.taules = []
-                self.seccio = None
-
-            def handle_starttag(self, tag, attrs):
-                attrs = dict(attrs)
-                if tag == 'table':
-                    self.taules.append({'columnes': 0, 'thead': [], 'tbody': []})
-                elif tag in ('colgroup', 'thead', 'tbody'):
-                    self.seccio = tag
-                elif tag == 'col' and self.seccio == 'colgroup':
-                    self.taules[-1]['columnes'] += int(attrs.get('span', 1))
-                elif tag == 'tr':
-                    self.taules[-1][self.seccio].append([])
-                elif tag in ('td', 'th'):
-                    self.taules[-1][self.seccio][-1].append((tag, attrs))
-
-            def handle_endtag(self, tag):
-                if tag in ('colgroup', 'thead', 'tbody'):
-                    self.seccio = None
-
         a = Cella('INVENTADA-A', 'L', 510, 555, '', 'Assignatura Inventada',
                   'Problemes', 'PAUL/811', False, False)
         parcials = [a, replace(a, id_sessio='INVENTADA-B', ini=540, fi=600),
                     replace(a, id_sessio='INVENTADA-C', ini=600, fi=660)]
-        # La mateixa setmana que la prova visual, i límits parcials amb rowspans
-        # tant a les classes com a les hores. Validem la setmana sencera.
         for classes in (setmana_inventada(), parcials):
-            parser = Taules()
-            parser.feed(taula_html(classes))
-            assert len(parser.taules) == 1  # Una sola setmana, sense taules duplicades.
-            for taula in parser.taules:
-                columnes = taula['columnes']
-                assert columnes >= 2
-                assert sum(int(c.get('colspan', 1)) for _, c in taula['thead'][0]) == columnes
-                pendents = [0] * columnes
-                for fila in taula['tbody']:
-                    ocupades = [n > 0 for n in pendents]
-                    # Comparació explícita amb <colgroup>, incloent-hi les
-                    # columnes ocupades per rowspans de files anteriors.
-                    assert sum(ocupades) + sum(int(c.get('colspan', 1)) for _, c in fila) == columnes
-                    seguent = [max(0, n - 1) for n in pendents]
-                    for tag, cella in fila:
-                        assert False in ocupades
-                        col = ocupades.index(False)
-                        ample = int(cella.get('colspan', 1))
-                        if tag == 'th':
-                            assert cella['scope'] == 'row' and col == 0 and ample == 1
-                        assert col + ample <= columnes
-                        assert not any(ocupades[col:col + ample])
-                        for k in range(col, col + ample):
-                            ocupades[k] = True
-                            seguent[k] = int(cella.get('rowspan', 1)) - 1
-                    assert all(ocupades)
-                    pendents = seguent
-                assert not any(pendents)
+            graella = estructura_graella(taula_html(classes))
+            assert len(graella.dies) == 5 and len(graella.classes) == len(classes)
+            inici = min(c.ini for c in classes) // 30 * 30
+            for dia, attrs in graella.classes:
+                fila, final, col, dret = posicio_classe(attrs)
+                assert 1 <= col < dret <= int(dia['data-carrils']) + 1
+                assert any(c.ini - inici + 1 == fila and c.fi - inici + 1 == final for c in classes)
+                for altre_dia, altre in graella.classes:
+                    if attrs is altre or dia is not altre_dia:
+                        continue
+                    f, fi, k, ample = posicio_classe(altre)
+                    assert not (fila < fi and f < final and col < ample and k < dret)
 
     def test_setmana_seguida_fins_divendres_sense_duplicar_classes(self):
-        from html.parser import HTMLParser
-        from components.graella import Cella
+        from components.graella import Cella, NOMS_DIES
         from components.prova_graella import setmana_inventada
-
-        class Setmana(HTMLParser):
-            def __init__(self):
-                super().__init__()
-                self.columnes = []
-                self.noms = []
-                self.columna = self.nom = False
-            def handle_starttag(self, tag, attrs):
-                if tag == 'th':
-                    self.columna = dict(attrs).get('scope') == 'col'
-                if tag == 'b':
-                    self.nom = True
-            def handle_endtag(self, tag):
-                if tag == 'th':
-                    self.columna = False
-                if tag == 'b':
-                    self.nom = False
-            def handle_data(self, data):
-                if self.columna:
-                    self.columnes.append(data)
-                if self.nom:
-                    self.noms.append(data)
-
-        # Els dies buits també conserven la seva columna fins a divendres.
         divendres = Cella('INVENTADA-DIVENDRES', 'V', 570, 630, '',
                          'Classe de divendres', 'Teoria', 'TE/99', False, False)
         for classes in (setmana_inventada(), [divendres]):
             html = taula_html(classes)
-            parser = Setmana()
-            parser.feed(html)
-            assert html.count('<table ') == 1
-            assert parser.columnes == ['Hora', 'Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres']
-            assert sorted(parser.noms) == sorted(c.assignatura for c in classes)
+            graella = estructura_graella(html)
+            assert html.count('class="horari"') == 1
+            assert tuple(d['aria-label'] for d in graella.dies) == NOMS_DIES
+            assert len(graella.caps) == 5
+            assert len(graella.classes) == len(classes)
+            assert all(html.count('<b>' + c.assignatura + '</b>') == 1 for c in classes if '’' not in c.assignatura)
 
     def test_noms_sencers_i_colors_amb_contrast(self):
         from components.graella import CSS, ESTATS
@@ -272,13 +208,13 @@ assert.equal(cos.style.backgroundPosition,fons);
         assert '…' not in html and 'text-overflow' not in CSS
         assert 'hyphens:none' in CSS and 'word-break:normal' in CSS
         assert 'overflow-wrap:anywhere' not in CSS and 'line-clamp' not in CSS
-        assert 'color:#1a1a18;font-size:14px;font-weight:700' in CSS
-        assert 'color:#52514e;font-size:12px' in CSS
+        assert 'color:#1a1a18;font-size:14px;font-weight:600' in CSS
+        assert 'font-size:12px;color:#52514e' in CSS
         esperats = {
-            'igual': ('#2a78d6', '#e8f1fc', '#1d5fae'),
-            'aula-nova': ('#2f8f46', '#e9f4ec', '#1f6b33'),
-            'canvi': ('#e8820c', '#fff1e0', '#9a5200'),
-            'relaxada': ('#d03b3b', '#fbe9e9', '#a12c2c'),
+            'igual': ('#2a78d6', '#eef4fc', '#1d5fae'),
+            'aula-nova': ('#2f8f46', '#edf6ef', '#1f6b33'),
+            'canvi': ('#e8820c', '#fff4e5', '#8f4c00'),
+            'relaxada': ('#d03b3b', '#fdeeee', '#a12c2c'),
         }
 
         def llum(color):
@@ -287,7 +223,7 @@ assert.equal(cos.style.backgroundPosition,fons);
                        for p, v in zip((.2126, .7152, .0722), canals))
 
         for clau, colors in esperats.items():
-            assert ESTATS[clau][2:] == colors
+            assert ESTATS[clau][1:] == colors
             _, fons, text = colors
             assert (llum(fons) + .05) / (llum(text) + .05) >= 4.5
             assert f'background:{fons}' in CSS and f'color:{text}' in CSS
@@ -296,7 +232,7 @@ assert.equal(cos.style.backgroundPosition,fons);
         from components.graella import CSS_FILTRES, filtres_html
         from components.prova_graella import setmana_inventada
         html = filtres_html(setmana_inventada())
-        assert 'Totes (7)' in html and 'Aula assignada (1)' in html
+        assert 'Totes (9)' in html and 'Aula assignada (1)' in html
         assert html.count('aria-pressed="true"') == 1
         assert 'background:#fff;color:#1a1a18;border:1px solid' in CSS_FILTRES
         assert 'border-color:#1a1a18;font-weight:700;outline:none' in CSS_FILTRES
@@ -311,11 +247,11 @@ assert.equal(cos.style.backgroundPosition,fons);
             assert not at.exception and not at.error
 
     def test_prova_comparteix_html_i_css(self):
-        from components.graella import CSS, CSS_FILTRES, script_linies_html
+        from components.graella import CSS, CSS_FILTRES
         from components.prova_graella import genera, setmana_inventada
         html = genera()
         assert CSS in html and CSS_FILTRES in html
-        assert script_linies_html() in html
+        assert 'background-image:var(--linies)' in html
         assert all(f'style="width:{ample}px"' in html for ample in (1160, 887, 390))
         assert html.count(taula_html(setmana_inventada(), 'Setmana inventada', estils=False)) == 3
 
@@ -394,8 +330,8 @@ class TestGraella(unittest.TestCase):
         html = exporta_aula_html(base, p, date(2027, 3, 8), 'Q9/0001', noms={'100001': '<script>alert(1)</script>'})
         assert '<!doctype html>' in html and '<style>' in html and 'lang="ca"' in html
         assert '<script>alert(1)</script>' not in html and '&lt;script&gt;' in html
-        assert html.count('<script>') == 1  # Només el codi estàtic de les línies.
-        assert 'Dilluns' in html and '09:00–09:30' in html
+        assert '<script>' not in html  # Les línies de fons són CSS, també en exportar.
+        assert 'Dilluns' in html and 'data-minut="540"' in html
         assert '20:30–21:00' not in html
 
 
@@ -429,7 +365,7 @@ class TestGraella(unittest.TestCase):
             at.get('button_group')[0].set_value('Només avui').run(timeout=30)
             assert not at.exception and not at.error
             html = '\n'.join(m.value for m in at.markdown)
-            assert html.count('<table class="horari"') == 2  # Grup i aula, sense duplicats.
+            assert html.count('class="horari"') == 2  # Grup i aula, sense duplicats.
             assert 'Amb la proposta ·' not in html
             assert 'Aula no indicada a les dades' in html
             at.selectbox(key='p2-curs').select('3r').run(timeout=30)
@@ -448,33 +384,22 @@ class TestMillores(unittest.TestCase):
         from components.graella import Cella
         a = Cella('S90007', 'L', 510, 630, 'Q9/0001', 'Assignatura Inventada I', 'Teoria', '81', False, False)
         b = Cella('S90008', 'L', 555, 615, 'Q9/0002', 'Assignatura Inventada II', 'Problemes', '811', False, False)
-        html = primera_taula(taula_html([a, b]))
+        html = taula_html([a, b])
+        graella = estructura_graella(html)
         assert html.count('<b>Assignatura Inventada I</b>') == 1
         assert html.count('<b>Assignatura Inventada II</b>') == 1
-        assert 'rowspan="6"' in html  # Inclou els límits exactes 09:15 i 10:15.
-        assert 'colspan="2">Dilluns' in html
+        assert [posicio_classe(c) for _, c in graella.classes] == [(1, 121, 1, 2), (46, 106, 2, 3)]
+        assert graella.dies[0]['data-carrils'] == '2'
         assert '08:30–10:30' in html
 
     def test_classe_sola_aprofita_amplada_del_dia(self):
         from components.graella import Cella
-        from html.parser import HTMLParser
-
-        class Graella(HTMLParser):
-            def __init__(self):
-                super().__init__()
-                self.celles = []
-            def handle_starttag(self, tag, attrs):
-                if tag == 'td':
-                    self.celles.append(dict(attrs))
-
         cs = [Cella('S90001', 'L', 510, 630, 'Q9/0001', 'Assignatura Inventada I', 'Teoria', '81', False, False),
               Cella('S90009', 'L', 630, 690, 'Q9/0001', 'Assignatura Inventada II', 'Problemes', '811', False, False),
               Cella('S90010', 'L', 630, 690, 'Q9/0002', 'Assignatura Inventada III', 'Problemes', '812', False, False)]
-        p = Graella()
-        p.feed(primera_taula(taula_html(cs)))
-        sessions = [a for a in p.celles if 'rowspan' in a]
-        assert sessions == [{'rowspan': '4', 'colspan': '2'},
-                            {'rowspan': '2', 'colspan': '1'}, {'rowspan': '2', 'colspan': '1'}]
+        graella = estructura_graella(taula_html(cs))
+        assert [posicio_classe(c) for _, c in graella.classes] == [
+            (1, 121, 1, 3), (121, 181, 1, 2), (121, 181, 2, 3)]
 
     def test_proposta_defecte(self):
         from pagines.part2 import proposta_per_defecte, RESULTATS
@@ -511,7 +436,7 @@ class TestMillores(unittest.TestCase):
             motius = carrega_excepcions(str(path), 1)
         base = crea_base()
         dades = celles_grup(base, Proposta.de_base(base), date(2027, 3, 8), 'GXX', '1r', '81', relaxacions=motius)
-        html = primera_taula(taula_html(dades))
+        html = contingut_graella(taula_html(dades))
         assert 'classe relaxada' in html
         assert 'Excepció de calendari' in html
         assert 'Festiu &lt;especial&gt;' in html
@@ -521,7 +446,7 @@ class TestAssignacions(unittest.TestCase):
     def test_llegenda_i_etiquetes_sense_codis(self):
         from components.graella import Cella, llegenda_html
         c = Cella('S90001', 'L', 510, 570, '', 'Assignatura Inventada I', 'Teoria', 'TE/81', False, False)
-        html = primera_taula(taula_html([c], originals=True))
+        html = contingut_graella(taula_html([c], originals=True))
         assert 'Grup 81' in html and 'TE/81' not in html
         assert 'Aula no indicada a les dades' in html
         assert 'Pendent d’assignar aula' in taula_html([c])
@@ -544,7 +469,7 @@ class TestAssignacions(unittest.TestCase):
         noves = celles_grup(base, p, *args)
         assert sum(c.canvi for c in noves) == 0
         assert sum(c.aula_assignada for c in noves) == 1
-        html = primera_taula(taula_html(noves))
+        html = contingut_graella(taula_html(noves))
         assert 'Aula assignada' in html and 'class="classe canvi' not in html
         assert 'class="classe aula-nova"' in html
         resum = resum_grup(base, p, actuals, noves)
@@ -572,64 +497,35 @@ class TestRedisseny(unittest.TestCase):
 
     def test_carrils_nomes_al_dia_i_franja_amb_solapament(self):
         from dataclasses import replace
-        from html.parser import HTMLParser
         from components.graella import Cella, CSS
-
-        class Taula(HTMLParser):
-            def __init__(self):
-                super().__init__()
-                self.files = []
-            def handle_starttag(self, tag, attrs):
-                if tag == 'tr':
-                    self.files.append([])
-                elif tag in ('th', 'td'):
-                    self.files[-1].append(dict(attrs))
-
         a = Cella('S90001', 'L', 510, 570, '', 'Inventada', 'Teoria', '81', False, False)
         cs = [a, replace(a, id_sessio='S90002', ini=600, fi=660),
               replace(a, id_sessio='S90003', ini=600, fi=660)]
         cs += [replace(a, id_sessio=f'S9001{i}', dia=dia) for i, dia in enumerate('MXJV')]
-        html = primera_taula(taula_html(cs))
-        taula = Taula()
-        taula.feed(html)
-        assert [int(c.get('colspan', 1)) for c in taula.files[0]] == [1, 2, 1, 1, 1, 1]
-        assert 'min-width:972px' in html  # Dos carrils dilluns; un als altres dies.
-        # La primera classe de dilluns ocupa tot el dia, les simultànies un carril.
-        blocs = [c for fila in taula.files[1:] for c in fila if 'rowspan' in c and 'colspan' in c]
-        assert [int(c['colspan']) for c in blocs] == [2, 1, 1, 1, 1, 1, 1]
-        # Simulem els rowspans: cada fila ha de tenir exactament les mateixes
-        # set columnes, també després del final de les classes paral·leles.
-        pendents = [0] * 7
-        for fila in taula.files[1:]:
-            ocupades = [n > 0 for n in pendents]
-            seguent = [max(0, n - 1) for n in pendents]
-            for cella in fila:
-                col = ocupades.index(False)
-                ample = int(cella.get('colspan', 1))
-                assert col + ample <= 7 and not any(ocupades[col:col + ample])
-                for k in range(col, col + ample):
-                    ocupades[k] = True
-                    seguent[k] = int(cella.get('rowspan', 1)) - 1
-            assert all(ocupades)
-            pendents = seguent
-        assert not any(pendents)
-        assert 'min-width:0;height:100%' in CSS
+        html = taula_html(cs)
+        graella = estructura_graella(html)
+        assert [d['data-carrils'] for d in graella.dies] == ['2', '1', '1', '1', '1']
+        assert 'grid-template-columns:56px minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)' in html
+        assert 'min-width:864px' in html
+        assert [posicio_classe(c)[3] - posicio_classe(c)[2] for _, c in graella.classes] == [2, 1, 1, 1, 1, 1, 1]
         assert 'container:p2-graella / inline-size' in CSS
-        assert 'overflow:auto' not in CSS
+        assert 'overflow-x:auto' in CSS and 'position:sticky;left:0' in CSS
 
     def test_classes_consecutives_no_obren_carrils_per_arrodoniment(self):
         from dataclasses import replace
         from components.graella import Cella
         a = Cella('S90001', 'L', 510, 555, '', 'Inventada I', 'Teoria', '81', False, False)
         b = replace(a, id_sessio='S90002', ini=555, fi=615, assignatura='Inventada II')
-        html = primera_taula(taula_html([a, b]))
-        assert 'min-width:822px' in html
-        assert 'colspan="1">Dilluns' in html
+        html = taula_html([a, b])
+        graella = estructura_graella(html)
+        assert 'min-width:738px' in html
+        assert graella.dies[0]['data-carrils'] == '1'
         assert '09:15–10:15' in html
-        assert html.count('<details class="classe') == 2
-        # Un sol minut compartit sí que exigeix dos blocs de com a mínim 150 px.
-        html = primera_taula(taula_html([a, replace(b, ini=554)]))
-        assert 'min-width:972px' in html and 'colspan="2">Dilluns' in html
+        assert len(graella.classes) == 2
+        assert [posicio_classe(c) for _, c in graella.classes] == [(1, 46, 1, 2), (46, 106, 1, 2)]
+        html = taula_html([a, replace(b, ini=554)])
+        assert 'min-width:864px' in html
+        assert estructura_graella(html).dies[0]['data-carrils'] == '2'
 
     def test_colors_variables_i_prioritat(self):
         from dataclasses import replace
@@ -642,20 +538,42 @@ class TestRedisseny(unittest.TestCase):
         for cella, esperat in casos:
             assert estat_cella(cella) == esperat
             assert f'data-estat="{esperat}"' in taula_html([cella])
-        assert ESTATS['igual'][2:] == ('#2a78d6', '#e8f1fc', '#1d5fae')
-        assert 'border-left:5px solid #2a78d6' in CSS
-        assert 'border-left-color:#2f8f46' in CSS and 'background:#e9f4ec' in CSS
-        assert 'color:#1f6b33' in CSS and 'border-left-color:#d03b3b' in CSS
-        assert 'border-left-color:#e8820c' in CSS
-        assert '<span class="estat">' in taula_html([casos[1][0]])
+        assert ESTATS['igual'][1:] == ('#2a78d6', '#eef4fc', '#1d5fae')
+        assert 'border-left' not in CSS
+        assert 'border:0;border-radius:10px;padding:8px 10px' in CSS
+        assert 'background:#edf6ef' in CSS and 'background:#fdeeee' in CSS
+        assert 'background:#fff4e5' in CSS and 'background:#eef4fc' in CSS
+        for cella, esperat in casos:
+            html = taula_html([cella])
+            nom = ESTATS[esperat][0]
+            assert f'title="{nom} ·' in html and f'aria-label="{nom} ·' in html
+            assert '<span class="estat">' not in html and '<svg' not in html
+
+    def test_tres_linies_i_nota_curta_amb_detall_complet(self):
+        from dataclasses import replace
+        from components.graella import Cella
+        c = Cella('INVENTADA-NOTA', 'L', 510, 630, 'Aula inventada',
+                  'Assignatura Inventada', 'Problemes', 'PAUL/999', True, False,
+                  abans='Abans: dijous 12:30 · Aula anterior inventada (08/03/2027)')
+        html = taula_html([c])
+        assert '<b>Assignatura Inventada</b><small class="ubicacio">08:30–10:30 · Aula inventada</small><small>Problemes · Subgrup 999</small><small class="nota">Abans: dijous 12:30</small>' in html
+        assert 'Aula anterior inventada' in html
+        igual = taula_html([replace(c, canvi_franja=False)])
+        assignada = taula_html([replace(c, canvi_franja=False, aula_assignada=True)])
+        assert '<small class="nota">' not in igual and '<small class="nota">' not in assignada
+        motiu = 'Motiu inventat amb <etiqueta> i prou paraules per comprovar que el resum és curt i el detall es conserva sencer.'
+        especial = taula_html([replace(c, relaxacions=(motiu,))])
+        assert '<small class="nota">Motiu inventat amb &lt;etiqueta&gt;' in especial
+        assert motiu.replace('<', '&lt;').replace('>', '&gt;') in especial
+        assert '<etiqueta>' not in especial
 
     def test_filtre_apaga_sense_amagar_ni_recolocar(self):
         from dataclasses import replace
         from components.graella import Cella, recomptes_estat
         a = Cella('S90001', 'L', 510, 570, '', 'Inventada I', 'Teoria', '81', False, False)
         b = replace(a, id_sessio='S90002', ini=570, fi=630, aula='Q9/0001', aula_assignada=True)
-        html = primera_taula(taula_html([a, b], filtre='aula-nova'))
-        assert 'class="classe apagada" data-estat="igual"' in html
+        html = contingut_graella(taula_html([a, b], filtre='aula-nova'))
+        assert 'class="classe igual apagada" data-estat="igual"' in html
         assert 'class="classe aula-nova" data-estat="aula-nova"' in html
         assert html.count('<details class="classe') == 2
         assert 'apagada"' not in taula_html([a, b], filtre='totes')
@@ -678,16 +596,16 @@ class TestRedisseny(unittest.TestCase):
         grup = celles_grup(base, p, date(2027, 3, 8), 'GXX', '1r', '81', noms=noms)
         aula = celles_aula(base, p, date(2027, 3, 8), 'Q9/0001', noms=noms)
         for html in (taula_html(grup), taula_html(aula), exporta_aula_html(base, p, date(2027, 3, 8), 'Q9/0001', noms=noms)):
-            html = primera_taula(html)
+            html = contingut_graella(html)
             assert html.count('<details class="classe') == 1
             assert 'Inventada I / Inventada II' in html
-            assert html.count('Classe compartida') == 1
+            assert 'Classe compartida' in html
         assert recomptes_estat(aula) == {'igual': 1}
         p.files['S90002'].aula = 'Q9/0002'
-        assert primera_taula(taula_html(celles_grup(base, p, date(2027, 3, 8), 'GXX', '1r', '81'))).count('<details class="classe') == 2
+        assert contingut_graella(taula_html(celles_grup(base, p, date(2027, 3, 8), 'GXX', '1r', '81'))).count('<details class="classe') == 2
         p.files['S90002'].aula = 'Q9/0001'
         p.files['S90002'].h_ini = '09:30'
-        assert primera_taula(taula_html(celles_aula(base, p, date(2027, 3, 8), 'Q9/0001'))).count('<details class="classe') == 2
+        assert contingut_graella(taula_html(celles_aula(base, p, date(2027, 3, 8), 'Q9/0001'))).count('<details class="classe') == 2
 
     def test_noms_grups_i_amplada_per_carril(self):
         from components.graella import Cella, CSS, nom_grup
@@ -695,10 +613,10 @@ class TestRedisseny(unittest.TestCase):
         assert nom_grup('PAUL/903', 'Problemes') == 'Subgrup 903 · problemes'
         assert nom_grup('SEM/906', 'Seminari') == 'Subgrup 906 · seminari'
         cs = [Cella(f'S90{i:03}', 'L', 510, 570, '', 'Assignatura Inventada', 'Problemes', f'PAUL/904{i}', False, False) for i in range(4)]
-        html = primera_taula(taula_html(cs))
-        assert 'min-width:1272px' in html  # 72 + (4 carrils + 4 dies) * 150
-        assert html.count('<col class="carril">') == 8
-        assert 'min-width:0;height:100%' in CSS and 'overflow:auto' not in CSS
+        html = contingut_graella(taula_html(cs))
+        assert 'min-width:1116px' in html  # Hores, padding, espais i vuit carrils.
+        assert sum(int(d['data-carrils']) for d in estructura_graella(html).dies) == 8
+        assert 'min-width:0;min-height:0' in CSS and 'overflow:auto' not in CSS
         assert 'overflow-wrap:anywhere' not in CSS and 'word-break:normal' in CSS
         assert 'PAUL/' not in html
 
@@ -707,11 +625,11 @@ class TestRedisseny(unittest.TestCase):
         p = Proposta.de_base(base)
         p.files['S90001'] = Assignacio('M', '16:00', 'Q9/0002')
         c, = celles_grup(base, p, date(2027, 3, 8), 'GXX', '1r', '81')
-        html = primera_taula(taula_html([c]))
-        assert '08:30–09:00' not in html and '16:00–16:30' in html
-        assert '16:30–17:00' in html and '20:30–21:00' not in html
+        html = contingut_graella(taula_html([c]))
+        assert 'data-minut="510"' not in html and 'data-minut="960"' in html
+        assert 'data-minut="990"' in html and 'data-minut="1230"' not in html
         assert 'Abans: dilluns 15:00' in html
-        assert '<summary>' in html and 'title="Abans:' in html
+        assert '<summary>' in html and 'title="Canvia ·' in html
 
     def test_resum_inclou_classe_que_marxa_de_la_setmana(self):
         from pagines.part2 import resum_html
