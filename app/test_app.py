@@ -229,6 +229,19 @@ preguntes.mostra()
         t.extra['torns'] = pd.DataFrame({'torn':['mati','tarda'],'ocupacio_pct':[69.7,42.1]})
         self.assertIn('Matí 70 % · Tarda 42 %',text(t)['frase'])
 
+    def test_hi_cap_mati_verd_quan_la_part2_ho_valida(self):
+        from presentacio import text
+        t = copy.deepcopy(una('hi-cap-mati'))
+        t.extra.update(falla_per_mida=False, per_mida=[], per_mida_setmanes=[])
+        t.extra['validat_part2'] = None
+        self.assertEqual(text(t)['estat'],'ambre')
+        t.extra['validat_part2'] = dict(veredicte='VALIDA AMB RELAXACIONS DECLARADES', incompliments=2, valida=False)
+        self.assertEqual(text(t)['estat'],'ambre')
+        t.extra['validat_part2'] = dict(veredicte='VALIDA AMB RELAXACIONS DECLARADES', incompliments=0, valida=True)
+        info = text(t)
+        self.assertEqual((info['estat'],info['etiqueta'],info['c']['resposta']),('verd','Hi cap','Sí, hi cap'))
+        self.assertIn('verificador oficial',info['frase'])
+
     def test_css_injectat_alinea_targetes(self):
         app = self.carrega()
         self.comprova(app)

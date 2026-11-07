@@ -1,5 +1,6 @@
 """Accés al contracte de troballes i a la llista de setmanes."""
 import importlib
+import json
 from pathlib import Path
 import streamlit as st
 from nivell1 import troballes
@@ -25,9 +26,38 @@ def totes(semestre, setmana, versio):
 
 
 @st.cache_data(ttl=None, show_spinner=False)
-def una(id_, semestre, setmana, versio):
+def _una(id_, semestre, setmana, versio):
     importlib.invalidate_caches()
     return troballes.una(id_, semestre, setmana)
+
+
+def una(id_, semestre, setmana, versio):
+    t = _una(id_, semestre, setmana, versio)
+    # «Hi cap el matí?» es dona per validat quan la proposta de la part 2 (5.2) passa el verificador oficial.
+    if t is not None and id_ == 'hi-cap-mati' and semestre == 2:
+        t.extra = dict(t.extra or {}, validat_part2=validacio_part2('5.2'))
+    return t
+
+
+# Buidar la memòria cau d'una() buida la de _una().
+una.clear = _una.clear
+
+
+RESULTATS_PART2 = Path(__file__).resolve().parents[1] / 'resultats' / 'nivell2'
+VEREDICTES_VALIDS = ('VALIDA', 'VALIDA AMB RELAXACIONS DECLARADES')
+
+
+def validacio_part2(apartat):
+    """Només el veredicte i el recompte d'incompliments que compten; cap fila de dades."""
+    carpeta = RESULTATS_PART2 / apartat
+    try:
+        veredicte = json.loads((carpeta / 'informe.json').read_text(encoding='utf-8'))['veredicte']
+        resum = json.loads((carpeta / 'resum.json').read_text(encoding='utf-8'))
+    except (OSError, KeyError, ValueError):
+        return None
+    incompliments = int(resum.get('incompliments_no_declarats', 0) or 0)
+    return dict(veredicte=veredicte, incompliments=incompliments,
+                valida=veredicte in VEREDICTES_VALIDS and incompliments == 0)
 
 
 @st.cache_data(ttl=None, show_spinner=False)

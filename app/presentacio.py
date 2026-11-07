@@ -177,6 +177,13 @@ def text(t, altres=None, *, setmana_triada=None):
         resultat.update(etiqueta='Cal actuar' if c['falla'] else 'Pendent de validar',
             estat='vermell' if c['falla'] else 'ambre',
             frase=c['torns'] + (' ' + falta_mida(t.extra) if c['falla'] else ''))
+        validacio = (t.extra or {}).get('validat_part2') or {}
+        if validacio.get('valida') and not c['falla']:
+            c['validat'] = True
+            c['resposta'] = 'Sí, hi cap'
+            resultat.update(etiqueta='Hi cap', estat='verd',
+                frase=c['torns'].split('.')[0] + '. L’horari proposat (part 2) ho confirma: el verificador oficial el dona per vàlid. '
+                      'Les úniques classes fora de torn són les que no es poden moure (fixades, dobles titulacions i setmana d’avaluació).')
     if t.id == 'marge-grau-nou' and (t.extra.get('estat_provisional') or not t.extra.get('validat_part2', False)):
         resultat.update(etiqueta='Pendent de validar', estat='ambre')
     resultat.update(c=c)

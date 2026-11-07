@@ -77,7 +77,9 @@ def heroi(t):
         torns = (t.extra or {}).get('torns')
         if torns is not None and 'setmana_pitjor' in torns:
             parts.append('més plena de cada torn: ' + ', '.join(f"{r.torn} {r.setmana_pitjor}" for r in torns.itertuples()))
-        st.caption(' · '.join(parts) + '. És una orientació: cal validar que les classes es poden repartir en un horari.')
+        final = ('. Validat amb l’horari proposat de la part 2 (verificador oficial).' if info['c'].get('validat')
+                 else '. És una orientació: cal validar que les classes es poden repartir en un horari.')
+        st.caption(' · '.join(parts) + final)
 
 
 def resum_grau(info):
