@@ -290,3 +290,32 @@ def test_error_conversio_no_exposa_valors(paquet):
     assert not r['ok']
     assert 'Conversion Error' in r['error']
     assert 'S0' not in r['error']
+
+
+@pytest.mark.parametrize('dia', ['dimecres', 'DIMECRES', 'Miércoles', 'miercoles', 'wednesday', 'WEDNESDAY'])
+def test_sql_normalitza_dia_i_retorn_consulta(paquet, dia):
+    con = e.dades.connexio()
+    con.execute("ALTER TABLE sessions ADD COLUMN dia VARCHAR DEFAULT 'X'")
+    sql = "SELECT count(*) AS n FROM sessions WHERE dia = 'X'"
+    esperat = e.executa('consulta_sql', {'sql': sql})
+    r = e.executa('consulta_sql', {'sql': sql.replace("'X'", f"'{dia}'")})
+    assert esperat['ok'] and r['ok'], r
+    assert r['resultat'] == esperat['resultat']
+    assert r['resultat']['files'][0]['n'] == 65
+    assert r['consulta'] == sql
+
+
+def test_normalitza_nomes_literals_exactes():
+    sql = '''SELECT 'Miércoles', 'MONDAY', 'dimarts', 'jueves', 'divendres',
+        ' dimecres', 'dimecres ', 'cada dimecres', 'dimecres''s', 'X', 'x',
+        "dimecres", "'wednesday'", $$'monday'$$, $dia$'martes'$dia$
+        /* 'lunes' /* 'martes' */ 'dilluns' */ -- 'friday'
+    '''
+    esperat = sql.replace("'Miércoles'", "'X'").replace("'MONDAY'", "'L'").replace("'dimarts'", "'M'").replace("'jueves'", "'J'").replace("'divendres'", "'V'")
+    assert e._normalitza_dies_sql(sql) == esperat
+    assert e._normalitza_dies_sql("SELECT 'dimarts', 'dimecres', 'viernes'") == "SELECT 'M', 'X', 'V'"
+
+
+def test_descripcio_sql_format_dia_hora():
+    desc = next(d['function']['description'] for d in e.EINES if d['function']['name'] == 'consulta_sql')
+    assert "dia: L, M, X, J o V (X = dimecres); h_ini 'HH:MM'; ini_min = minuts des de mitjanit" in desc

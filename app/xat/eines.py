@@ -199,6 +199,31 @@ def resultat_proposta(apartat):
     return _retorn(resultat, consulta)
 
 
+def _normalitza_dies_sql(sql):
+    import duckdb
+    # DuckDB identifica els literals: no toquem comentaris, identificadors,
+    # ni cadenes delimitades amb dòlar. Els offsets són bytes UTF-8.
+    original = sql.encode('utf-8')
+    canvis = []
+    for inici, tipus in duckdb.tokenize(sql):
+        if tipus.name != 'string_const' or original[inici:inici+1] != b"'":
+            continue
+        literal = re.match(rb"'(?:[^']|'')*'", original[inici:])
+        if literal is None:
+            continue
+        valor = literal[0][1:-1].decode('utf-8')
+        if len(valor) <= 1 or valor != valor.strip():
+            continue
+        try:
+            codi = _dia(valor)
+        except EntradaError:
+            continue
+        canvis.append((inici, inici + len(literal[0]), f"'{codi}'".encode('utf-8')))
+    for inici, fi, literal in reversed(canvis):
+        original = original[:inici] + literal + original[fi:]
+    return original.decode('utf-8')
+
+
 def consulta_sql(sql):
     import duckdb
     if not isinstance(sql, str) or len(sql) > 20000:
@@ -206,6 +231,7 @@ def consulta_sql(sql):
     con = duckdb.connect(config={'enable_external_access': False, 'threads': 1})
     timer = None
     try:
+        sql = _normalitza_dies_sql(sql)
         statements = con.extract_statements(sql)
         if len(statements) != 1 or statements[0].type != duckdb.StatementType.SELECT or not re.match(r'^\s*(SELECT|WITH)\b', sql, re.I):
             raise EntradaError('Només es permet una sentència SELECT o WITH…SELECT.')
@@ -426,6 +452,7 @@ _COLUMNES_SQL = {
 _DESCRIPCIO_SQL = ('Una SELECT o WITH…SELECT, màxim 50 files i 5 s. Fes servir xifra primer per a xifres generals. '
                    'Sense fitxers ni xarxa. Columnes de les vistes:\n'
                    + '\n'.join(f'{nom}: {cols}' for nom, cols in _COLUMNES_SQL.items())
+                   + "\ndia: L, M, X, J o V (X = dimecres); h_ini 'HH:MM'; ini_min = minuts des de mitjanit"
                    + "\nel torn d'una sessió es dedueix de h_ini (abans de 14.30 matí); torn_requerit és el que li toca")
 
 _DEFS = [
