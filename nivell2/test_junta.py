@@ -219,7 +219,7 @@ def test_fora_torn_heretades_i_noves(tmp_path):
     assert len(d['excepcions']) == 2
     for text in documents(d):
         assert 'Excepcions noves als torns' in text
-        assert '1 classes ja es fan avui fora del seu torn i no es toquen.' in text
+        assert '1 classe ja es fa avui fora del seu torn i no es toca.' in text
 
 
 def test_tarda_i_percentatges_catalans():
@@ -334,3 +334,27 @@ def test_pic_instantani_successives_en_aules_diferents():
     r = pics_i_mides(b, b, colloca(b, p))['mati']
     assert r['simultani']['classes'] == 1
     assert r['pitjor']['classes'] == 2
+
+
+def test_escriptura_atomica(tmp_path, monkeypatch):
+    from nivell2 import junta
+    path = tmp_path / 'junta.json'
+    path.write_text('{"anterior": true}')
+    replace = junta.os.replace
+    def comprova(origen, desti):
+        assert origen.parent == path.parent
+        assert json.loads(path.read_text()) == {'anterior': True}
+        assert json.loads(origen.read_text()) == {'nou': True}
+        replace(origen, desti)
+    monkeypatch.setattr(junta.os, 'replace', comprova)
+    junta.escriu_atomic(path, '{"nou": true}')
+    assert json.loads(path.read_text()) == {'nou': True}
+    assert list(tmp_path.iterdir()) == [path]
+
+
+def test_textos_planers():
+    from nivell2 import junta
+    assert junta.classe(1) == 'classe'
+    assert junta.classe(2) == 'classes'
+    assert 'sense curs a les dades' in junta.nom('GXX:?')
+    assert junta.motiu_planer('vegeu diagnostic.md') == junta.MOTIU_S04526

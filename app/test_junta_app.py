@@ -28,7 +28,8 @@ def dades():
     fila = {'cohort': 'GXX:1r', 'nom': 'Grau inventat, 1r', 'sessions': 10,
             'mogudes': 0, 'mogudes_pct': 0, 'franja': 0, 'franja_pct': 0,
             'aules_assignades': 0, 'aula': 0, 'aula_pct': 0, 'torn': 0, 'torn_pct': 0}
-    return {'versio_resum': 2, 'data': '2026-11-07', 'aulari': {'ordinaries': 21, 'reserva': 2, 'disponibles': 19},
+    return {'versio_resum': junta.junta.VERSIO_RESUM, 'versio_calcul': junta.junta.VERSIO_CALCUL,
+            'empremtes': {'proposta': 'Avui', 'relaxacions': None}, 'data': '2026-11-07', 'aulari': {'ordinaries': 21, 'reserva': 2, 'disponibles': 19},
             'pics': {'mati': torn, 'tarda': copy.deepcopy(torn)},
             'sessions_mogudes': [fila], 'pitjor_cohort': ['GXX:1r'],
             'fora_torn_ja_avui': 0, 'excepcions': [], 'excepcions_resum': [], 'torn_no_avaluable': 0,
@@ -124,8 +125,8 @@ def test_resum_antic_es_conserva_per_avisar(tmp_path):
     (desti / 'junta.json').write_text(json.dumps(d))
     with patch.object(junta, 'RESULTATS', tmp_path), patch.object(junta, 'SORTIDA', tmp_path):
         with patch.object(junta, 'genera', return_value=dades()) as genera:
-            assert junta.carrega('Avui') == d
-        genera.assert_not_called()
+            assert junta.carrega('Avui') == dades()
+        genera.assert_called_once()
 
 
 def test_mides_actuals_i_explicacio():
@@ -147,8 +148,8 @@ def test_mides_antigues_avisen(tmp_path):
     (desti / 'junta.json').write_text(json.dumps(d))
     with patch.object(junta, 'RESULTATS', tmp_path), patch.object(junta, 'SORTIDA', tmp_path):
         with patch.object(junta, 'genera', return_value=dades()) as genera:
-            assert junta.carrega('Avui') == d
-        genera.assert_not_called()
+            assert junta.carrega('Avui') == dades()
+        genera.assert_called_once()
     app = obre(d, ['Avui'])
     assert any('Resum antic' in i.value for i in app.info)
     assert not app.get('download_button')
@@ -228,7 +229,6 @@ def test_propostes_completes_amb_escenari_inventat(tmp_path, nom, escenari):
     with patch.object(junta, 'RESULTATS', tmp_path), patch.object(junta, 'SORTIDA', tmp_path), \
          patch.object(junta.junta, 'carrega_oficial', return_value=b) as oficial, \
          patch.object(junta.junta, 'carrega_model', return_value=b) as model:
-        junta.genera.clear()
         app = AppTest.from_string("""
 from pagines import junta
 junta.mostra()
@@ -243,7 +243,6 @@ junta.mostra()
         d = junta.carrega(nom)
         assert d['aulari'] == {'ordinaries': 3, 'reserva': 2, 'disponibles': 1}
         assert d['sessions_mogudes'][0]['franja'] == (1 if nom == '5.3' else 0)
-        junta.genera.clear()
 
 
 def test_regenera_resum_sense_aulari(tmp_path):
@@ -256,7 +255,7 @@ def test_regenera_resum_sense_aulari(tmp_path):
     with patch.object(junta, 'RESULTATS', tmp_path), patch.object(junta, 'SORTIDA', tmp_path), \
          patch.object(junta, 'genera', return_value=dades()) as genera:
         assert junta.carrega('5.3') == dades()
-        genera.assert_called_once_with('5.3', 0, 0)
+        genera.assert_called_once_with('5.3')
 
 
 def test_barres_vuit_i_desplegable_ordenats():
@@ -330,3 +329,49 @@ def test_impacte_canvi_aula_visible_i_ordenat():
     assert app.dataframe[0].value.iloc[0]['Titulació i curs'] == 'Canvi aula'
     assert app.dataframe[0].value.iloc[0]['Canvi d’aula'] == 4
     assert '40 %' in junta.fitxes(d)
+
+
+@pytest.mark.parametrize('font', ['proposta.csv', 'relaxacions.csv'])
+def test_sha_canviat_regenera(tmp_path, font):
+    p = tmp_path / '5.2' / 'proposta.csv'
+    p.parent.mkdir()
+    p.write_text('inventada')
+    p.with_name('relaxacions.csv').write_text('inventada')
+    d = dades()
+    d['empremtes'] = junta.junta.empremtes(p)
+    desti = tmp_path / 'junta' / '5.2' / 'junta.json'
+    junta.junta.escriu_atomic(desti, json.dumps(d))
+    with patch.object(junta, 'RESULTATS', tmp_path), patch.object(junta, 'SORTIDA', tmp_path), patch.object(junta, 'genera', return_value=dades()) as gen:
+        assert junta.carrega('5.2') == d
+        gen.assert_not_called()
+        p.with_name(font).write_text('modificada')
+        junta.carrega('5.2')
+        gen.assert_called_once_with('5.2')
+
+
+def test_json_truncat_regenera(tmp_path):
+    junta.junta.escriu_atomic(tmp_path / 'junta' / 'junta.json', '{')
+    with patch.object(junta, 'SORTIDA', tmp_path), patch.object(junta, 'RESULTATS', tmp_path), patch.object(junta, 'genera', return_value=dades()) as gen:
+        assert junta.carrega('Avui') == dades()
+        gen.assert_called_once()
+
+
+def test_fallada_actualitzacio_conserva_i_avisa(tmp_path):
+    d = dades()
+    d['empremtes'] = {}
+    d['data'] = '2026-11-07T20:45:00+01:00'
+    junta.junta.escriu_atomic(tmp_path / 'junta' / 'junta.json', json.dumps(d))
+    with patch.object(junta, 'SORTIDA', tmp_path), patch.object(junta, 'RESULTATS', tmp_path), patch.object(junta, 'genera', side_effect=ValueError('reescriptura')):
+        anterior = junta.carrega('Avui')
+    app = obre(anterior, ['Avui'])
+    assert app.warning[0].value == "Resum de les 20:45; no s'ha pogut actualitzar"
+
+
+@pytest.mark.parametrize('nom', ['Avui', '5.1', '5.2', '5.3', '5.4'])
+def test_totes_opcions_i_torns(nom):
+    with patch.object(junta, 'disponibles', return_value=['Avui', '5.1', '5.2', '5.3', '5.4']), patch.object(junta, 'carrega', return_value=dades()):
+        app = AppTest.from_string('from pagines import junta; junta.mostra()').run()
+        app.selectbox[0].set_value(nom).run()
+        for torn in ['Matí', 'Tarda']:
+            app.radio[0].set_value(torn).run()
+            assert not app.exception and not app.error

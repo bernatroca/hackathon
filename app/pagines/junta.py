@@ -30,13 +30,21 @@ def ruta_resum(nom):
     return next((r / rel for r in (SORTIDA, RESULTATS) if (r / rel).is_file()), SORTIDA / rel)
 
 
-@st.cache_data
-def llegeix(path, versio):
-    return json.loads(Path(path).read_text(encoding='utf-8'))
+def llegeix(path, versio=None):
+    try:
+        dades = json.loads(Path(path).read_text(encoding='utf-8'))
+        return dades if isinstance(dades, dict) else None
+    except (OSError, ValueError):
+        return None
 
 
-@st.cache_data
-def genera(nom, versio, versio_relax):
+def empremtes(nom):
+    proposta = None if nom == 'Avui' else RESULTATS / nom / 'proposta.csv'
+    return junta.empremtes(proposta)
+
+
+def genera(nom, versio=None, versio_relax=None):
+    abans = empremtes(nom)
     escenari = junta.escenari_proposta(nom)
     base = junta.carrega_oficial(escenari)
     model = junta.carrega_model(escenari)
@@ -50,25 +58,41 @@ def genera(nom, versio, versio_relax):
         relax = path.with_name('relaxacions.csv')
         relax = relax if relax.is_file() else None
     dades = junta.calcula(proposta, base, model, col, relax)
+    if empremtes(nom) != abans:
+        raise ValueError('Les fonts han canviat durant el càlcul')
+    dades['empremtes'] = abans
     desti = SORTIDA / 'junta'
     if nom != 'Avui':
         desti /= nom
-    desti.mkdir(parents=True, exist_ok=True)
-    (desti / 'junta.json').write_text(json.dumps(dades, ensure_ascii=False, indent=2), encoding='utf-8')
+    junta.escriu_atomic(desti / 'junta.json', json.dumps(dades, ensure_ascii=False, indent=2))
     return dades
 
 
+def resum_valid(d):
+    try:
+        assert isinstance(d['excepcions'], list)
+        assert isinstance(d['sessions_mogudes'], list)
+        assert d['data']
+        fitxes(d)
+        junta.documents(d)
+        return True
+    except (KeyError, TypeError, ValueError, AssertionError):
+        return False
+
+
 def carrega(nom):
-    path = ruta_resum(nom)
-    if path.is_file():
-        dades = llegeix(str(path), path.stat().st_mtime_ns)
-        if dades.get('versio_resum') == 2:
-            return dades
-        # Resum desat amb un format antic: es torna a generar.
-    proposta = RESULTATS / nom / 'proposta.csv'
-    relax = proposta.with_name('relaxacions.csv')
-    return genera(nom, proposta.stat().st_mtime_ns if proposta.is_file() else 0,
-                  relax.stat().st_mtime_ns if relax.is_file() else 0)
+    anterior = llegeix(ruta_resum(nom))
+    try:
+        if (anterior and resum_valid(anterior)
+                and anterior.get('versio_resum') == junta.VERSIO_RESUM
+                and anterior.get('versio_calcul') == junta.VERSIO_CALCUL
+                and anterior.get('empremtes') == empremtes(nom)):
+            return anterior
+        return genera(nom)
+    except Exception:
+        if anterior and resum_valid(anterior):
+            return dict(anterior, avis_actualitzacio=True)
+        raise
 
 
 def grafic_mogudes(files):
@@ -131,9 +155,9 @@ def fitxes(d):
     n = len(d['excepcions'])
     heretades = d['fora_torn_ja_avui']
     peces.append('<section class="junta-fitxa"><h3>Excepcions noves als torns</h3>'
-                 f'<div class="junta-xifra">{n} <small>classes</small></div>'
+                 f'<div class="junta-xifra">{n} <small>{junta.classe(n)}</small></div>'
                  + estat({'estat': 'ambre' if n else 'verd', 'etiqueta': 'Fora del torn' if n else 'Cap'})
-                 + (f'<small>{heretades} classes ja es fan avui fora del seu torn i no es toquen.</small>' if heretades else '')
+                 + (f'<small>{heretades} {junta.classe(heretades)} ja es {'fa' if heretades == 1 else 'fan'} avui fora del seu torn i no es {'toca' if heretades == 1 else 'toquen'}.</small>' if heretades else '')
                  + '</section>')
     return '<div class="junta-fitxes">' + ''.join(peces) + '</div>'
 
@@ -174,6 +198,10 @@ def mostra():
         except (KeyError, TypeError, AssertionError):
             st.info('Resum antic: cal tornar-lo a generar.')
             return
+        if d.get('avis_actualitzacio'):
+            from datetime import datetime
+            hora = datetime.fromisoformat(d['data']).strftime('%H:%M')
+            st.warning(f"Resum de les {hora}; no s'ha pogut actualitzar")
         st.markdown(fitxes(d), unsafe_allow_html=True)
         for torn, etiqueta in [('mati', 'Matí'), ('tarda', 'Tarda')]:
             pic = d['pics'][torn].get('simultani')
@@ -185,9 +213,9 @@ def mostra():
             for motiu in dict.fromkeys(e['motiu'] for e in d['excepcions']):
                 casos = [e for e in d['excepcions'] if e['motiu'] == motiu]
                 noms = sorted({junta.nom(c) for e in casos for c in e['cohorts']})
-                st.write(f"{len(casos)} classes: {junta.motiu_planer(motiu)} Titulacions: {', '.join(noms)}.")
+                st.write(f"{len(casos)} {junta.classe(len(casos))}: {junta.motiu_planer(motiu)} Titulacions: {', '.join(noms)}.")
                 if any(e['id_sessio'] == 'S04526' for e in casos):
-                    st.write('Cas S04526: ' + junta.motiu_planer(motiu))
+                    st.write('Cas S04526: ' + junta.MOTIU_S04526)
         format_actual = all('ocupades_al_pic' in m for torn in ('mati', 'tarda')
                             for m in d['pics'][torn]['mides'])
         with st.container(key='junta-dos'):
@@ -230,7 +258,7 @@ def mostra():
             st.caption(f"Resum calculat: {d['data']} · {triada}")
             st.caption('Les mides corresponen al moment de més ocupació del torn triat; sense aula assignada, fem servir els alumnes previstos (estimació). Els colors són orientatius i no garanteixen que tot l’horari encaixi.')
             if d['torn_no_avaluable']:
-                st.write(f"{d['torn_no_avaluable']} classes sense torn definit.")
+                st.write(f"{d['torn_no_avaluable']} {junta.classe(d['torn_no_avaluable'])} sense torn definit.")
             mostra_taula(pd.DataFrame([{'Titulació i curs': r['nom'], 'Canvien de dia o hora': junta.percentatge(r['franja_pct']), 'Canvis d’aula': r['aula'], 'Aules assignades': r['aules_assignades']} for r in d['sessions_mogudes']]))
             for motiu in dict.fromkeys(r['motiu'] for r in d['excepcions']):
                 st.write(motiu)
