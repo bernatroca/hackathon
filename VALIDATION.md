@@ -92,6 +92,9 @@
 31. [cap @ /] Mira les pàgines del menú → cadascuna té una icona al davant.
 32. [cap @ /] Fes la finestra de mòbil (375 px) i plega el menú → el botó d'obrir-lo no tapa «Com estem avui».
 33. [cap @ /] Fes scroll a la portada → cap barra talla la part de dalt del contingut.
+34. [cap @ /] Mira els «Com ho sabem →» del bloc gran i de les caixes → són enllaços blaus iguals, amb el text sencer (no es talla ni per dalt ni per baix).
+35. [cap @ /] Mira el bloc «Si 1r i 2n fan classe al matí, hi cabem?» → els quadrets de les aules són al costat de la resposta, centrats i ben visibles, no arraconats a la dreta.
+36. [cap @ /] Mira el mateix bloc → poc marge a dalt i a baix; la línia petita del final queda just sota el text.
 
 ## Part 2 · Proposta d'horari
 

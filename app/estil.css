@@ -210,7 +210,6 @@ h1 {font-size:28px!important;margin-bottom:0!important;}
 .st-key-targetes .desglos:not(:empty) {font-size:13px!important;}
 .st-key-targetes .proposem {font-size:13px;line-height:1.4;padding-top:6px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
 .st-key-targetes [data-testid="stVerticalBlock"] {gap:6px;}
-.st-key-targetes button {font-size:14px;min-height:0;padding-top:0;padding-bottom:0;}
 /* Portada: menys aire entre els elements de dalt perquè també hi càpiga amb el menú obert. */
 .block-container:has(.st-key-heroi) {padding-top:16px!important;}
 .block-container:has(.st-key-heroi) [data-testid="stVerticalBlock"] {gap:10px;}
@@ -218,3 +217,22 @@ h1 {font-size:28px!important;margin-bottom:0!important;}
 .block-container:has(.st-key-heroi) .st-key-heroi {margin:4px 0 8px;}
 /* Amb el menú plegat, el botó per obrir-lo no tapa el títol. */
 .stApp:has([data-testid="stExpandSidebarButton"]) .block-container {padding-top:64px!important;}
+
+/* ds 21:50 · «Com ho sabem →»: enllaç net, mateix aspecte a tot arreu, sense text tallat. */
+.st-key-heroi button,.st-key-targetes button,.st-key-respostes button[kind="secondary"] {
+ border:0!important;background:transparent!important;box-shadow:none!important;color:#256abf!important;
+ min-height:32px!important;height:auto!important;padding:4px 0!important;line-height:1.4!important;overflow:visible!important;
+}
+.st-key-heroi button p,.st-key-targetes button p,.st-key-respostes button[kind="secondary"] p {
+ font-size:15px!important;font-weight:600;line-height:1.4!important;margin:0!important;overflow:visible!important;
+}
+.st-key-heroi button:hover p,.st-key-targetes button:hover p,.st-key-respostes button[kind="secondary"]:hover p {text-decoration:underline;}
+.st-key-heroi button:focus-visible,.st-key-targetes button:focus-visible {outline:2px solid #256abf!important;outline-offset:2px;border-radius:4px;}
+/* Bloc gran: menys marge a dalt i a baix; els quadrets d'aules al costat de la resposta i més grans. */
+.block-container:has(.st-key-heroi) .st-key-heroi {padding:14px 24px 10px;}
+.st-key-heroi [data-testid="stVerticalBlock"] {gap:4px!important;}
+.st-key-heroi .estat {margin:0 0 2px;}
+.st-key-heroi h2.pregunta {margin:2px 0 0!important;}
+.st-key-heroi [data-testid="stCaptionContainer"] {margin-top:4px;}
+.st-key-heroi .aules {grid-template-columns:repeat(7,28px);gap:6px;margin:0 0 6px;}
+.st-key-heroi .aules-peu {font-size:14px;max-width:24rem;margin:0;}

@@ -60,7 +60,7 @@ def heroi(t):
     info = contingut(t)
     with st.container(key='heroi'):
         mostra_avis(t)
-        esquerra,dreta = st.columns([3,1],gap='large')
+        esquerra,dreta = st.columns([1.7,1],gap='medium',vertical_alignment='center')
         with esquerra:
             st.markdown(estat(info),unsafe_allow_html=True)
             st.markdown(f'<h2 class="pregunta">{escape(info["titol"])}</h2>',unsafe_allow_html=True)
