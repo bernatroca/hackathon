@@ -150,3 +150,18 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - Fase 0 (Claude, integració): especificació restaurada i completada, esquelet `nivell2/base.py` (el verificador hi dona les xifres de l'enunciat: 2.008, 13, 43, 54 i 4.541), excepció del .gitignore per a les propostes i worktrees antics de la part 1 tret.
 - Fase 1 en paral·lel, `gpt-6.1-sol` medium, sense xarxa, un worktree per tasca (../hack-n2-*): n2-backend-1 (aules del 5.1), n2-backend-2 (franges del 5.2), n2-dades-1 (taula de xifres) i n2-frontend-1 (graella de la part 2).
 - Aquesta sessió orquestra la part 2; la sessió Part 1 no hi llança subagents.
+
+### [ds 17:57] IA · n2-dades-1 acabat i unit a main
+- L'ordre `python -m nivell2.comprova <proposta>` treu la taula d'abans i després en uns 6 s; amb l'horari d'avui quadra amb l'enunciat. Té 6 proves verdes.
+- PROBLEMA: faltava pytest al .venv i dos subagents van tornar BLOCKED. Ja està instal·lat. n2-frontend-1 torna a provar per un error d'imports.
+- Pendent menor: quan totes les titulacions empaten a 0 %, «la que surt pitjor» les llista totes.
+
+### [ds 17:59] IA · n2-frontend-1 acabat i unit a main
+- La pàgina «Part 2 · Proposta d'horari» té selectors de proposta, setmana i grup (titulació → curs → grup), la graella de l'estudiant d'avui i de la proposta, i la vista per aula. Té 7 proves verdes i ja surt a l'app.
+- Ha calgut una segona passada: amb pytest, els imports `app.components` xocaven amb app/app.py.
+- Per a la fase 2: cada classe es repeteix a cada fila de 30 min. Millor un sol bloc que ocupi les seves files.
+
+### [ds 18:02] IA · n2-backend-1: el 5.1 és VALIDA
+- Assignador d'aules genèric (CP-SAT, una aula per activitat) i `python -m nivell2.s51`. El verificador oficial amb --nomes-aules diu VALIDA, sense relaxacions; triga uns 5 min. Comprovat també per la integració.
+- La proposta es queda al Mac (resultats/, fora de git).
+- Pendent de millora: aula base i canvis teoria-problemes fora del passadís surten pitjor que avui. Es millorarà quan hi hagi temps, amb més pes a l'aula base.
