@@ -36,6 +36,8 @@ def test_colloca_amb_rutina_sense_tocar_referencia():
     assert stats['estat'] in ('OPTIMAL', 'FEASIBLE')
     assert result.files[host.id] == ref.files[host.id]
     assert result.files[first.id] == result.files[second.id]
+    assert (result.files[first.id].dia, result.files[first.id].h_ini) == ('L', '09:00')
+    assert stats['sessions_noves_fora_franja'] == 0
     assert not any(comprova_proposta(base, result, ref).values())
     assert avalua_rapid(base, result).veredicte == 'VALIDA'
     assert ref == original and not first.aula
@@ -169,3 +171,147 @@ def test_rebutja_referencia_aliena_i_noves_fixades():
     foreign = Proposta.de_base(base_petita(nova('inventada-aliena')))
     with pytest.raises(ValueError):
         referencia_completa(base, foreign)
+
+
+def test_model_te91_no_solapa_paul92_i_no_eximeix_conflictes_originals_nous():
+    te = nova('te', grup='TE/91', docents=frozenset({'D1'}))
+    paul = nova('paul', tipus='PAUL', grup='PAUL/92', alumnes=20,
+                codi='inventada-paul', docents=frozenset({'D2'}))
+    base = base_petita(te, paul)
+    ref = referencia(base, te, paul)
+    result, stats = resol_congelat(base, ref, temps_s=5)
+    assert result is not None
+    assert stats['sessions_noves_fora_franja'] == 1
+    assert not any(comprova_proposta(base, result, ref).values())
+    original = Proposta.de_base(base)
+    assert comprova_proposta(base, original, ref)['conflictes_persones_nous'] == 1
+
+
+def test_objectiu_prioritza_franja_davant_hores_mortes_i_aula_base():
+    a = nova('a', ini=540)
+    b = nova('b', ini=720)
+    base = base_petita(a, b)
+    result, stats = resol_congelat(base, referencia(base, a, b), temps_s=5)
+    assert stats['estat'] == 'OPTIMAL'
+    assert stats['sessions_noves_fora_franja'] == 0
+    assert stats['objectiu_hores_mortes_min'] == 120
+    assert result.files[a.id].aula == result.files[b.id].aula
+
+
+def test_objectiu_enganxa_classe_que_cal_moure():
+    a = nova('a', ini=540, docents=frozenset({'docent-a'}))
+    b = nova('b', ini=660, docents=frozenset({'docent-b'}))
+    host = sessio('host', torn='mati', ini=540, aula='0',
+                  cohorts=('ALTRE:1r',), docents=a.docents)
+    base = base_petita(a, b, host)
+    base.dies_sense_classe = frozenset(a.data+dt.timedelta(days=d) for d in range(1, 5))
+    result, stats = resol_congelat(base, referencia(base, a, b), temps_s=5)
+    assert stats['estat'] == 'OPTIMAL'
+    assert stats['sessions_noves_fora_franja'] == 1
+    assert stats['objectiu_hores_mortes_min'] == 0
+    assert result.files[host.id].h_ini == '09:00'
+    assert result.files[b.id].h_ini == '11:00'
+
+
+def test_comprova_proposta_tambe_mira_docents():
+    new = nova(docents=frozenset({'D-inventat'}))
+    host = sessio('host', torn='mati', ini=new.ini, aula='0',
+                  cohorts=('ALTRE:1r',), docents=new.docents)
+    base = base_petita(new, host)
+    ref = referencia(base, new)
+    assert comprova_proposta(base, Proposta.de_base(base), ref)['conflictes_docents_nous'] == 1
+    result, _ = resol_congelat(base, ref, temps_s=5)
+    assert not any(comprova_proposta(base, result, ref).values())
+
+
+def prepara_main(tmp_path, monkeypatch):
+    import nivell2.s54 as s54
+    new = nova()
+    host = sessio('host', ini=900, aula='0')
+    base = base_petita(new, host)
+    ref = referencia(base, new)
+    ref.escriu(tmp_path/'5.2'/'proposta.csv')
+    out = tmp_path/'5.4'
+    out.mkdir()
+    for name in ('proposta.csv', 'informe.json', 'resum.json', 'relaxacions.csv',
+                 'violacions.csv', 'xifres.csv', 'execucio.json', 'README.md', 'antic.txt'):
+        (out/name).write_text('lliurament anterior: '+name)
+    snapshot = {p.name: p.read_bytes() for p in out.iterdir()}
+    monkeypatch.setattr(s54, 'RESULTATS', tmp_path)
+    monkeypatch.setattr(s54, 'carrega_model', lambda *args: base)
+    monkeypatch.setattr(s54, 'carrega_oficial', lambda scenario=None: base if scenario else base_petita(host))
+    return s54, base, ref, out, snapshot
+
+
+@pytest.mark.parametrize('status', ['UNKNOWN', 'INFEASIBLE'])
+def test_main_no_toca_cap_fitxer_del_lliurament_si_no_hi_ha_solucio(tmp_path, monkeypatch, status):
+    s54, _, _, out, snapshot = prepara_main(tmp_path, monkeypatch)
+    monkeypatch.setattr(s54, 'resol_congelat', lambda *a, **kw: (None, {'estat': status}))
+    assert s54.main(['--temps', '1']) == 1
+    assert {p.name: p.read_bytes() for p in out.iterdir()} == snapshot
+
+
+@pytest.mark.parametrize('failure', ['exception', 'invalid'])
+def test_main_no_publica_si_falla_verificador(tmp_path, monkeypatch, failure):
+    from types import SimpleNamespace
+    s54, _, _, out, snapshot = prepara_main(tmp_path, monkeypatch)
+    def verify(*args, **kw):
+        assert kw['referencia'] == tmp_path/'5.2'/'proposta.csv'
+        assert kw['json_path'].parent != out
+        if failure == 'exception':
+            raise RuntimeError('fallada inventada')
+        return SimpleNamespace(veredicte='NO VALIDA', compten=lambda: {'R4': 1})
+    monkeypatch.setattr(s54, 'verifica', verify)
+    with pytest.raises((RuntimeError, ValueError)):
+        s54.main(['--temps', '2'])
+    assert {p.name: p.read_bytes() for p in out.iterdir()} == snapshot
+    assert not list(tmp_path.glob('.s54-*'))
+
+
+def test_relaxacions_nomes_per_violacions_que_compten(monkeypatch):
+    from types import SimpleNamespace as Obj
+    import nivell2.s54 as s54
+    new = nova()
+    base = base_petita(new)
+    raw = Obj(violacions=[Obj(regla='R1-TORN', sessions=('necessaria',), compta=True),
+                          Obj(regla='R1-TORN', sessions=('doble-heretada',), compta=False)])
+    monkeypatch.setattr(s54, 'avalua', lambda *a: raw)
+    relax = [Obj(restriccio='R1-TORN', sessions=('necessaria',), justificacio='torn'),
+             Obj(restriccio='R1-TORN', sessions=('doble-heretada',), justificacio='dobles')]
+    assert s54.relaxacions_necessaries(base, Proposta.de_base(base), relax) == [
+        {'restriccio': 'R1-TORN', 'sessions': 'necessaria', 'justificacio': 'torn'}]
+
+
+def test_publicacio_fallida_restaura_directori(tmp_path, monkeypatch):
+    from pathlib import Path
+    from nivell2.s54 import publica
+    out = tmp_path/'5.4'
+    out.mkdir()
+    (out/'anterior.txt').write_text('inventat')
+    stage = tmp_path/'execucio'/'nou'
+    stage.mkdir(parents=True)
+    original = Path.rename
+    def rename(self, dest):
+        if self == stage:
+            raise OSError('fallada inventada')
+        return original(self, dest)
+    monkeypatch.setattr(Path, 'rename', rename)
+    with pytest.raises(OSError):
+        publica(stage, out)
+    assert (out/'anterior.txt').read_text() == 'inventat'
+
+
+def test_publicacio_no_barreja_fitxers_d_execucions(tmp_path):
+    from nivell2.s54 import publica
+    out = tmp_path/'5.4'
+    out.mkdir()
+    (out/'proposta.csv').write_text('proposta inventada anterior')
+    (out/'antic.txt').write_text('fitxer antic')
+    stage = tmp_path/'execucio'/'nou'
+    stage.mkdir(parents=True)
+    expected = {'proposta.csv': 'proposta inventada nova', 'informe.json': 'informe inventat nou'}
+    for name, content in expected.items():
+        (stage/name).write_text(content)
+    publica(stage, out)
+    assert {p.name: p.read_text() for p in out.iterdir()} == expected
+    assert not (stage.parent/'anterior').exists()
