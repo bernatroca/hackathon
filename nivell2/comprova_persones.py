@@ -25,7 +25,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-from nivell2.base import GRAU_NOU, RESULTATS_PRINCIPAL, Proposta, carrega_oficial
+from nivell2.base import CONTINGENCIES, GRAU_NOU, RESULTATS_PRINCIPAL, Proposta, carrega_oficial
 from horaris.check import Informe as InformeIntern, _alumnat_comparteix, _col_loca
 
 
@@ -135,7 +135,8 @@ def escenaris():
     if RESULTATS_PRINCIPAL.is_dir():
         for path in sorted(RESULTATS_PRINCIPAL.glob('*/proposta.csv')):
             nom = path.parent.name
-            yield nom, path, GRAU_NOU if nom.startswith('5.4') else None
+            yield nom, path, (CONTINGENCIES if nom == '5.3' else
+                             GRAU_NOU if nom.startswith('5.4') else None)
 
 
 def comprova(detall: Path | None = None) -> bool:
@@ -165,7 +166,8 @@ def comprova(detall: Path | None = None) -> bool:
         d = comprova_dobles(base, col, parelles)
         n_dobles = sum(s.sense_espai for s in base.sessions.values())
 
-        print(f'\n== {nom}' + (' (amb el grau nou)' if escenari else ''))
+        etiqueta = {str(GRAU_NOU): ' (amb el grau nou)', str(CONTINGENCIES): ' (amb els imprevistos)'}.get(str(escenari), '')
+        print(f'\n== {nom}{etiqueta}')
         print(f'  Persones amb dues classes alhora: {resum_conflictes(conf)}')
         if path is not None:
             print(f'    - noves respecte d\'avui: {resum_conflictes(nous)}')
