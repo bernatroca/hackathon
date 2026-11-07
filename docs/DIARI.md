@@ -100,3 +100,7 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - Punt crític de la part 2: desdoblar tots els PAUL i SEM de més de 34 alumnes obligaria a declarar R3-AFORAMENT a 1.197 sessions (153 activitats). VALIDA sense relaxacions passa per davant, i el jurat no veu la meitat B.
 - L'equip decideix: les propostes lliurades (5.1-5.4) van sense desdoblaments. Desdoblaments i fusions, com a alternativa per a la Junta, al final i si sobra temps.
 - DADA: la tarda hi cap amb marge. La pitjor setmana demana 259 h d'aula, contra 617 h d'oferta (19 aules × 6,5 h × 5 dies). El matí, 397 h contra 570 h.
+
+### [ds 16:24] DECISIÓ · Rutina com a prioritat forta i quatre respostes al 5.4
+- La rutina (mateix dia, hora i aula cada setmana) passa de regla dura a prioritat forta. S'hi admeten excepcions puntuals per calendari o setmanes concretes, i cada una es compta i s'explica. Mai passa per davant del verificador.
+- El 5.4 respon sempre una de quatre: hi cap; no hi cap sense tocar el 5.2; no l'hem trobat; hem demostrat que no existeix (recompte o INFEASIBLE d'un model complet).

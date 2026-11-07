@@ -32,7 +32,7 @@ I, un sol cop, la graella setmanal per aula de la proposta més avançada.
 Les regles són per ordre de prioritat. Quan dues xoquen, guanya la primera.
 
 1. **Les regles del verificador.** Cap relaxació en silenci: totes es declaren amb el motiu.
-2. **La rutina és una regla dura.** Planifiquem per activitat (`activitat_id`), no per sessió. Totes les sessions d'una activitat van al mateix dia, la mateixa hora i la mateixa aula totes les setmanes. Només el 5.3 pot fer diferent una setmana concreta (sala reservada, avaria, recuperació).
+2. **La rutina és una prioritat forta, no una regla dura** (decisió del ds 16:25). Planifiquem per activitat (`activitat_id`), no per sessió. Primer intentem que totes les sessions d'una activitat vagin al mateix dia, la mateixa hora i la mateixa aula totes les setmanes. Si el calendari (festius, aturades, avaluació) o una setmana concreta ho impedeixen, s'hi admeten excepcions puntuals: cada una es compta a la taula de xifres i s'explica. La rutina mai no passa per davant del verificador.
 3. **El torn de l'estudiant.** Al 5.1, al 5.3 i al 5.4 cap sessió no canvia de torn. Al 5.2 una sessió només canvia de torn si la regla 1 l'hi obliga. Mai no es mou cap a l'altre torn una sessió que ja és al seu.
 4. **Mínims canvis respecte d'avui.** Un canvi d'hora o de dia pesa més que un canvi d'aula. Quan una sessió s'ha de moure, primer es prova el mateix dia; només si no hi cap, o si hi guanya molt, va a un altre dia.
 5. **Aula base i passadís.** La teoria i els problemes d'un grup, a la mateixa aula o al mateix passadís (mateixa espina i planta).
@@ -110,6 +110,15 @@ Es mesura amb `canvis_franja_vs_referencia` i `canvis_aula_vs_referencia`. Com m
 ## 5.4 Grau nou de 40 places
 
 Les 235 sessions del grau nou ja són al matí, sense aula i sense fixar. Les col·loquem sobre el 5.2 amb la mateixa rutina i les mateixes regles, sense desdoblaments. Primer provem sense moure cap sessió del 5.2; si cal moure'n, el mínim, i diem quines. Si no hi cap, diem quina restricció ho impedeix, on, i el canvi més petit que ho faria possible (quantes aules de quina mida, o quina regla caldria relaxar). Qualsevol «no hi cap» es demostra amb un recompte o un INFEASIBLE.
+
+La resposta és sempre una d'aquestes quatre, i es diu quina (decisió del ds 16:25):
+
+1. **Hi cap**, amb una proposta que el verificador dona per bona.
+2. **No hi cap sense tocar el 5.2**, en les condicions provades (rutina, 5.2 congelat). Això no prova que sigui impossible.
+3. **No l'hem trobat** dins del temps disponible. Un UNKNOWN del solver vol dir això, no que sigui impossible.
+4. **Hem demostrat que no existeix** amb unes regles explícites. Per demostrar-ho cal un recompte (demanda superior a l'oferta màxima defensable en dates, franges i mides concretes) o un INFEASIBLE d'un model complet, sense rutina obligatòria ni el 5.2 congelat.
+
+Si és el 4, diem el coll d'ampolla i el canvi que el resol. Parlem de «canvi mínim» només si hem demostrat que és el mínim; si no, diem «el canvi més petit que hem trobat».
 
 ## Com sabem que està fet
 
