@@ -206,6 +206,22 @@ preguntes.mostra()
         t.extra['torns'] = pd.DataFrame({'torn':['mati','tarda'],'ocupacio_pct':[69.7,42.1]})
         self.assertIn('Matí 70 % · Tarda 42 %',text(t)['frase'])
 
+    def test_css_injectat_alinea_targetes(self):
+        app = self.carrega()
+        self.comprova(app)
+        css = next(m.value for m in app.markdown if m.value.startswith('<style>'))
+        self.assertIn('align-items: stretch',css)
+        self.assertIn('margin-top: auto',css)
+        self.assertIn('stLayoutWrapper',css)
+        self.assertIn('flex-direction: column',css)
+        self.assertIn('height: 100%',css)
+        # La proposta i el botó han d'estar dins el mateix peu natiu.
+        peus = [b for b in app.get('flex_container') if any('peu-targeta-' in str(v) for v in [b.proto.id])]
+        self.assertEqual(len(peus),len(PORTADA)-1)
+        for peu in peus:
+            self.assertEqual(len(peu.button),1)
+            self.assertIn('Proposem:',peu.markdown[0].value)
+
     def test_canvi_semestre(self):
         app = self.carrega()
         app.selectbox[0].select(1).run(timeout=90)

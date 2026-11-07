@@ -84,20 +84,53 @@ main {padding:0;max-width:none;}
 .aules i {width:100%;height:auto;aspect-ratio:1;}
 .aules-peu {word-break:normal;overflow-wrap:normal;hyphens:none;white-space:normal;max-width:38rem;}
 .ocupacio-rajola {display:block;font-size:12px;margin-top:4px;}
-/* Cada cel·la s'estira; el cos flexible deixa la proposta i el botó al peu. */
-.st-key-targetes [data-testid="stHorizontalBlock"] {align-items:stretch;}
-.st-key-targetes [data-testid="stColumn"] {display:flex;align-items:stretch;}
-.st-key-targetes [data-testid="stColumn"] > div {flex:1;}
-.st-key-targetes [data-testid="stColumn"] [data-testid="stVerticalBlock"] {flex:1;}
-.st-key-targetes [class*="st-key-targeta-"] {height:100%;display:flex;flex-direction:column;}
-.st-key-targetes [class*="st-key-targeta-"] > div {flex:1;}
-.st-key-targetes [data-testid="stElementContainer"]:has(.targeta-cor) {flex:1;display:flex;}
-.st-key-targetes [data-testid="stMarkdown"]:has(.targeta-cor),
-.st-key-targetes [data-testid="stMarkdownContainer"]:has(.targeta-cor) {height:100%;width:100%;}
-.targeta-cor {display:flex;flex-direction:column;gap:12px;height:100%;}
+/* La columna, el wrapper de Streamlit i la targeta formen una cadena flex.
+   stLayoutWrapper és present a Streamlit actual; el selector del wrapper antic
+   es conserva per a instal·lacions anteriors. No estirem els elements del peu. */
+.st-key-targetes [data-testid="stHorizontalBlock"] {
+ align-items: stretch;
+}
+.st-key-targetes [data-testid="stColumn"],
+.st-key-targetes [data-testid="stColumn"] > [data-testid="stVerticalBlock"],
+.st-key-targetes [data-testid="stLayoutWrapper"]:has(> [class*="st-key-targeta-"]),
+.st-key-targetes [data-testid="stVerticalBlockBorderWrapper"]:has([class*="st-key-targeta-"]) {
+ display: flex;
+ flex-direction: column;
+ height: 100%;
+ min-width: 0;
+ flex: 1 1 auto;
+}
+.st-key-targetes [class*="st-key-targeta-"] {
+ display: flex;
+ flex-direction: column;
+ height: 100%;
+ flex: 1 1 auto;
+ background: var(--targeta);
+ border-radius: 16px;
+}
+/* El contingut té alçada natural. El peu absorbeix l'espai sobrant per sobre,
+   sense donar flex:1 també al botó, que era la causa de l'alineació desigual. */
+.st-key-targetes [data-testid="stLayoutWrapper"]:has(> [class*="st-key-peu-targeta-"]),
+.st-key-targetes [class*="st-key-peu-targeta-"] {
+ margin-top: auto;
+ flex: 0 0 auto;
+ width: 100%;
+}
+.st-key-targetes [class*="st-key-peu-targeta-"] {
+ display: flex;
+ flex-direction: column;
+}
+.targeta-cor {display:flex;flex-direction:column;gap:12px;}
 .targeta-cor h3,.targeta-cor p {margin:0;}
 .targeta-cor .estat {align-self:flex-start;}
-.targeta-cor .proposem {margin-top:auto;min-height:4.5rem;}
+.st-key-targetes .proposem {
+ margin-top: auto;
+ min-height: 6rem;
+ line-height: 1.5;
+}
+.st-key-targetes [class*="st-key-peu-targeta-"] [data-testid="stElementContainer"] {
+ flex: 0 0 auto;
+}
 .desglos:empty {display:none;}
 /* Streamlit conserva els elements antics durant una recàrrega: els amaguem. */
 [data-testid="stMain"] [data-stale="true"] {visibility:hidden;}

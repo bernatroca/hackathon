@@ -72,7 +72,7 @@ def heroi(t):
 
 def targeta(t, posicio=0):
     info = contingut(t)
-    with st.container(border=True, key='targeta-'+t.id):
+    with st.container(border=True, height='stretch', key='targeta-'+t.id):
         mostra_avis(t)
         percent = info['c'].get('percent')
         metre = ''
@@ -81,9 +81,11 @@ def targeta(t, posicio=0):
         detall_desglos = desglos(t.extra) if t.id == 'hores-aula' else ''
         st.markdown(f'<article class="targeta-cor">{estat(info)}<h3>{escape(info["titol"])}</h3>'
             f'<div class="xifra-targeta">{escape(info["c"]["xifra"])}</div>'
-            f'<p class="desglos">{escape(detall_desglos)}</p>{metre}<p>{escape(info["frase"])}</p>'
-            f'<div class="proposem"><b>Proposem:</b> {escape(info["proposem"])}</div></article>',unsafe_allow_html=True)
-        obre(t)
+            f'<p class="desglos">{escape(detall_desglos)}</p>{metre}<p>{escape(info["frase"])}</p></article>',unsafe_allow_html=True)
+        # Un sol peu natiu: la proposta i el botó comparteixen l'alineació.
+        with st.container(key='peu-targeta-'+t.id):
+            st.markdown(f'<div class="proposem"><b>Proposem:</b> {escape(info["proposem"])}</div>',unsafe_allow_html=True)
+            obre(t)
 
 
 def detall(t):
