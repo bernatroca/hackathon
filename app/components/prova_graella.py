@@ -36,6 +36,15 @@ def setmana_inventada():
               'Taller inventat', 'Teoria', 'TE/99', False, False),
         Cella('INVENTADA-MITJA', 'V', 510, 570, 'Aula fictícia inicial',
               'Seminari inventat', 'Seminari', 'SEM/999', False, False),
+    ] + [
+        Cella(f'INVENTADA-CURTA-{dia}-{durada}-{carril}', dia, 780, 780 + durada,
+              'Aula fictícia amb un nom llarg',
+              'Assignatura inventada de sistemes experimentals amb un nom molt llarg ' * 3 + f'{dia} {carril}',
+              'Problemes', f'PAUL/99{carril}', True, False,
+              abans='Abans: dijous 12:30 · Aula fictícia anterior')
+        for dia, durada, carrils in (('L', 30, 1), ('M', 30, 2),
+                                    ('X', 60, 3), ('J', 60, 4), ('V', 90, 4))
+        for carril in range(carrils)
     ]
 
 

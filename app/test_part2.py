@@ -205,9 +205,10 @@ class TestGraellaResponsive(unittest.TestCase):
         from html import unescape
         for c in classes:
             assert f'<b>{c.assignatura}</b>' in unescape(html)
-        assert '…' not in html and 'text-overflow' not in CSS
+        assert '…' not in html  # El text complet roman al DOM; el CSS aplica l'el·lipsi.
+        assert 'text-overflow:ellipsis' in CSS
         assert 'hyphens:none' in CSS and 'word-break:normal' in CSS
-        assert 'overflow-wrap:anywhere' not in CSS and 'line-clamp' not in CSS
+        assert 'overflow-wrap:anywhere' not in CSS and '-webkit-line-clamp:var(--linies-nom)' in CSS
         assert 'color:#1a1a18;font-size:14px;font-weight:600' in CSS
         assert 'font-size:12px;color:#52514e' in CSS
         esperats = {
@@ -232,7 +233,7 @@ class TestGraellaResponsive(unittest.TestCase):
         from components.graella import CSS_FILTRES, filtres_html
         from components.prova_graella import setmana_inventada
         html = filtres_html(setmana_inventada())
-        assert 'Totes (9)' in html and 'Aula assignada (1)' in html
+        assert 'Totes (23)' in html and 'Aula assignada (1)' in html
         assert html.count('aria-pressed="true"') == 1
         assert 'background:#fff;color:#1a1a18;border:1px solid' in CSS_FILTRES
         assert 'border-color:#1a1a18;font-weight:700;outline:none' in CSS_FILTRES
@@ -548,6 +549,39 @@ class TestRedisseny(unittest.TestCase):
             nom = ESTATS[esperat][0]
             assert f'title="{nom} ·' in html and f'aria-label="{nom} ·' in html
             assert '<span class="estat">' not in html and '<svg' not in html
+
+    def test_pressupost_classes_curtes_i_noms_llargs(self):
+        from components.graella import Cella, CSS, pressupost_classe
+        nom = 'Assignatura inventada amb un nom molt llarg & difícil "de resumir" ' * 8
+        for durada in (30, 45, 60, 90, 120, 180):
+            for carrils in range(1, 5):
+                cs = [Cella(f'CURTA-{i}', 'L', 510, 510 + durada,
+                            'Aula inventada molt llarga', nom, 'Problemes',
+                            f'PAUL/99{i}', True, False) for i in range(carrils)]
+                html = taula_html(cs)
+                graella = estructura_graella(html)
+                assert graella.dies[0]['data-carrils'] == str(carrils)
+                for _, attrs in graella.classes:
+                    assert nom in attrs['title'] and nom in attrs['aria-label']
+                    for nota in (False, True):
+                        p = pressupost_classe(durada, nota=nota)
+                        # Recalculem l'alçada amb les mètriques reals del CSS.
+                        secundaries = sum(p[k] for k in ('ubicacio', 'grup', 'nota'))
+                        visible = 2 * p['padding'] + p['nom'] * 17.5 + secundaries * (16.2 + 3)
+                        assert visible <= durada * 1.6 - 6
+                        assert abs(visible - p['visible']) < 1e-6
+                        assert p['nom'] >= 1 and p['ubicacio']
+                        assert not p['nota'] or p['grup']
+                        if nota:
+                            assert f'--linies-nom:{p["nom"]};' in attrs['style']
+                            for camp in ('ubicacio', 'grup', 'nota'):
+                                assert f'--mostra-{camp}:{"block" if p[camp] else "none"};' in attrs['style']
+                if durada == 30:
+                    assert pressupost_classe(durada)['padding'] == 2
+                    assert not pressupost_classe(durada, nota=True)['grup']
+        assert '-webkit-line-clamp:var(--linies-nom)' in CSS
+        assert '.classe:not([open]){overflow:hidden;}' in CSS
+        assert '.classe[open] b' in CSS
 
     def test_tres_linies_i_nota_curta_amb_detall_complet(self):
         from dataclasses import replace

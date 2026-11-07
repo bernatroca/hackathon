@@ -234,6 +234,17 @@ CSS = """
 .p2-horari .classe .nota{font-size:12px;font-weight:500;}
 .p2-horari .classe.apagada{opacity:.25;}
 .p2-horari .classe summary:focus-visible{outline:3px solid #2a78d6;outline-offset:2px;}
+/* El pressupost usa línies senceres: nom 17.5px, secundàries 16.2px i gap 3px.
+   Només el resum tancat queda limitat; obrir recupera tot el contingut. */
+.p2-horari .classe{padding-block:var(--padding-classe,8px);}
+.p2-horari .classe:not([open]){overflow:hidden;}
+.p2-horari .classe:not([open]) summary{min-width:0;}
+.p2-horari .classe:not([open]) b{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:var(--linies-nom);max-height:calc(var(--linies-nom)*17.5px);overflow:hidden;text-overflow:ellipsis;}
+.p2-horari .classe:not([open]) small{line-height:16.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.p2-horari .classe:not([open]) .ubicacio{display:var(--mostra-ubicacio);}
+.p2-horari .classe:not([open]) summary>small:not([class]){display:var(--mostra-grup);}
+.p2-horari .classe:not([open]) .nota{display:var(--mostra-nota);}
+.p2-horari .classe[open] b,.p2-horari .classe[open] small{overflow-wrap:break-word;}
 .p2-horari .classe[open]{z-index:3;align-self:start;min-height:calc(100% - 6px);box-shadow:0 4px 12px #0002;}
 .p2-horari .classe .detall{padding-top:6px;border-top:1px solid #e6e5e0;margin-top:6px;}
 .p2-llegenda{display:flex;flex-wrap:wrap;gap:8px;padding:0;list-style:none;font:13px/1.35 system-ui;color:#1a1a18;}
@@ -250,6 +261,31 @@ LINIES_JS = "function preparaLiniesHorari() { return ()=>{}; }"
 
 MIN_CARRIL = 120
 AMPLE_HORES = 56
+
+
+def pressupost_classe(durada, *, nota=False):
+    """Alçades en px, compartides amb el CSS; vàlid per qualsevol ample de carril.
+
+    Cada secundària ocupa una sola línia amb el·lipsi. Reservem fins a tres
+    línies de nom abans del grup i la nota; el nom aprofita la resta d'espai.
+    Els 6px de marge vertical es resten de l'àrea de la graella.
+    """
+    padding = 2 if durada <= 30 else 8
+    caixa = durada * 1.6 - 6
+    disponible = max(0, caixa - 2 * padding)
+    nom = min(3, max(1, int((disponible - 19.2) // 17.5)))
+    visible = nom * 17.5
+    ubicacio = visible + 19.2 <= disponible
+    visible += 19.2 if ubicacio else 0
+    grup = ubicacio and visible + 19.2 <= disponible
+    visible += 19.2 if grup else 0
+    mostra_nota = nota and grup and visible + 19.2 <= disponible
+    visible += 19.2 if mostra_nota else 0
+    extra = max(0, int((disponible - visible) // 17.5))
+    nom += extra
+    visible += extra * 17.5
+    return dict(padding=padding, nom=nom, ubicacio=ubicacio, grup=grup,
+                nota=mostra_nota, visible=visible + 2 * padding, caixa=caixa)
 
 
 def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='totes', estils=True):
@@ -329,8 +365,13 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
                         f'<small>{escape(tipus)} · {escape(grup)}</small>')
             if nota:
                 contingut += f'<small class="nota">{escape(nota)}</small>'
+            pressupost = pressupost_classe(c.fi - c.ini, nota=bool(nota))
+            ajust = (f'--padding-classe:{pressupost["padding"]}px;'
+                     f'--linies-nom:{pressupost["nom"]};' + ''.join(
+                         f'--mostra-{camp}:{"block" if pressupost[camp] else "none"};'
+                         for camp in ('ubicacio', 'grup', 'nota')))
             html += (f'<details class="classe {marques}" data-estat="{estat}" '
-                f'style="grid-row:{c.ini-inici_dia+1}/span {c.fi-c.ini};grid-column:{columna}" '
+                f'style="grid-row:{c.ini-inici_dia+1}/span {c.fi-c.ini};grid-column:{columna};{ajust}" '
                 f'title="{escape(etiqueta, quote=True)}" aria-label="{escape(etiqueta, quote=True)}">'
                 f'<summary>{contingut}</summary><small class="detall">{escape(avis or nom)}</small></details>')
         html += '</section>'
