@@ -95,10 +95,10 @@ Ja resolt (commit `e956847`): el model llegeix `dades/alumnes_sense_dada.json` (
 - Tres selectors: titulació → curs → grup de teoria (GED → 1r → 81).
 - La graella ensenya la setmana de l'estudiant: la teoria del grup i els seus problemes i seminaris (81, 811, 812…).
 
-### Propostes a git
+### Propostes i dades fora de git
 
-- `.gitignore` ignora `*.csv`. Hi afegim l'excepció `!resultats/nivell2/**/*.csv`, perquè no es perdi una proposta bona feta de nit. Les propostes només porten `id_sessio`, dia, hora i aula.
-- Abans de fer cap `git push` (el repositori és privat a GitHub), l'equip ho revisa amb la norma de les dades (vegeu el diari, ds 12:36).
+- Res que surti de les dades del repte no va a git: ni les propostes (`resultats/`), ni les xifres per grup (`dades/`), ni els CSV. El `.gitignore` les ignora.
+- Les propostes es queden al Mac, a `resultats/nivell2/<apartat>/`, i es poden tornar a generar amb l'ordre del `README.md` de cada carpeta. Al jurat se li lliuren directament, no per GitHub.
 
 ## 5.2: què es pot moure
 

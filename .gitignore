@@ -13,5 +13,6 @@ repte-horaris-escola/
 *.csv
 *.xlsx
 
-# Propostes de la part 2: només id_sessio, dia, hora i aula (decisió ds 7-11)
-!resultats/nivell2/**/*.csv
+# Res que surti de les dades del repte va a git: propostes, resultats i xifres per grup (decisió ds 7-11)
+resultats/
+dades/

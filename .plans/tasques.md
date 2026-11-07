@@ -63,4 +63,4 @@ Codex no ha vist la conversa. Només sap el que hi ha al prompt i al seu worktre
 
 ## Decidit
 
-- Les propostes de `resultats/nivell2/` van a git: `.gitignore` hi té l'excepció `!resultats/nivell2/**/*.csv`. Abans de fer cap `git push`, l'equip ho revisa amb la norma de les dades.
+- Res que surti de les dades del repte va a git: `.gitignore` ignora `resultats/`, `dades/` i `*.csv`. Les propostes es queden al Mac i es lliuren al jurat directament.
