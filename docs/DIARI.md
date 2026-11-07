@@ -76,7 +76,7 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - Rutina dura (mateix dia, hora i aula cada setmana; només el 5.3 trenca una setmana). Mínims canvis: un canvi d'hora pesa més que un d'aula. Qui va de tardes continua de tardes, tret que la regla 1 obligui (només al 5.2).
 - Al 5.2 es pot moure qualsevol sessió movible, amb cost per canvi i preferint el mateix dia. Excepcions a la regla 1 només si es demostra que és impossible. Sense alternatives de torn; el 5.2 no deixa lloc per al grau nou.
 - IDEA de l'equip: rotació de PAUL i SEM. Si un grup no cap en una aula petita, es parteix en dues meitats: la 1a hora A fa problemes de X i B de Y, i la 2a hora es canvien. Es declara R3-AFORAMENT i el nostre model reserva la 2a hora.
-- IDEA de l'equip: fusionar classes repetides amb el mateix docent. Va com a proposta per a la Junta, no al 5.2 lliurat. DADA: només 2 casos reals de teoria (Assignatura Inventada A, D951, 148 alumnes; 900000, 108 alumnes); la resta no hi cap o és fixada.
+- IDEA de l'equip: fusionar classes repetides amb el mateix docent. Va com a proposta per a la Junta, no al 5.2 lliurat. DADA: només 2 casos reals de teoria (una assignatura de 3r amb 148 alumnes i una altra amb 108); la resta no hi cap o és fixada.
 - Espec: .plans/nivell2-horari-spec.md (substitueix .plans/nivell2-prompt.md).
 
 ### [ds 15:51] DECISIÓ · Desdoblament de PAUL i SEM i punts pendents de la part 2
