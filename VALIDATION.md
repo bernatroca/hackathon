@@ -38,11 +38,17 @@
 
 ## Totes les respostes
 
-1. [cap @ /respostes] Obre «Totes les respostes» al menú → surten les 11 respostes en targetes petites.
-2. [cap @ /respostes] Mira com es reparteixen → han d'anar en 2 o 3 columnes; si surten en 11 columnes estretes, anota-ho com a pendent.
-3. [cap @ /respostes] Obre «Com fem servir les aules?» → surt el plànol de les 21 aules per espina (Q1 a Q4) i planta, més fosques com més ocupades.
-4. [cap @ /respostes] Passa el ratolí per sobre d'una aula del plànol → surt el codi, les places i el % d'ocupació.
-5. [cap @ /respostes] Llegeix la nota sota el plànol → explica que moltes aules semblen buides perquè 3 de cada 4 classes no tenen aula a les dades.
+1. [cap @ /respostes] Obre «Totes les respostes» al menú → surten les 11 respostes en targetes petites, amb «Es mostren 11 de 11» a dalt. (reprova)
+2. [cap @ /respostes] Mira com es reparteixen → 3 columnes en pantalla ampla, 2 en pantalla mitjana i 1 al mòbil. (reprova)
+3. [cap @ /respostes] Mira l'ordre → primer les «Cal actuar» (vermelles), després «Vigilar» i «Pendent de validar» (grogues) i al final les «Hi cap» (verdes).
+4. [cap @ /respostes] A «Estat», desmarca «Vigilar» → només queden les vermelles i les verdes, i el recompte baixa.
+5. [cap @ /respostes] Torna a marcar «Vigilar» i a «Respostes» tria «Un grau nou de 40 places» → només surt aquesta targeta i diu «Es mostren 1 de 11».
+6. [cap @ /respostes] Desmarca els tres estats → surt «Cap resposta coincideix amb els filtres» amb què cal canviar.
+7. [cap @ /respostes] Llegeix la targeta del grau nou → diu 26 h a la setmana, 181 h lliures i 4.679 h de marge en tot el semestre.
+8. [cap @ /respostes] Prem «Com ho sabem →» d'una targeta → s'obre el detall; a «Detalls informàtics» surt la consulta SQL i cap identificador de sessió.
+9. [cap @ /respostes] Obre «Com fem servir les aules?» → surt el plànol de les 21 aules per espina (Q1 a Q4) i planta, més fosques com més ocupades.
+10. [cap @ /respostes] Passa el ratolí per sobre d'una aula del plànol → surt el codi, les places i el % d'ocupació.
+11. [cap @ /respostes] Llegeix la nota sota el plànol → explica que moltes aules semblen buides perquè 3 de cada 4 classes no tenen aula a les dades.
 
 ## Opcions i menú
 
