@@ -225,3 +225,9 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - Disseny: tres propostes per a la pàgina de la part 2, amb l'estil de la part 1 i dades inventades (docs/disseny/part2-opcio-a, b i c): A, franja i pastilla; B, com era i com queda; C, colors que ressalten. Totes porten el menú agrupat i la guia a baix a l'esquerra. L'equip tria.
 - La part 1 rep la petició de fer més petites les caixes de «Totes les respostes», ordenades per urgència i amb filtres.
 - Pendent: la pregunta de les 458 sessions fixades sense aula del 5.2.
+
+### [ds 19:20] DECISIÓ · Norma de dades a la part 2 i resultats de la validació
+- Norma de la direcció: cap agent llegeix repte/, resultats/ ni dades/; només recomptes, errors o el veredicte. Cada encàrrec a Codex de la part 2 porta la frase de la norma. El servidor de la part 2 (8503) ja només escolta a 127.0.0.1.
+- nivell2/base.py llegeix la carpeta de les dades de REPTE_DIR. Pendent per a la branca del 5.2: que franges.py imprimeixi només el nombre d'excepcions i desi el detall en un fitxer.
+- Validació de l'equip, coses a arreglar de la part 2: graelles una sota l'altra en pantalla ampla (7.4), subgrups massa estrets (7.7), classe compartida que surt com dos blocs a Q9/5006 (7.9), codis de grup sense explicar (7.12) i sigles al resum de la Junta (8.7). La 8.7 ja és en marxa (n2-dades-5); la resta entra amb el disseny que triï l'equip.
+- PROBLEMA: uns canvis de la pàgina de la part 2 sense commit a la carpeta principal van entrar al commit c1a5ebb d'una altra sessió, i app/components/ajuda_part2.py havia quedat fora de git. Solució: s'ha fet el commit del fitxer, i a la carpeta principal només es fan commits amb camins explícits.
