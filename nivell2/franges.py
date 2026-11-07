@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import itertools
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 from ortools.sat.python import cp_model
@@ -170,8 +170,13 @@ def _colls_capacitat(base, units, weeks, selected, candidates):
     """Certificats de demanda fixa superior a l'oferta, mai inferits d'UNKNOWN."""
     rooms = [a for a in base.aules.values() if a.tipus in ('Aules docents', 'Seminaris')]
     reports = []
+    # Only simultaneous demand is a necessary room-capacity condition.
+    # Counting classes touching an hour falsely counts consecutive classes in
+    # the same room twice. Exact R8 (distinct ordinary rooms over the whole
+    # hour) is enforced by assigna_aules, once room identities are known.
+    reserve = RESERVA if sum(a.ordinaria for a in base.aules.values()) >= RESERVA else 0
     for week, us in weeks.items():
-        buckets = defaultdict(list)
+        fixed = []
         for u in us:
             if u not in selected or selected[u][0] != 'f':
                 continue
@@ -179,20 +184,18 @@ def _colls_capacitat(base, units, weeks, selected, candidates):
             if not rows:
                 continue
             start = next(iter(candidates[selected[u]]))
-            end = start + max(r.durada for r in rows)
-            for day in range(5):
-                for hour in range(MATI[0], TARDA[1], 60):
-                    if start < day*1440+hour+60 and end > day*1440+hour:
-                        buckets[day,hour].append(sum(r.alumnes for r in rows))
-        for (day,hour), sizes in buckets.items():
+            fixed.append((start, start + max(r.durada for r in rows), sum(r.alumnes for r in rows)))
+        for start in sorted({a for a, _, _ in fixed}):
+            sizes = [n for a, b, n in fixed if a <= start < b]
             for threshold in [-1]+sorted({a.capacitat for a in rooms}):
                 demand = sum(n > threshold for n in sizes)
-                supply = max(0,len(rooms)-RESERVA) if threshold == -1 else sum(a.capacitat>threshold for a in rooms)
+                supply = max(0,len(rooms)-reserve) if threshold == -1 else sum(a.capacitat>threshold for a in rooms)
                 if demand > supply:
                     reports.append({'tipus':'capacitat_obstacles',
-                                    'data':(week+dt.timedelta(days=day)).isoformat(),
-                                    'h_ini':fmt(hour), 'mes_de_alumnes':threshold,
-                                    'demanda':demand, 'oferta':supply})
+                                    'data':(week+dt.timedelta(days=start//1440)).isoformat(),
+                                    'h_ini':fmt(start%1440), 'mes_de_alumnes':threshold,
+                                    'demanda':demand, 'oferta':supply,
+                                    'recompte':'classes simultànies, no classes que toquen una hora'})
     return reports
 
 
@@ -252,28 +255,34 @@ def _resol_torn(base, units, weeks, edges, groups, movibles, current, referencia
         return None, 'INFEASIBLE'
     variables, durations, cost, dayscost = {}, {}, [], []
     for key, ds in candidates.items():
-        variables[key] = m.new_int_var_from_domain(cp_model.Domain.from_values(sorted(ds)), str(key))
+        variables[key] = (m.new_constant(next(iter(ds))) if key[0] == 'f' else
+                          m.new_int_var_from_domain(cp_model.Domain.from_values(sorted(ds)), str(key)))
     for u, key in selected.items():
         durations[u] = max(s.durada for s in units[u])
     for key, x in variables.items():
         if key[0] == 'f':
             continue
         us = [u for u, k in selected.items() if k == key]
-        originals = {current[units[u][0].id][0].weekday()*1440+current[units[u][0].id][1] for u in us}
-        ref = min(originals)
+        originals = Counter(current[s.id][0].weekday()*1440+current[s.id][1] for u in us for s in units[u])
+        ref = max(originals,key=lambda value:(originals[value],-value))
         hint = min(candidates[key], key=lambda v:(v//1440 != ref//1440,abs(v%1440-ref%1440)))
         m.add_hint(x, hint)
-        # One change per activity, then same-day preference as a tie break.
-        changed = m.new_bool_var('canvi_activitat')
-        m.add(x == ref).only_enforce_if(changed.Not())
-        m.add(x != ref).only_enforce_if(changed)
-        cost.append(changed)
         day = m.new_int_var(0,4,'dia')
         m.add_division_equality(day,x,1440)
-        dc = m.new_bool_var('canvi_dia')
-        m.add(day == ref//1440).only_enforce_if(dc.Not())
-        m.add(day != ref//1440).only_enforce_if(dc)
-        dayscost.append(dc)
+        # A shared activity variable still incurs one cost per dated session.
+        # Compare with the supplied reference, including weekly exceptions.
+        for u in us:
+            for row in units[u]:
+                date, minute = _referencia(row, referencia)
+                original = date.weekday()*1440+minute
+                changed = m.new_bool_var('canvi_sessio')
+                m.add(x == original).only_enforce_if(changed.Not())
+                m.add(x != original).only_enforce_if(changed)
+                cost.append(changed)
+                changed_day = m.new_bool_var('canvi_dia')
+                m.add(day == date.weekday()).only_enforce_if(changed_day.Not())
+                m.add(day != date.weekday()).only_enforce_if(changed_day)
+                dayscost.append(changed_day)
     seen = set()
     for u, v in edges:
         if u not in selected or v not in selected:
@@ -296,7 +305,9 @@ def _resol_torn(base, units, weeks, edges, groups, movibles, current, referencia
         assigna_franges.estadistiques['colls_capacitat'] = bottlenecks
         return None, 'INFEASIBLE'
     rooms = [a for a in base.aules.values() if a.tipus in ('Aules docents','Seminaris')]
-    # The rounded interval can be reused in every week with the same activity.
+    reserve = RESERVA if sum(a.ordinaria for a in base.aules.values()) >= RESERVA else 0
+    # Necessary simultaneous packing only; hourly R8 is a union of room IDs,
+    # not a cumulative count of rounded session intervals (see assigna_aules).
     intervals = {}
     patterns = set()
     for us in weeks.values():
@@ -311,20 +322,14 @@ def _resol_torn(base, units, weeks, edges, groups, movibles, current, referencia
             entries.append(key)
             if key not in intervals:
                 x = variables[selected[u]]
-                start = m.new_int_var(0,120,'cubell_inici')
-                end = m.new_int_var(0,120,'cubell_fi')
-                length = m.new_int_var(1,24,'cubells')
-                m.add_division_equality(start,x-MATI[0],60)
-                m.add_division_equality(end,x+durations[u]-MATI[0]+59,60)
-                m.add(length==end-start)
-                intervals[key] = m.new_interval_var(start,length,end,'capacitat')
+                intervals[key] = m.new_fixed_size_interval_var(x,durations[u],'capacitat')
         pattern = tuple(sorted(entries))
         if pattern in patterns or not entries:
             continue
         patterns.add(pattern)
         for threshold in [-1]+sorted({a.capacitat for a in rooms}):
             relevant = [intervals[k] for k in entries if k[2]>threshold]
-            available = max(0,len(rooms)-RESERVA) if threshold == -1 else sum(a.capacitat>threshold for a in rooms)
+            available = max(0,len(rooms)-reserve) if threshold == -1 else sum(a.capacitat>threshold for a in rooms)
             available = min(available, limits_capacitat.get(threshold, available))
             if relevant:
                 m.add_cumulative(relevant,[1]*len(relevant),available)
@@ -370,13 +375,22 @@ def _resol_torn(base, units, weeks, edges, groups, movibles, current, referencia
                 m.add(variables[key] == original).only_enforce_if(exc)
                 m.add(variables[key] != original).only_enforce_if(exc.Not())
                 penalties.append(len(rows)*exc)
-    secondary_bound = COST_CANVI*(len(dayscost)+1)*len(cost)+len(dayscost)+1
-    m.minimize(secondary_bound*sum(penalties)+COST_CANVI*(len(dayscost)+1)*sum(cost)+sum(dayscost))
+    starts = {u:variables[key] for u,key in selected.items()}
+    gap_minutes = _hores_mortes(m, base, units, starts,
+                               {w:[u for u in us if u in selected] for w,us in weeks.items()},
+                               nomes_variables=True)
+    # One point per half hour, ten per changed session. R1 exceptions dominate
+    # every possible secondary cost. Keep minute precision for quarter-hours.
+    # Same-day preference only breaks ties in the specified weighted score.
+    tie_bound = len(dayscost)+1
+    secondary = tie_bound*(30*COST_CANVI*sum(cost)+COST_HORA_MORTA*sum(gap_minutes))+sum(dayscost)
+    secondary_bound = tie_bound*(30*COST_CANVI*len(cost)+COST_HORA_MORTA*1440*len(gap_minutes))+len(dayscost)+1
+    m.minimize(secondary_bound*sum(penalties)+secondary)
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = max(.001, deadline-time.monotonic())
     solver.parameters.num_workers = 2
     solver.parameters.random_seed = llavor
-    solver.parameters.stop_after_first_solution = not torn_tou
+    solver.parameters.stop_after_first_solution = False
     status = solver.solve(m)
     if status not in (cp_model.OPTIMAL,cp_model.FEASIBLE):
         assigna_franges.estadistiques['causa'] = 'solver'
@@ -389,16 +403,70 @@ def _resol_torn(base, units, weeks, edges, groups, movibles, current, referencia
     return out, solver.status_name(status)
 
 
-def assigna_franges(base, *, referencia, fixes=None, temps_s=300, llavor=0, limits_capacitat=None, permet_excepcions_torn=False):
+def _revisa_pista(base, referencia, pista, fixes, deadline, llavor, permet_excepcions_torn):
+    """Reopen complete weeks with movable shift exceptions in an incumbent.
+
+    The incumbent has already passed the official verifier in s52. All other
+    weeks retain that schedule; every movable session in an affected week is
+    reopened before an R1 exception can be justified.
+    """
+    import copy
+    import time
+    from horaris.check import _torn_ok
+    begin = time.monotonic()
+    base, double_stats = _prepara_dobles(base)
+    units,weeks,edges,groups = _problema(base,referencia,fixes)
+    current = {s.id:_referencia(s,pista) for s in base.sessions.values()}
+    original = dict(current)
+    affected = sorted({_setmana(s) for s in base.sessions.values() if not s.fixada and
+                       _torn_ok(s.torn,current[s.id][1],current[s.id][1]+s.durada) is False})
+    stats = {**double_stats,'pista_verificada':True,'setmanes_reobertes':len(affected),'proves_torn':[]}
+    assigna_franges.estadistiques = stats
+    for index,week in enumerate(affected):
+        us = set(weeks[week])
+        sub = copy.copy(base)
+        sub.sessions = {s.id:s for u in us for s in units[u]}
+        sub.ordre = list(sub.sessions)
+        args = (sub,{u:units[u] for u in us},{week:weeks[week]},
+                [(u,v) for u,v in edges if u in us and v in us],groups,us,
+                current,referencia,fixes,(MATI[0],TARDA[1]))
+        hard_begin = time.monotonic()
+        # Reserve time for the soft model only after a genuine hard proof.
+        hard_deadline = min(deadline,hard_begin+max(.01,(deadline-hard_begin)/(len(affected)-index)*.65))
+        solution,state = _resol_torn(*args,hard_deadline,llavor,reparacio=True,setmana_completa=True)
+        proof = {'setmana':week.isoformat(),'dur':state,'dur_s':time.monotonic()-hard_begin}
+        if solution is None and state == 'INFEASIBLE' and permet_excepcions_torn and week == dt.date(2027,4,5):
+            soft_begin = time.monotonic()
+            solution,state = _resol_torn(*args,deadline,llavor,reparacio=True,setmana_completa=True,torn_tou=True)
+            proof.update(tou=state,tou_s=time.monotonic()-soft_begin)
+            if solution is not None:
+                proof['sessions'] = [s.id for s in sub.sessions.values() if not s.fixada and
+                    _torn_ok(s.torn,solution[s.id][1],solution[s.id][1]+s.durada) is False]
+                proof['nombre'] = len(proof['sessions'])
+        stats['proves_torn'].append(proof)
+        print('Revisió de torn:',state,'; excepcions:',proof.get('nombre',0),flush=True)
+        if solution is None:
+            return {},state,[]
+        current = solution
+    notes = [{'id_sessio':s.id,'data':current[s.id][0].isoformat(),'minut_inici':current[s.id][1],
+              'motiu':'reoptimització de tota la setmana d’una excepció de torn'}
+             for s in base.sessions.values() if current[s.id] != original[s.id]]
+    stats.update(total_s=time.monotonic()-begin,
+                 sessions_canviades=sum(current[s.id] != _referencia(s,referencia) for s in base.sessions.values()),
+                 excepcions_festiu=len(notes))
+    return current,'FEASIBLE',notes
+
+
+def assigna_franges(base, *, referencia, fixes=None, temps_s=300, llavor=0, limits_capacitat=None, permet_excepcions_torn=False, pista=None):
     """Primera passada per activitat/torn; reparació local de calendari després.
 
     `permet_excepcions_torn` autoritza exclusivament W14/2027, després d'un
     INFEASIBLE conjunt de tota la setmana: l'única alternativa fora de torn
     és la franja original. `limits_capacitat` és llindar d'alumnes -> màxim
-    per cubell horari (-1: total). Les proves i el mínim trobat es registren.
+    simultànies (-1: total). Les proves i el mínim trobat es registren.
     Contracte del mòdul. `assigna_franges.estadistiques` registra els temps i
-    recomptes de l'última crida (ús seqüencial). La passada opcional d'hores
-    mortes s'omet per prioritzar el lliurament de la primera solució vàlida.
+    recomptes de l'última crida (ús seqüencial). Cada model optimitza els canvis
+    per sessió i les hores mortes amb els pesos de l'especificació.
     """
     import time
     from horaris.check import _torn_ok, _dins_finestra
@@ -411,9 +479,13 @@ def assigna_franges(base, *, referencia, fixes=None, temps_s=300, llavor=0, limi
         s = base.sessions[sid]
         if s.fixada and value != (s.data,s.ini):
             raise ValueError('Una sessió fixada no es pot moure')
+    if pista is not None and not fixes:
+        return _revisa_pista(base,referencia,pista,fixes,deadline,llavor,permet_excepcions_torn)
     base, double_stats = _prepara_dobles(base)
     units,weeks,edges,groups = _problema(base,referencia,fixes)
     current = {s.id:_referencia(s,referencia) for s in base.sessions.values()}
+    if pista is not None:
+        current.update({s.id:_referencia(s,pista) for s in base.sessions.values() if s.id in pista.files})
     current.update(fixes)
     for s in base.sessions.values():
         if s.fixada:
@@ -427,7 +499,7 @@ def assigna_franges(base, *, referencia, fixes=None, temps_s=300, llavor=0, limi
         opened = set(mobile)
         for level in range(3):
             solution,state = _resol_torn(base,units,weeks,edges,groups,opened,current,referencia,
-                                         fixes,shift,deadline,llavor,limits_capacitat=limits_capacitat)
+                                         fixes,shift,min(deadline,time.monotonic()+max(1,temps_s*.10)),llavor,limits_capacitat=limits_capacitat)
             if solution is not None:
                 current = solution
                 break
@@ -448,7 +520,7 @@ def assigna_franges(base, *, referencia, fixes=None, temps_s=300, llavor=0, limi
                 sub.ordre = list(sub.sessions)
                 repaired,state = _resol_torn(sub,{u:units[u] for u in us},{week:us_list},
                     [(u,v) for u,v in edges if u in us and v in us],groups,us,current,
-                    referencia,fixes,shift,deadline,llavor,reparacio=True,
+                    referencia,fixes,shift,min(deadline,time.monotonic()+max(1,temps_s*.03)),llavor,reparacio=True,
                     limits_capacitat=limits_capacitat,ignora_calendari=True)
                 if repaired is None:
                     return {},state,stats.get('colls_capacitat',[])
@@ -466,7 +538,7 @@ def assigna_franges(base, *, referencia, fixes=None, temps_s=300, llavor=0, limi
     for shift in (MATI,TARDA):
         if invalid:
             solution,state = _resol_torn(base,units,weeks,edges,groups,invalid,current,referencia,
-                                         fixes,shift,deadline,llavor,reparacio=True,limits_capacitat=limits_capacitat)
+                                         fixes,shift,min(deadline,time.monotonic()+max(1,temps_s*.05)),llavor,reparacio=True,limits_capacitat=limits_capacitat)
             if solution is None and state == 'INFEASIBLE':
                 affected_weeks = {_setmana(units[u][0]) for u in invalid}
                 expanded = set(invalid)
@@ -478,7 +550,7 @@ def assigna_franges(base, *, referencia, fixes=None, temps_s=300, llavor=0, limi
                 expanded.update(u for u,rows in units.items() if _setmana(rows[0]) in affected_weeks
                                 and any(s.aula in base.aules and base.aules[s.aula].tipus in types for s in rows))
                 solution,state = _resol_torn(base,units,weeks,edges,groups,expanded,current,referencia,
-                    fixes,shift,deadline,llavor,reparacio=True,limits_capacitat=limits_capacitat)
+                    fixes,shift,min(deadline,time.monotonic()+max(1,temps_s*.05)),llavor,reparacio=True,limits_capacitat=limits_capacitat)
             if solution is None and state == 'INFEASIBLE':
                 # Last local circle: solve affected real weeks independently.
                 # Avoid reopening the whole semester in one large model.
@@ -492,21 +564,22 @@ def assigna_franges(base, *, referencia, fixes=None, temps_s=300, llavor=0, limi
                     sub.ordre = list(sub.sessions)
                     repaired,state = _resol_torn(sub,{u:units[u] for u in us}, {week:weeks[week]},
                         [(u,v) for u,v in edges if u in us and v in us], groups, us,
-                        solution,referencia,fixes,shift,deadline,llavor,reparacio=True,
+                        solution,referencia,fixes,shift,min(deadline,time.monotonic()+max(1,temps_s*.03)),llavor,reparacio=True,
                         limits_capacitat=limits_capacitat)
                     if repaired is None and state == 'INFEASIBLE' and permet_excepcions_torn and week == dt.date(2027,4,5):
                         hard_begin = time.monotonic()
                         repaired,hard_state = _resol_torn(sub,{u:units[u] for u in us}, {week:weeks[week]},
                             [(u,v) for u,v in edges if u in us and v in us], groups, us,
-                            solution,referencia,fixes,(MATI[0],TARDA[1]),deadline,llavor,
-                            reparacio=True,limits_capacitat=limits_capacitat,setmana_completa=True)
+                            solution,referencia,fixes,(MATI[0],TARDA[1]),min(deadline,time.monotonic()+max(1,temps_s*.10)),llavor,
+                            reparacio=True,setmana_completa=True)
+                        state = hard_state
                         proof = {'setmana':week.isoformat(),'dur':hard_state,'dur_s':time.monotonic()-hard_begin}
                         if repaired is None and hard_state == 'INFEASIBLE':
                             soft_begin = time.monotonic()
                             repaired,state = _resol_torn(sub,{u:units[u] for u in us}, {week:weeks[week]},
                                 [(u,v) for u,v in edges if u in us and v in us], groups, us,
                                 solution,referencia,fixes,(MATI[0],TARDA[1]),min(deadline,soft_begin+90),llavor,
-                                reparacio=True,limits_capacitat=limits_capacitat,setmana_completa=True,torn_tou=True)
+                                reparacio=True,setmana_completa=True,torn_tou=True)
                             proof.update(tou=state,tou_s=time.monotonic()-soft_begin)
                             if repaired is not None:
                                 from horaris.check import _torn_ok
@@ -537,23 +610,26 @@ def assigna_franges(base, *, referencia, fixes=None, temps_s=300, llavor=0, limi
     return current, 'FEASIBLE', notes
 
 
-def _hores_mortes(m, base, units, starts, weeks):
+def _hores_mortes(m, base, units, starts, weeks, *, nomes_variables=False):
     """Minuts entre sessions consecutives, amb els subgrups del verificador.
 
     L'ordre és per inici i id, també quan hi ha solapaments heretats.
     No compta el migdia ni replica una teoria per subgrups absents aquell dia.
     """
     costs = []
-    days, minutes = {}, {}
+    days, minutes, clock_vars = {}, {}, {}
     for u, x in starts.items():
-        days[u] = m.new_int_var(0, 4, 'dia_agenda')
-        minutes[u] = m.new_int_var(0, 1439, 'minut_agenda')
-        m.add_division_equality(days[u], x, 1440)
-        m.add_modulo_equality(minutes[u], x, 1440)
-    same_days, later_starts = {}, {}
+        if x.index not in clock_vars:
+            day = m.new_int_var(0, 4, 'dia_agenda')
+            minute = m.new_int_var(0, 1439, 'minut_agenda')
+            m.add_division_equality(day, x, 1440)
+            m.add_modulo_equality(minute, x, 1440)
+            clock_vars[x.index] = day,minute
+        days[u],minutes[u] = clock_vars[x.index]
+    same_days, later_starts, agendas = {}, {}, {}
 
     def same_day(u, v):
-        key = tuple(sorted((u, v)))
+        key = tuple(sorted((starts[u].index, starts[v].index)))
         if key not in same_days:
             eq = m.new_bool_var('mateix_dia')
             m.add(days[u] == days[v]).only_enforce_if(eq)
@@ -562,10 +638,10 @@ def _hores_mortes(m, base, units, starts, weeks):
         return same_days[key]
 
     def later_start(u, v):
-        key = (u, v)
+        tie = min(s.id for s in units[u]) < min(s.id for s in units[v])
+        key = (starts[u].index,starts[v].index,tie)
         if key not in later_starts:
             later = m.new_bool_var('posterior')
-            tie = min(s.id for s in units[u]) < min(s.id for s in units[v])
             m.add(starts[v] >= starts[u] + (0 if tie else 1)).only_enforce_if(later)
             m.add(starts[v] < starts[u] + (0 if tie else 1)).only_enforce_if(later.Not())
             value = m.new_int_var(0, 7200, 'candidat_seguent')
@@ -591,8 +667,21 @@ def _hores_mortes(m, base, units, starts, weeks):
             members = practice | theory[key[:2]]
             if len(members) < 2:
                 continue
+            if nomes_variables and all(len(starts[u].proto.domain) == 2 and
+                    starts[u].proto.domain[0] == starts[u].proto.domain[1] for u in members):
+                continue  # A constant agenda cannot affect the choice.
             all_practice = set().union(*(v for k, v in groups.items() if k[:2] == key[:2]))
-            for u in members:
+            # Repeated routine weeks have the same agenda expression. Reuse
+            # its variables but append its costs again, preserving multiplicity.
+            ordered = sorted(members,key=lambda u:min(s.id for s in units[u]))
+            signature = (tuple((starts[u].index,max(s.durada for s in units[u]),u in practice)
+                               for u in ordered),
+                         tuple(sorted(starts[u].index for u in all_practice)),key[2] == '*')
+            if signature in agendas:
+                costs.extend(agendas[signature])
+                continue
+            begin_cost = len(costs)
+            for u in ordered:
                 following = m.new_int_var(0, 7200, 'seguent')
                 m.add_min_equality(following, [later_start(u, v) for v in members if v != u])
                 nextday = m.new_int_var(0, 5, 'dia_seguent')
@@ -632,6 +721,7 @@ def _hores_mortes(m, base, units, starts, weeks):
                 m.add(cost == gap).only_enforce_if(count)
                 m.add(cost == 0).only_enforce_if(count.Not())
                 costs.append(cost)
+            agendas[signature] = costs[begin_cost:]
     return costs
 
 
@@ -664,7 +754,7 @@ def main():
         proposta_franges(base, ref, result).escriu(args.sortida)
         print('Canvis de franja:', sum(result[s.id] != (s.data, s.ini) for s in base.sessions.values()))
     import json
-    detail = Path(__file__).resolve().parents[1]/'resultats/nivell2/5.2/franges-detall.json'
+    detail = Path(__file__).resolve().parents[1]/'resultats/.intents-s52/franges-detall.json'
     detail.parent.mkdir(parents=True,exist_ok=True)
     detail.write_text(json.dumps({'estadistiques':assigna_franges.estadistiques,'excepcions':notes},ensure_ascii=False,indent=2))
     print('Excepcions:', len(notes))
@@ -676,7 +766,7 @@ if __name__ == '__main__':
         raise SystemExit(main())
     except Exception:
         import traceback
-        target = Path(__file__).resolve().parents[1]/'resultats/nivell2/5.2'
+        target = Path(__file__).resolve().parents[1]/'resultats/.intents-s52'
         target.mkdir(parents=True,exist_ok=True)
         (target/'error-franges.txt').write_text(traceback.format_exc(),encoding='utf-8')
         print('Errors d’execució: 1; detall desat fora de git')
