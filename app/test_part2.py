@@ -293,7 +293,7 @@ class TestRedisseny(unittest.TestCase):
         taula = Taula()
         taula.feed(html)
         assert [int(c.get('colspan', 1)) for c in taula.files[0]] == [1, 2, 1, 1, 1, 1]
-        assert 'min-width:990px' in html  # Dos carrils dilluns; un als altres dies.
+        assert 'min-width:648px' in html  # Dos carrils dilluns; un als altres dies.
         # La primera classe de dilluns ocupa tot el dia, les simultànies un carril.
         blocs = [c for fila in taula.files[1:] for c in fila if 'rowspan' in c and 'colspan' in c]
         assert [int(c['colspan']) for c in blocs] == [2, 1, 1, 1, 1, 1, 1]
@@ -313,7 +313,7 @@ class TestRedisseny(unittest.TestCase):
             assert all(ocupades)
             pendents = seguent
         assert not any(pendents)
-        assert 'min-width:140px' in CSS
+        assert 'min-width:0;height:100%' in CSS
         assert '.horari-scroll{overflow:auto;width:100%;max-width:100%;min-width:0;contain:inline-size;' in CSS
 
     def test_classes_consecutives_no_obren_carrils_per_arrodoniment(self):
@@ -322,13 +322,13 @@ class TestRedisseny(unittest.TestCase):
         a = Cella('S90001', 'L', 510, 555, '', 'Inventada I', 'Teoria', '81', False, False)
         b = replace(a, id_sessio='S90002', ini=555, fi=615, assignatura='Inventada II')
         html = taula_html([a, b])
-        assert 'min-width:840px' in html
+        assert 'min-width:552px' in html
         assert 'colspan="1">Dilluns' in html
         assert '09:15–10:15' in html
         assert html.count('<details class="classe') == 2
         # Un sol minut compartit sí que exigeix dos blocs de com a mínim 140 px.
         html = taula_html([a, replace(b, ini=554)])
-        assert 'min-width:990px' in html and 'colspan="2">Dilluns' in html
+        assert 'min-width:648px' in html and 'colspan="2">Dilluns' in html
 
     def test_colors_variables_i_prioritat(self):
         from dataclasses import replace
@@ -394,9 +394,9 @@ class TestRedisseny(unittest.TestCase):
         assert nom_grup('SEM/906', 'Seminari') == 'Subgrup 906 · seminari'
         cs = [Cella(f'S90{i:03}', 'L', 510, 570, '', 'Assignatura Inventada', 'Problemes', f'PAUL/904{i}', False, False) for i in range(4)]
         html = taula_html(cs)
-        assert 'min-width:1290px' in html  # 90 + (4 carrils + 4 dies) * 150
-        assert html.count('<col style="width:150px">') == 8
-        assert 'min-width:140px' in CSS and 'overflow:auto' in CSS
+        assert 'min-width:840px' in html  # 72 + (4 carrils + 4 dies) * 96
+        assert html.count('<col class="carril">') == 8
+        assert 'min-width:0;height:100%' in CSS and 'overflow:auto' in CSS
         assert 'overflow-wrap:anywhere' not in CSS and 'word-break:normal' in CSS
         assert 'PAUL/' not in html
 

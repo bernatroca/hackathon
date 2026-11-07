@@ -114,14 +114,14 @@ CSS_PAGINA = """
 .st-key-p2-pagina .st-key-p2-filtres button p{font-size:13px;}
 .st-key-p2-pagina .st-key-p2-filtres button[kind="primary"]{outline:2px solid currentColor;outline-offset:1px;}
 .st-key-p2-pagina .st-key-p2-vista-aula button{color:#256abf;}
-.st-key-p2-pagina .st-key-p2-obre-guia{position:fixed;left:18px;bottom:18px;width:auto;z-index:10005;}
+.st-key-p2-pagina .st-key-p2-obre-guia{position:fixed;left:18px;bottom:18px;width:auto;z-index:1000002;}
 .st-key-p2-pagina .st-key-p2-obre-guia button{background:var(--targeta,#fff);color:#256abf;border:1px solid var(--linia);border-radius:12px;box-shadow:0 2px 8px #0002;}
-.st-key-p2-pagina .st-key-p2-guia{position:fixed;left:18px;top:80px;width:350px;max-height:calc(100vh - 24px);overflow:auto;z-index:10004;background:var(--targeta,#fff);border:2px solid var(--blau);border-radius:14px;padding:16px;box-shadow:0 6px 28px #0003;gap:8px;}
+.st-key-p2-pagina .st-key-p2-guia{position:fixed;left:18px;top:80px;width:350px;max-height:calc(100vh - 24px);overflow:auto;z-index:1000001;background:var(--targeta,#fff);border:2px solid var(--blau);border-radius:14px;padding:16px;box-shadow:0 6px 28px #0003;gap:8px;}
 .st-key-p2-pagina .st-key-p2-guia p{font-size:14px;}
 .st-key-p2-pagina .st-key-p2-guia button{color:#256abf;}
 .st-key-p2-pagina .st-key-p2-guia [data-testid="stHorizontalBlock"]{flex-wrap:nowrap;gap:6px;}
 .st-key-p2-pagina .st-key-p2-guia [data-testid="stColumn"]{min-width:0!important;flex:1 1 0!important;width:auto!important;}
-.st-key-p2-pagina .p2-pas-actiu{position:relative;z-index:10003;background:var(--targeta,#fff);outline:3px solid var(--blau);outline-offset:5px;border-radius:10px;box-shadow:0 0 0 100vmax #10182070;scroll-margin-top:80px;}
+.st-key-p2-pagina .p2-pas-actiu{position:relative;z-index:1000000;background:var(--targeta,#fff);outline:3px solid var(--blau);outline-offset:5px;border-radius:10px;box-shadow:0 0 0 100vmax #10182070;scroll-margin-top:80px;}
 .st-key-p2-pagina .horari-scroll.p2-pas-actiu{max-height:48vh;}
 .st-key-p2-pagina .st-key-p2-vista-aula.p2-pas-actiu{max-height:48vh;overflow:auto;}
 @media(prefers-reduced-motion:reduce){.st-key-p2-pagina *{scroll-behavior:auto!important;transition:none!important;animation:none!important;}}

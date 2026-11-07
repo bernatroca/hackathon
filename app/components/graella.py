@@ -194,14 +194,14 @@ CSS = """
 .p2-horari .horari th,.p2-horari .horari td{border:1px solid var(--linia,#e6e5e0);padding:4px;vertical-align:top}
 .p2-horari .horari th{background:var(--fons,#f4f3ef);font-weight:600}
 .p2-horari .horari tbody tr{height:32px}
-.p2-horari .horari .hora{width:90px}
+.p2-horari .horari .hora{width:72px}
 .p2-horari .horari caption{text-align:left;font-size:16px;font-weight:600;padding:10px 12px}
-.p2-horari .classe{background:var(--targeta,#fff);border:1px solid var(--linia,#e6e5e0);border-left:5px solid var(--blau,#2a78d6);border-radius:8px;padding:7px;min-width:140px;height:100%;box-sizing:border-box;word-break:normal;overflow-wrap:normal;hyphens:auto}
+.p2-horari .classe{background:var(--targeta,#fff);border:1px solid var(--linia,#e6e5e0);border-left:5px solid var(--blau,#2a78d6);border-radius:8px;padding:6px;min-width:0;height:100%;box-sizing:border-box;word-break:normal;overflow-wrap:normal;hyphens:auto}
 .p2-horari .classe.aula-nova{border-left-color:var(--verd,#2f8f46)}
 .p2-horari .classe.canvi{border-left-color:var(--p2-taronja,#e8820c)}
 .p2-horari .classe.relaxada{border-left-color:var(--vermell,#d03b3b)}
 .p2-horari .classe small{display:block;margin-top:3px}
-.p2-horari .classe .estat{display:inline-flex;align-items:center;gap:4px;white-space:normal;font-size:12px;font-weight:600;border-radius:999px;padding:2px 7px;margin-top:5px}
+.p2-horari .classe .estat{display:inline-flex;align-items:center;gap:4px;white-space:normal;hyphens:manual;overflow-wrap:normal;font-size:12px;line-height:1.25;font-weight:600;border-radius:999px;padding:2px 7px;margin-top:5px}
 .p2-horari .classe.aula-nova .estat{background:var(--verd-fons,#e9f4ec);color:var(--verd-text,#1f6b33)}
 .p2-horari .classe.canvi .estat{background:var(--p2-taronja-fons,#fff1e0);color:var(--p2-taronja-text,#9a5200)}
 .p2-horari .classe.relaxada .estat{background:var(--vermell-fons,#fbe9e9);color:var(--vermell-text,#a12c2c)}
@@ -265,13 +265,13 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
             for fila in range(primera, final):
                 for columna in range(carril, carril + ample):
                     cobertes[dia, fila, columna] = True
-    # Cada carril disposa de 150 px: 140 de bloc i el marge de la cel·la.
+    # Cada carril té com a mínim 96 px; si hi ha lloc, la taula s'estira fins a l'amplada disponible.
     total = sum(n for n, _ in carrils.values())
-    amplada = 90 + 150 * total
+    amplada = 72 + 96 * total
     html = (f'<style>{CSS}</style>' if estils else '') + f'<div class="p2-horari"><div class="horari-scroll" tabindex="0" role="region" aria-label="{escape(titol, quote=True)}"><table class="horari"><caption>{escape(titol)}</caption><colgroup><col class="hora">'
     for dia in DIES:
         n, _ = carrils[dia]
-        html += ''.join('<col style="width:150px">' for _ in range(n))
+        html += ''.join('<col class="carril">' for _ in range(n))
     html = html.replace('<table class="horari">', f'<table class="horari" style="min-width:{amplada}px">')
     html += '</colgroup><thead><tr><th scope="col">Hora</th>'
     html += ''.join(f'<th scope="col" colspan="{carrils[d][0]}">{nom}</th>' for d, nom in zip(DIES, NOMS_DIES)) + '</tr></thead><tbody>'
