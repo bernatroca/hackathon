@@ -1,3 +1,5 @@
+from html import escape
+import re
 import streamlit as st
 from components.grafics import grafics, numero
 from mostra import exemples
@@ -43,9 +45,9 @@ def targeta(t, posicio):
     with st.container(border=True):
         if (t.extra or {}).get('mostra'):
             st.caption('MOSTRA · dades fictícies')
-        st.metric(t.titol, numero(t.xifra))
-        st.write(t.frase)
-        grafics(t, petit=True, clau=f'targeta-{posicio}-{t.id}')
+        st.subheader(t.titol)
+        st.markdown(f'<div class="xifra-targeta">{escape(numero(t.xifra))}</div>', unsafe_allow_html=True)
+        st.write(re.split(r'(?<=[.!?])\s+', t.frase.strip(), maxsplit=1)[0])
         if st.button('Obre la troballa', key='obre-' + t.id, width='stretch'):
             st.session_state.detall_id = t.id
             st.rerun()

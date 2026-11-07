@@ -20,11 +20,14 @@ def taula(df):
 
 
 def figura(fig, petit, clau):
-    fig.update_layout(height=180 if petit else 400, margin=dict(l=12, r=12, t=30, b=25),
+    fig.update_layout(template='plotly_white', height=180 if petit else 400, margin=dict(l=12, r=12, t=30, b=25),
         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
         colorway=COLORS, separators=',.', font=dict(color='#24383D'),
-        legend=dict(orientation='h', y=-0.25), barmode='group')
-    st.plotly_chart(fig, width='stretch', key=clau, config={'displayModeBar': not petit, 'locale': 'ca'})
+        legend=dict(orientation='h', y=-0.25, font=dict(color='#24383D')), barmode='group')
+    fig.update_xaxes(tickfont=dict(color='#24383D'), title_font=dict(color='#24383D'), gridcolor='#E2EAEA', linecolor='#D3DFDF', automargin=True)
+    fig.update_yaxes(tickfont=dict(color='#24383D'), title_font=dict(color='#24383D'), gridcolor='#E2EAEA', linecolor='#D3DFDF', automargin=True)
+    fig.update_annotations(font_color='#24383D')
+    st.plotly_chart(fig, width='stretch', key=clau, theme=None, config={'displayModeBar': not petit, 'locale': 'ca'})
 
 
 def avis(df, text):
@@ -86,13 +89,23 @@ def dibuixa(df, tipus, petit=False, clau='grafic', limit=False):
     if not numeriques:
         avis(df, 'Falten columnes numèriques per dibuixar el gràfic. Es mostra la taula.')
         return
+    hover = x
+    if limit:
+        x = list(range(len(df)))
     fig = go.Figure()
     for col in numeriques:
         if limit and col != 'classes':
             continue
         trace = go.Bar if tipus == 'barres' else go.Scatter
-        fig.add_trace(trace(x=x, y=df[col], name=col.replace('_', ' ')))
+        fig.add_trace(trace(x=x, y=df[col], name=col.replace('_', ' '),
+            **({'customdata': hover, 'hovertemplate': '%{customdata}<br>%{y} classes<extra></extra>'} if limit else {})))
     if limit:
+        if 'dia' in df:
+            dies = df['dia'].astype(str).reset_index(drop=True)
+            fig.update_xaxes(tickmode='array',
+                tickvals=[(dies[dies == dia].index[0] + dies[dies == dia].index[-1]) / 2 for dia in dies.drop_duplicates()],
+                ticktext=list(dies.drop_duplicates()), title_text='Dia', tickangle=0)
+        fig.update_yaxes(title_text='Classes simultànies')
         fig.add_hline(y=19, line_dash='dash', line_color=COLORS[2], annotation_text='19 aules disponibles')
     figura(fig, petit, clau)
 
@@ -119,12 +132,13 @@ def grafics(t, petit=False, clau='troballa'):
         elif {'llindar', 'demanda_h', 'oferta_h', 'oferta_h_amb_seminaris', 'falla'}.issubset(df.columns):
             fig = go.Figure()
             etiquetes = df['llindar'].map(lambda k: f'> {numero(k)} places')
-            for i, (col, nom) in enumerate([('demanda_h', 'Demanda'), ('oferta_h', 'Oferta · 19 aules'),
+            for i, (col, nom) in enumerate([('demanda_h', 'Demanda'), ('oferta_h', 'Oferta'),
                                            ('oferta_h_amb_seminaris', 'Oferta amb seminaris')]):
                 fig.add_bar(x=etiquetes, y=df[col], name=nom, marker_color=COLORS[i])
             for etiqueta, falla in zip(etiquetes, df['falla']):
                 if falla is True or str(falla).lower() in ('true', '1'):
                     fig.add_annotation(x=etiqueta, y=1.08, yref='paper', text='Falla', showarrow=False, font_color=COLORS[2])
+            fig.update_layout(showlegend=True, legend_title_text='Hores-aula')
             figura(fig, petit, clau + camp)
         else:
             avis(df, 'La comparació per mida necessita llindar, demanda_h, oferta_h, oferta_h_amb_seminaris i falla.')
