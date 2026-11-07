@@ -114,12 +114,13 @@ def test_doble_fixat_i_no_aparellat_es_conserven():
 def test_relaxacions_per_motiu_amb_dades_inventades():
     from nivell2.s52 import relaxacions_proposta, MOTIU_FIXADES, MOTIU_DOBLES
     fixed = sessio('inventat-fix',codi='100000',ini=900,torn='mati',fixada='R1: GXX 1r')
-    double = sessio('inventat-doble',codi='100000',ini=900,torn='mati',sense_espai=True,grup='TE/91')
+    double = sessio('inventat-doble',codi='100000',ini=900,torn='mati',sense_espai=True,grup='TE/91',fixada='R1: GXX 1r')
     base = base_petita(fixed,double)
     proposal = Proposta.de_base(base)
     proposal.files[fixed.id].aula = 'aula-inventada'
     rows = relaxacions_proposta(base,proposal,set())
-    assert {r['justificacio'] for r in rows} == {MOTIU_FIXADES,MOTIU_DOBLES}
+    assert {r['justificacio'] for r in rows} == {MOTIU_FIXADES}
+    assert all(double.id not in r['sessions'].split('|') for r in rows)
     assert all(r['restriccio'] == 'R1-TORN' for r in rows)
 
 
@@ -147,3 +148,126 @@ def test_sortida_solver_no_mostra_detall_privatiu(capsys):
     stdout = capsys.readouterr().out
     assert secret not in stdout and 'aula-inventada' not in stdout
     assert history[0]['estadistiques_franges']['proves_torn'][0]['sessions'] == [secret]
+
+
+def test_fallada_conserva_tot_el_lliurament(tmp_path):
+    from nivell2.s52 import main
+    root = tmp_path/'nivell2'
+    out = root/'5.2'
+    out.mkdir(parents=True)
+    original = {'README.md':b'anterior', 'relaxacions.csv':b'anterior',
+                'diagnostic.md':b'anterior', 'xifres.csv':b'anterior'}
+    for name,content in original.items():
+        (out/name).write_bytes(content)
+    for state in ('UNKNOWN','INFEASIBLE'):
+        with patch('nivell2.s52.RESULTATS',root), \
+             patch('nivell2.s52.carrega_model',return_value=base_petita(sessio('inventat'))), \
+             patch('nivell2.s52.carrega_oficial',return_value=base_petita(sessio('inventat'))), \
+             patch('nivell2.s52.resol',return_value=(None,[],[{'franges':state}])):
+            assert main(['--temps-franges','1','--temps-aules','1']) == 1
+        assert {p.name:p.read_bytes() for p in out.iterdir()} == original
+    diagnostics = [p.read_text() for p in (tmp_path/'.intents-s52').glob('*/diagnostic.md')]
+    assert any('UNKNOWN — temps esgotat' in text for text in diagnostics)
+    assert any('INFEASIBLE — impossibilitat demostrada' in text for text in diagnostics)
+
+
+def test_error_verificador_conserva_lliurament(tmp_path):
+    from nivell2.s52 import main
+    root = tmp_path/'nivell2'
+    out = root/'5.2'
+    out.mkdir(parents=True)
+    (out/'proposta.csv').write_bytes(b'proposta anterior')
+    with patch('nivell2.s52.RESULTATS',root), \
+         patch('nivell2.s52.verifica',side_effect=RuntimeError('inventat')):
+        assert main([]) == 2
+    assert (out/'proposta.csv').read_bytes() == b'proposta anterior'
+    assert list(p.name for p in out.iterdir()) == ['proposta.csv']
+
+
+def test_publicacio_fallida_restaura_directori(tmp_path):
+    import pytest
+    from pathlib import Path
+    from nivell2.s52 import publica
+    out = tmp_path/'5.2'
+    out.mkdir()
+    (out/'proposta.csv').write_text('anterior')
+    stage = tmp_path/'stage'
+    stage.mkdir()
+    (stage/'proposta.csv').write_text('nova')
+    with patch('nivell2.s52._intercanvia',side_effect=OSError('fallada inventada')), pytest.raises(OSError):
+        publica(stage,out)
+    assert (out/'proposta.csv').read_text() == 'anterior'
+
+
+def test_publicacio_atomica_sense_barrejar_fitxers(tmp_path):
+    from nivell2.s52 import publica
+    out = tmp_path/'5.2'
+    out.mkdir()
+    (out/'proposta.csv').write_text('anterior')
+    (out/'fitxer-antic').write_text('antic')
+    stage = tmp_path/'stage'
+    stage.mkdir()
+    (stage/'proposta.csv').write_text('nova')
+    (stage/'informe.json').write_text('nou')
+    publica(stage,out)
+    assert {p.name:p.read_text() for p in out.iterdir()} == {
+        'proposta.csv':'nova','informe.json':'nou'}
+    assert not stage.exists()
+
+
+def test_candidata_invalida_o_pitjor_no_publica(tmp_path):
+    from types import SimpleNamespace
+    from nivell2.base import Informe
+    from nivell2.s52 import _executa
+    def report(verdict,declared):
+        return Informe({'veredicte':verdict,'incompliments_declarats':declared,
+                        'restriccions':{},'objectius':dict.fromkeys(
+                            ('canvis_franja','hores_mortes_min','desplacaments_aula',
+                             'r6_aules_te_extra_per_grup'),0)},'')
+    base = base_petita(sessio('inventat',ini=870))
+    out = tmp_path/'5.2'
+    out.mkdir()
+    (out/'proposta.csv').write_bytes(b'original')
+    for index,(verdict,declared) in enumerate([('NO VALIDA',0),('VALIDA AMB RELAXACIONS DECLARADES',460)]):
+        stage = tmp_path/f'stage-{index}'
+        stage.mkdir()
+        with patch('nivell2.s52.verifica',side_effect=[report('VALIDA AMB RELAXACIONS DECLARADES',459),report(verdict,declared)]), \
+             patch('nivell2.s52.carrega_model',return_value=base), \
+             patch('nivell2.s52.carrega_oficial',return_value=base), \
+             patch('nivell2.s52.resol',return_value=(Proposta.de_base(base),[],[{'estadistiques_franges':{}}])), \
+             patch('nivell2.s52.publica') as publish:
+            assert _executa(SimpleNamespace(temps_franges=1,temps_aules=1,llavor=0),stage,out) == 1
+        assert not publish.called
+        assert {p.name:p.read_bytes() for p in out.iterdir()} == {'proposta.csv':b'original'}
+
+
+def test_revisio_pista_unknown_no_demostra_excepcio():
+    import datetime as dt
+    import time
+    from nivell2.franges import _revisa_pista, assigna_franges
+    row = sessio('inventat',data=dt.date(2027,4,9),dia='V',ini=540)
+    base = base_petita(row)
+    ref = Proposta.de_base(base)
+    with patch('nivell2.franges._resol_torn',return_value=(None,'UNKNOWN')) as solve:
+        result,state,_ = _revisa_pista(base,ref,ref,{},time.monotonic()+5,0,True)
+    assert not result and state == 'UNKNOWN'
+    assert solve.call_count == 1  # No soft R1 model without a hard proof.
+    assert 'sessions' not in assigna_franges.estadistiques['proves_torn'][0]
+    assert solve.call_args.kwargs['setmana_completa']
+    assert 'limits_capacitat' not in solve.call_args.kwargs
+
+
+def test_revisio_pista_sense_excepcio_si_r1_dura_es_possible():
+    import datetime as dt
+    import time
+    from nivell2.franges import _revisa_pista, assigna_franges
+    from nivell2.s52 import relaxacions_proposta
+    row = sessio('inventat',data=dt.date(2027,4,9),dia='V',ini=540)
+    base = base_petita(row)
+    ref = Proposta.de_base(base)
+    with patch('nivell2.franges._resol_torn',return_value=({row.id:(row.data,870)},'FEASIBLE')):
+        result,state,_ = _revisa_pista(base,ref,ref,{},time.monotonic()+5,0,True)
+    assert state == 'FEASIBLE' and result[row.id][1] == 870
+    assert 'sessions' not in assigna_franges.estadistiques['proves_torn'][0]
+    from nivell2.franges import proposta_franges
+    assert not relaxacions_proposta(base,proposta_franges(base,ref,result),set())

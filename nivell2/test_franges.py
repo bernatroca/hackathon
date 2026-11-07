@@ -92,7 +92,7 @@ def test_solapament_nou_i_capacitat_horaria():
     r, _ = resol(base_petita(a, b))
     if r['a'][0] == r['b'][0]:
         assert abs(r['a'][1] - r['b'][1]) >= 60
-    # Tres aules menys dues de reserva: una sola classe per cubell horari.
+    # Tres aules menys dues de reserva: una aula ocupada per cubell horari.
     # Dues mitges hores consecutives toquen el mateix cubell 14:30-15:30.
     a = sessio('a', ini=870, durada=30, docents=frozenset(), cohorts=('A:3r',))
     b = sessio('b', ini=990, durada=30, docents=frozenset(), cohorts=('B:3r',))
@@ -101,7 +101,17 @@ def test_solapament_nou_i_capacitat_horaria():
     ref = Proposta.de_base(base)
     r, state, _ = assigna_franges(base, referencia=ref, temps_s=3,
                                  fixes={'a': (a.data, 870), 'b': (b.data, 900)})
-    assert state == 'INFEASIBLE'
+    assert state == 'FEASIBLE'
+    assert r['a'] == (a.data,870) and r['b'] == (b.data,900)
+    # The final room model must permit reuse within the hour as well.
+    from nivell2.aules import assigna_aules
+    rooms, state = assigna_aules(base,r,temps_s=3)
+    assert state in ('OPTIMAL','FEASIBLE')
+    assert rooms['a'] == rooms['b']
+    proposal = proposta_franges(base,ref,r)
+    for sid,room in rooms.items():
+        proposal.files[sid].aula = room
+    assert not [v for v in avalua_rapid(base,proposal).violacions if v.compta and v.regla == 'R8-RESERVA']
 
 
 def test_hores_mortes_heretades():
@@ -139,6 +149,34 @@ def test_activitats_correctes_congelades():
     r,_ = resol(base)
     assert r['a'] == (a.data,a.ini)
     assert r['b'][1] >= 870
+
+
+def test_cost_canvi_es_per_sessio_i_optimitza_hores_mortes():
+    import time
+    from nivell2.franges import _problema, _resol_torn
+    from horaris.model import TARDA
+    # Fifteen dates share a variable with one singleton activity. They start
+    # at different times in the reference; preserving fifteen dates must win.
+    rows = [sessio(f'inventat-a{i}',activitat='A',ini=900,
+                   data=dt.date(2027,2,8)+dt.timedelta(weeks=i),
+                   cohorts=(),docents=frozenset()) for i in range(15)]
+    singleton = sessio('inventat-b',activitat='B',ini=960,cohorts=(),docents=frozenset())
+    base = base_petita(*rows,singleton)
+    ref = Proposta.de_base(base)
+    units,weeks,edges,groups = _problema(base,ref,{})
+    # This synthetic shared component has one common decision across dates.
+    groups = {u:'component' for u in units}
+    current = {r.id:(r.data,r.ini) for r in base.sessions.values()}
+    result,state = _resol_torn(base,units,weeks,edges,groups,{'component'},current,
+                              ref,{},TARDA,time.monotonic()+5,0)
+    assert state == 'OPTIMAL'
+    assert all(result[r.id][1] == 900 for r in rows)
+    assert result[singleton.id][1] == 900
+    # With a mandatory move, the gap term selects the adjacent slot.
+    fixed = sessio('inventat-fix',ini=870,fixada='R1',durada=60)
+    moved = sessio('inventat-mou',ini=540)
+    result,_ = resol(base_petita(fixed,moved))
+    assert result[moved.id] == (fixed.data,930)
 
 
 class TestFranges(unittest.TestCase):
