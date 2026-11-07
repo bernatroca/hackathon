@@ -141,6 +141,27 @@ def _files(b, p):
                'assignatura': s.codi, 'tipus': s.tipus, 'grup': s.grup}
 
 
+def _recomptes_sessions(rows):
+    # Una sessió pot aparèixer a més d'una titulació: el total és únic.
+    uniques = {r['id_sessio']: r for r in rows}
+    amb = sum(bool(r.get('aula')) for r in uniques.values())
+    return {'total_sessions': len(uniques), 'amb_aula': amb,
+            'sense_aula': len(uniques) - amb}
+
+
+def _recomptes(rows, b):
+    resultat = _recomptes_sessions(rows)
+    cohorts = {}
+    for r in rows:
+        noms = [f"{r['titulacio']}:{r['curs']}"] if 'titulacio' in r else b.sessions[r['id_sessio']].cohorts
+        for nom in noms:
+            cohorts.setdefault(nom, []).append(r)
+    resultat['per_titulacio_curs'] = [dict(titulacio=nom.rsplit(':', 1)[0],
+        curs=nom.rsplit(':', 1)[1], **_recomptes_sessions(files))
+        for nom, files in sorted(cohorts.items())]
+    return resultat
+
+
 def horari_grup(grup, titulacio=None, curs=None, dia=None, setmana=None, proposta='avui'):
     graella = _modul('components.graella')
     b, p = _carrega(proposta)
@@ -174,7 +195,7 @@ def horari_grup(grup, titulacio=None, curs=None, dia=None, setmana=None, propost
     for r in rows[:LIMIT]:
         key = (r['titulacio'], r['curs'])
         horaris.setdefault(key, {'titulacio': key[0], 'curs': key[1], 'files': []})['files'].append(r)
-    return _retorn({'total': len(rows), 'horaris': list(horaris.values())},
+    return _retorn({'total': len(rows), 'horaris': list(horaris.values()), 'recomptes': _recomptes(rows, b)},
                    f'celles(grup={grup}, titulacio={titulacio}, curs={curs}, setmana={w}, dia={d}, proposta={proposta})',
                    [r['id_sessio'] for r in rows[:LIMIT]])
 
@@ -185,7 +206,9 @@ def ocupacio_aula(aula, dia=None, setmana=None, proposta='avui'):
     d = _dia(dia) if dia is not None else None
     w = _setmana(b, setmana)
     rows = [r for r in _files(b, p) if r['aula'] == aula and w <= r['data'] < w+dt.timedelta(days=7) and (d is None or r['dia'] == d)]
-    return _retorn(sorted(rows, key=lambda r: (r['data'], r['ini_min'], r['id_sessio'])), f'ocupacio_aula(aula={aula}, dia={dia}, setmana={w}, proposta={proposta})')
+    out = _retorn(sorted(rows, key=lambda r: (r['data'], r['ini_min'], r['id_sessio'])), f'ocupacio_aula(aula={aula}, dia={dia}, setmana={w}, proposta={proposta})')
+    out['resultat']['recomptes'] = _recomptes(rows, b)
+    return out
 
 
 def aules_lliures(hora_ini, durada_min, places_min, dia=None, data=None, tipus=None, setmana=None, proposta='avui'):
@@ -209,7 +232,9 @@ def aules_lliures(hora_ini, durada_min, places_min, dia=None, data=None, tipus=N
                 ocupades.update((r[3] or '').split('|'))
     rows = [{'aula': a.aula, 'capacitat': a.capacitat, 'tipus': a.tipus, 'data': date, 'h_ini': nb.fmt(ini), 'h_fi': nb.fmt(ini+durada_min)}
             for a in b.aules.values() if a.aula not in ocupades and a.capacitat >= places_min and (a.tipus == tipus if tipus else a.ordinaria)]
-    return _retorn(sorted(rows, key=lambda r: (r['capacitat'], r['aula'])), f'aules_lliures(data={date}, hora_ini={hora_ini}, durada_min={durada_min}, places_min={places_min}, tipus={tipus}, proposta={proposta}); solapament: inici < fi AND final > inici')
+    out = _retorn(sorted(rows, key=lambda r: (r['capacitat'], r['aula'])), f'aules_lliures(data={date}, hora_ini={hora_ini}, durada_min={durada_min}, places_min={places_min}, tipus={tipus}, proposta={proposta}); solapament: inici < fi AND final > inici')
+    out['resultat']['recomptes'] = {'total_aules': len(rows)}
+    return out
 
 
 def xifra(id):
@@ -272,6 +297,32 @@ def _normalitza_dies_sql(sql):
     return original.decode('utf-8')
 
 
+def _abast_sql(sql):
+    import duckdb
+    # Tokenització exclou comentaris i evita confondre literals amb columnes.
+    raw = sql.encode('utf-8')
+    tokens = duckdb.tokenize(sql)
+    parts = []
+    for i, (start, kind) in enumerate(tokens):
+        end = tokens[i+1][0] if i+1 < len(tokens) else len(raw)
+        value = raw[start:end].decode('utf-8').strip()
+        if kind.name == 'string_const' and not re.fullmatch(r"'(?:[0-9]{4}-W[0-9]{2}|C/[12]|[12])'", value, re.I):
+            value = "''"
+        if kind.name != 'comment':
+            parts.append(value)
+    text = ' '.join(parts)
+    filtre = re.search(r'\b(?:WHERE|HAVING|ON|FILTER)\b', text, re.I)
+    text = text[filtre.end():] if filtre else ''
+    # Només predicats, no la mera presència de la columna al SELECT.
+    week = re.search(r"\bsetmana\b\s*=\s*'(\d{4}-W\d{2})'", text, re.I)
+    if week:
+        return f'setmana {week[1]}'
+    semester = re.search(r"\b(?:sem|semestre)\b\s*=\s*'?((?:C/)?[12])'?", text, re.I)
+    if semester:
+        return '1r semestre' if semester[1].endswith('1') else '2n semestre'
+    return 'tot el curs (els dos semestres)'
+
+
 def consulta_sql(sql):
     import duckdb
     if not isinstance(sql, str) or len(sql) > 20000:
@@ -316,6 +367,7 @@ def consulta_sql(sql):
         out = _retorn(rows, sql)
         out['resultat']['total'] = total
         out['resultat']['truncat'] = total > LIMIT
+        out['resultat']['abast'] = _abast_sql(sql)
         return out
     except duckdb.Error as exc:
         # Els errors de vinculació/sintaxi descriuen la consulta, no les files.
@@ -353,6 +405,11 @@ def prova_canvi(apartat, canvi):
                 if not isinstance(valor, dict) or any(k not in valor for k in obligatoris):
                     raise EntradaError(f'canvi.{camp} no vàlid: cada objecte ha de contenir {", ".join(obligatoris)}.')
     b, p = _carrega(apartat)
+    oficial = json.loads((nb.RESULTATS_PRINCIPAL / apartat / 'informe.json').read_text(encoding='utf-8'))['veredicte']
+    context = {'aplicat': False, 'desat': False, 'veredicte_oficial': oficial,
+               'nota_validacio': 'Comprovació ràpida sense les relaxacions declarades. '
+                   f'Veredicte oficial de {apartat}: {oficial}. '
+                   'Els incompliments nous es comparen amb la mateixa comprovació ràpida sense el canvi.'}
     before = nb.avalua_rapid(b, p, nomes_aules=apartat == '5.1')
     nova = copy.deepcopy(p)
     estat = 'MOVIMENT_EXPLICIT'
@@ -409,7 +466,7 @@ def prova_canvi(apartat, canvi):
         estat = res.estat
         b = after
         if res.proposta is None:
-            return _retorn({'estat': estat, 'veredicte': 'SENSE PROPOSTA', 'canvis': [], 'total': 0}, 'repara + avalua_rapid: sense solució al veïnat provat')
+            return _retorn({**context, 'estat': estat, 'veredicte': 'SENSE PROPOSTA', 'canvis': [], 'total': 0}, 'repara + avalua_rapid: sense solució al veïnat provat')
         nova = res.proposta
     else:
         raise EntradaError('tipus ha de ser imprevist o moure.')
@@ -427,7 +484,7 @@ def prova_canvi(apartat, canvi):
             nous.append(_json(v))
     diffs = [{'id_sessio': sid, 'abans': _json(p.files[sid]), 'despres': _json(a)} for sid, a in nova.files.items() if a != p.files[sid]]
     ids_conflictes = set(re.findall(r'[\w/.-]+', json.dumps(nous))) & b.sessions.keys()
-    return _retorn({'veredicte': inf.veredicte, 'veredicte_abans': before.veredicte,
+    return _retorn({**context, 'veredicte': inf.veredicte, 'veredicte_abans': before.veredicte,
                     'verificacio': 'Ràpida, sense relaxacions declarades; compara incompliments amb la proposta original.',
                     'estat': estat, 'total': len(diffs), 'canvis': diffs[:LIMIT],
                     'total_incompliments_nous': len(nous), 'incompliments_nous': nous[:LIMIT],
@@ -439,14 +496,41 @@ def prova_canvi(apartat, canvi):
 _HANDLERS = {f.__name__: f for f in (horari_grup, aules_lliures, ocupacio_aula, xifra, resultat_proposta, consulta_sql, prova_canvi)}
 
 
+def _normalitza_parametres(args):
+    aliases = {'semana': 'setmana', 'week': 'setmana', 'day': 'dia',
+        'hora': 'hora_ini', 'hour': 'hora_ini', 'inici': 'hora_ini',
+        'duracion': 'durada_min', 'duration': 'durada_min', 'minuts': 'durada_min',
+        'plazas': 'places_min', 'places': 'places_min', 'capacitat': 'places_min',
+        'capacity': 'places_min', 'seats': 'places_min', 'propuesta': 'proposta',
+        'proposal': 'proposta', 'titulacion': 'titulacio', 'degree': 'titulacio',
+        'group': 'grup', 'grupo': 'grup', 'room': 'aula', 'sala': 'aula'}
+    result = {}
+    # Els noms canònics prevalen sobre els àlies, independentment de l'ordre.
+    for alias_pass in (True, False):
+        for key, value in args.items():
+            normal = ''.join(c for c in unicodedata.normalize('NFD', str(key).lower())
+                             if not unicodedata.combining(c))
+            if (normal in aliases) != alias_pass:
+                continue
+            if isinstance(value, dict):
+                value = _normalitza_parametres(value)
+            elif isinstance(value, list):
+                value = [_normalitza_parametres(v) if isinstance(v, dict) else v for v in value]
+            result[aliases.get(normal, normal)] = value
+    return result
+
+
 def executa(nom: str, args: dict) -> dict:
     try:
         if not isinstance(nom, str) or nom not in _HANDLERS:
             raise EntradaError('Eina desconeguda.')
         if not isinstance(args, dict):
             raise EntradaError('Els arguments han de ser un objecte JSON.')
+        args = _normalitza_parametres(args)
+        signature = inspect.signature(_HANDLERS[nom])
+        args = {k: v for k, v in args.items() if k in signature.parameters}
         try:
-            inspect.signature(_HANDLERS[nom]).bind(**args)
+            signature.bind(**args)
         except TypeError as exc:
             raise EntradaError(f'Paràmetres de {nom} no vàlids: {exc}. Consulta els paràmetres acceptats a la definició de l’eina.') from None
         result = _HANDLERS[nom](**args)
@@ -517,7 +601,7 @@ _DESCRIPCIO_SQL = ('Una SELECT o WITH…SELECT, màxim 50 files i 5 s. Fes servi
                    'Sense fitxers ni xarxa. Columnes de les vistes:\n'
                    + '\n'.join(f'{nom}: {cols}' for nom, cols in _COLUMNES_SQL.items())
                    + "\ndia: L, M, X, J o V (X = dimecres); h_ini 'HH:MM'; ini_min = minuts des de mitjanit"
-                   + "\nper a la setmana típica, filtra setmana = 'típica' (es tradueix sol). Sense filtre de setmana es compta tot el semestre seleccionat; a sessions filtra sem = 2 per al segon semestre."
+                   + "\nper a la setmana típica, filtra setmana = 'típica' (es tradueix sol). Sense filtre de setmana ni semestre es compta tot el curs (els dos semestres); a sessions filtra sem = 2 per al segon semestre. Fes servir abast per indicar el període."
                    + "\nel torn d'una sessió es dedueix de h_ini (abans de 14.30 matí); torn_requerit és el que li toca")
 
 _DEFS = [
@@ -529,7 +613,7 @@ _DEFS = [
     ('consulta_sql', _DESCRIPCIO_SQL, _obj({'sql': _str('Consulta SQL de lectura')}, ['sql'])),
     ('prova_canvi', 'Simula sense desar. moure: id_sessio o activitat_id i almenys dia/hora_ini/aula; valida i compara conflictes nous sense reparar. imprevist: llistes de tancaments, creixements o cancel·lacions; repara (10 s) i valida.', _obj({'apartat': _APARTAT, 'canvi': _CANVI}, ['apartat', 'canvi'])),
 ]
-EINES: list[dict] = [{'type': 'function', 'function': {'name': n, 'description': d, 'parameters': p}} for n, d, p in _DEFS]
+EINES: list[dict] = [{'type': 'function', 'function': {'name': n, 'description': d + (' Fes servir `recomptes` per a qualsevol número.' if n in ('horari_grup', 'ocupacio_aula', 'aules_lliures') else ''), 'parameters': p}} for n, d, p in _DEFS]
 
 
 def main():

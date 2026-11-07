@@ -434,4 +434,91 @@ def test_normalitzacio_setmana_mandrosa_i_exacta(paquet, monkeypatch):
 def test_descripcio_sql_setmana_tipica():
     desc = next(d['function']['description'] for d in e.EINES if d['function']['name'] == 'consulta_sql')
     assert "per a la setmana típica, filtra setmana = 'típica' (es tradueix sol)" in desc
-    assert 'Sense filtre de setmana es compta tot el semestre' in desc
+    assert 'Sense filtre de setmana ni semestre es compta tot el curs' in desc
+
+
+def test_recomptes_abans_limit_i_per_cohort(paquet, monkeypatch):
+    from dataclasses import replace
+    graella = e._modul('components.graella')
+    cella = graella.celles(paquet[0], paquet[1], dt.date(2027, 2, 8), cohort='GXX:3r', linia=paquet[0].sessions['S1'].linia)[0]
+    rows = [replace(cella, id_sessio=f'I{i}', aula='Q9/0001' if i < 2 else '') for i in range(59)]
+    monkeypatch.setattr(graella, 'celles', lambda *a, **kw: rows)
+    r = e.executa('horari_grup', {'grup': '81'})['resultat']
+    assert len(r['horaris'][0]['files']) == 50
+    assert r['recomptes'] == {'total_sessions': 59, 'amb_aula': 2, 'sense_aula': 57,
+        'per_titulacio_curs': [{'titulacio': 'GXX', 'curs': '3r', 'total_sessions': 59, 'amb_aula': 2, 'sense_aula': 57}]}
+    assert e._recomptes_sessions(e._json(rows[:9])) == {'total_sessions': 9, 'amb_aula': 2, 'sense_aula': 7}
+
+
+def test_recomptes_ocupacio_i_aules(paquet):
+    r = e.executa('ocupacio_aula', {'aula': 'Q9/0001'})['resultat']
+    assert r['recomptes']['total_sessions'] == 2
+    assert r['recomptes']['amb_aula'] == 2
+    assert r['recomptes']['sense_aula'] == 0
+    r = e.executa('aules_lliures', {'dia': 'L', 'hora_ini': '17', 'durada_min': 60,
+                                  'places_min': 0, 'tipus': 'Seminaris'})['resultat']
+    assert r['recomptes']['total_aules'] == 3
+
+
+@pytest.mark.parametrize('alias,canonical', [
+    ('SEMÁNA', 'setmana'), ('week', 'setmana'), ('DÍA', 'dia'), ('day', 'dia'),
+    ('hora', 'hora_ini'), ('hour', 'hora_ini'), ('inici', 'hora_ini'),
+    ('duracion', 'durada_min'), ('DURACIÓN', 'durada_min'), ('duration', 'durada_min'), ('minuts', 'durada_min'),
+    ('plazas', 'places_min'), ('places', 'places_min'), ('capacitat', 'places_min'),
+    ('capacity', 'places_min'), ('seats', 'places_min'), ('propuesta', 'proposta'), ('proposal', 'proposta'),
+    ('titulación', 'titulacio'), ('titulacion', 'titulacio'), ('degree', 'titulacio'),
+    ('group', 'grup'), ('grupo', 'grup'), ('AULA', 'aula'), ('room', 'aula'), ('sala', 'aula'),
+])
+def test_alias_parametres(alias, canonical):
+    assert e._normalitza_parametres({alias: 'valor'}) == {canonical: 'valor'}
+
+
+def test_alias_executa_i_desconeguts(paquet):
+    r = e.executa('aules_lliures', {'día': 'lunes', 'hora': '9', 'duración': 60,
+        'plazas': 0, 'semana': '2027-W06', 'propuesta': 'avui', 'extra': True})
+    assert r['ok'], r
+    assert e.executa('ocupacio_aula', {'ROOM': 'Q9/0001', 'DAY': 'Monday'})['ok']
+    assert e.executa('horari_grup', {'GROUP': '81', 'TITULACIÓN': 'GXX'})['ok']
+    r = e.executa('ocupacio_aula', {'ignorat': 'x'})
+    assert not r['ok'] and 'aula' in r['error']
+    for args in ({'grup': '81', 'grupo': '82'}, {'grupo': '82', 'grup': '81'}):
+        assert e._normalitza_parametres(args) == {'grup': '81'}
+
+
+def test_simulacio_context_oficial_i_alias_nested(paquet):
+    path = e.nb.RESULTATS_PRINCIPAL / '5.2' / 'informe.json'
+    verdict = 'VALIDA AMB RELAXACIONS DECLARADES'
+    path.write_text(json.dumps({'veredicte': verdict}))
+    r = e.executa('prova_canvi', {'APARTAT': '5.2', 'CANVI': {
+        'tipus': 'moure', 'id_sessio': 'S1', 'HOUR': '15:00'}})
+    assert r['ok'], r
+    result = r['resultat']
+    assert result['aplicat'] is False and result['desat'] is False
+    assert result['veredicte_oficial'] == verdict
+    assert verdict in result['nota_validacio']
+    assert 'sense les relaxacions declarades' in result['nota_validacio']
+    assert result['total_incompliments_nous'] == 0
+
+
+@pytest.mark.parametrize('sql,abast', [
+    ('SELECT count(*) FROM sessions', 'tot el curs (els dos semestres)'),
+    ("SELECT 'setmana', '2027-W07', 'sem = 2'", 'tot el curs (els dos semestres)'),
+    ('SELECT 1 /* WHERE sem = 2 */', 'tot el curs (els dos semestres)'),
+    ("SELECT count(*) FROM sessions WHERE setmana = '2027-W06'", 'setmana 2027-W06'),
+    ('SELECT count(*) FROM sessions WHERE sem = 2', '2n semestre'),
+    ('SELECT count(*) FROM sessions WHERE sem = 1', '1r semestre'),
+])
+def test_sql_abast(paquet, sql, abast):
+    con = e.dades.connexio()
+    con.execute("ALTER TABLE sessions ADD COLUMN setmana VARCHAR DEFAULT '2027-W06'")
+    con.execute('ALTER TABLE sessions ADD COLUMN sem INTEGER DEFAULT 2')
+    r = e.executa('consulta_sql', {'SQL': sql})
+    assert r['ok'], r
+    assert r['resultat']['abast'] == abast
+
+
+def test_descripcions_recomptes():
+    for definicio in e.EINES:
+        f = definicio['function']
+        if f['name'] in ('horari_grup', 'ocupacio_aula', 'aules_lliures'):
+            assert 'fes servir `recomptes` per a qualsevol número' in f['description'].lower()
