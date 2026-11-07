@@ -20,10 +20,10 @@ from servei import AULES_DISPONIBLES, AULES_RESERVA, inventari
 
 def grau_inventat():
     from nivell1.troballes import Troballa
-    return Troballa(id='marge-grau-nou', titol='Grau inventat', xifra='4.679 h',
+    return Troballa(id='marge-grau-nou', titol='Grau inventat', xifra='26 h',
         frase='Resum inventat', metode='Text tècnic inventat: la xifra gran és semestral.', sql='-- prova',
         taula=pd.DataFrame([{'llindar':0,'seminaris':False,'nou_hores':26.,'marge_hores':181.}]),
-        extra={'setmana':'2027-W07','demanda_h_setmana':26.,'lliures_h_setmana':181.,
+        extra={'setmana':'2027-W07','marge_semestre_h':4679.,'demanda_h_setmana':26.,'lliures_h_setmana':181.,
                'cap_per_mida':True,'estat_provisional':True}, exemples=['S90001'])
 
 

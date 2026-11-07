@@ -139,7 +139,7 @@ def context(t, altres=None):
             c['percent'] = float(n) / total * 100
     elif t.id == 'marge-grau-nou':
         df = t.taula
-        total_semestre = extra.get('marge_h_semestre', valor(t.xifra))
+        total_semestre = extra.get('marge_semestre_h', extra.get('marge_h_semestre'))
         if total_semestre is not None:
             c['marge_semestre'] = numero(total_semestre)
         if {'llindar', 'seminaris', 'nou_hores', 'marge_hores'}.issubset(df.columns):
