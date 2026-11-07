@@ -71,3 +71,27 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - Textos planers a app/textos.py. El SQL queda dins «Per a tècnics».
 - PROBLEMA resolt: al frontend li faltava l'inventari d'aules. L'app el llegeix amb una sola consulta, i les constants (19 aules, 2 de reserva, 40 places) porten comentari d'on surten.
 - Pendent: «Com ho hem calculat» encara fa servir paraules tècniques (cohort, PLAB, llindar).
+
+### [ds 15:32] DECISIÓ · Especificació de la part 2 afinada amb l'entrevista
+- Rutina dura (mateix dia, hora i aula cada setmana; només el 5.3 trenca una setmana). Mínims canvis: un canvi d'hora pesa més que un d'aula. Qui va de tardes continua de tardes, tret que la regla 1 obligui (només al 5.2).
+- Al 5.2 es pot moure qualsevol sessió movible, amb cost per canvi i preferint el mateix dia. Excepcions a la regla 1 només si es demostra que és impossible. Sense alternatives de torn; el 5.2 no deixa lloc per al grau nou.
+- IDEA de l'equip: rotació de PAUL i SEM. Si un grup no cap en una aula petita, es parteix en dues meitats: la 1a hora A fa problemes de X i B de Y, i la 2a hora es canvien. Es declara R3-AFORAMENT i el nostre model reserva la 2a hora.
+- IDEA de l'equip: fusionar classes repetides amb el mateix docent. Va com a proposta per a la Junta, no al 5.2 lliurat. DADA: només 2 casos reals de teoria (Assignatura Inventada A, D951, 148 alumnes; 900000, 108 alumnes); la resta no hi cap o és fixada.
+- Espec: .plans/nivell2-horari-spec.md (substitueix .plans/nivell2-prompt.md).
+
+### [ds 15:51] DECISIÓ · Desdoblament de PAUL i SEM i punts pendents de la part 2
+- Tot PAUL o SEM movible de més de 34 alumnes es parteix en dues meitats (aula petita = seminari o Q9/5014). Amb parella, rotació: la 1a hora A fa X i B fa Y, i la 2a es canvien. Sense parella, es parteix igualment; si no hi ha hora seguida, la 2a meitat la fa un altre dia.
+- DADA: 101 grups de problemes tenen de 35 a 50 alumnes i només hi ha 4 aules d'aquesta mida; avui ocupen aules de 63-90 que necessita la teoria.
+- TE/908 (5.3): aula més gran a la mateixa hora. Les excepcions a la regla 1 es demostren amb recompte o INFEASIBLE. La vista de l'estudiant posa avui i proposta costat per costat.
+- Queda per confirmar el format del resum de la Junta. Espec: .plans/nivell2-horari-spec.md
+
+### [ds 15:52] DECISIÓ · Horari oficial de diumenge: entrega a les 12:00
+- Correu de l'organització: dg 12:00 lliurament de projectes; després presentacions, jurat i cloenda; s'acaba entre les 14:00 i les 15:00.
+- No hi ha cap demo al jurat abans del lliurament: la demo en directe (i les 3 preguntes al nivell 3) és a la presentació.
+- Pla: congelació dg 2:00; de 8:00 a 12:00 diapositives, vídeo de reserva, assajos i zip (fet cap a les 11:30).
+- Dg: dutxes 9-11 al SAF, esmorzar inclòs, sense dinar. Falta saber quant dura la presentació i el format (estand o escenari).
+
+### [ds 16:01] DECISIÓ · Per a qui és l'app, i l'escalat queda per al pitch
+- Segons l'enunciat i la presentació, l'usuari és Gestió Acadèmica (el tècnic que fa i manté l'horari). La Direcció i la Junta decideixen amb el resum d'una pàgina. El docent i els estudiants només reben avisos (redactats, no enviats).
+- IDEA (proper pas, no ara): obrir l'app a l'alumnat («El meu horari» amb canvis en directe) i al professorat (peticions de canvi o de classe extra validades pel verificador i aprovades per Gestió Acadèmica). Ho guardem a docs/MILLORES-PITCH.md per explicar-ho al pitch.
+- Motiu de no fer-ho ara: fora de l'enunciat i de la nota, sense adreces, i docents pseudonimitzats.
