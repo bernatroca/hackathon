@@ -76,11 +76,10 @@ def test_preguntes_i_junta():
     assert '5.4' in widget.pantalla_actual('Resum per a la Junta', {'junta-proposta': '5.4'})['text']
 
 
-def test_estils_consultes_i_correccio_footer():
+def test_sense_estils_consultes_i_correccio_footer():
     css = (widget.WEB / 'xat-ia.css').read_text()
-    assert '.xatia-consultes' in css
+    assert '.xatia-consult' not in css
     assert 'white-space: pre-wrap' in css
-    assert '.xatia-consulta-error { color: var(--xatia-error); }' in css
     assert '.xatia footer.xatia-peu { display: block !important; }' in css
 
 
@@ -254,41 +253,16 @@ async function flux(fi) {
   assert.equal(truncada.consultes.length, 1);
   const missatge = {role: 'assistant', content: r.text, consultes: r.consultes};
   const html = p.htmlMissatge(missatge);
-  assert.ok(html.includes('<details class="xatia-consultes"><summary>Com ho he comprovat</summary>'));
-  assert.ok(html.includes('i 13 més'));
-  assert.ok(html.includes('SELECT *\nFROM inventat WHERE x &lt; 4;'));
-  assert.ok(html.includes('xatia-consulta-error'));
-  assert.ok(html.includes('&lt;img src=x onerror=&quot;alert(1)&quot;&gt;'));
-  assert.ok(!html.includes('<img'));
-  assert.ok(!html.includes('<code>S9</code>'));
-  assert.ok(!html.includes('x'.repeat(120)));
-  assert.ok(!p.htmlMissatge({role:'assistant', content:'Antiga'}).includes('<details'));
-  const sql = 'SELECT * FROM inventat';
-  const original = {eina:'consulta_sql', args:{sql, proposta:'avui', filtre:{b:2, a:1}}, consulta:sql};
-  const duplicada = {eina:'consulta_sql', args:{filtre:{a:1, b:2}, proposta:'avui', sql}, consulta:sql};
-  const render = (consultes) => p.htmlMissatge({role:'assistant', content:'Prova', consultes});
-  const unica = render([original, duplicada]);
-  assert.ok(unica.includes('<summary>Com ho he comprovat</summary>'));
-  assert.equal((unica.match(/class="xatia-consulta"/g) || []).length, 1);
-  assert.equal(unica.split(sql).length - 1, 1);
-  assert.ok(!unica.includes('sql='));
-  assert.ok(unica.includes('proposta=avui'));
-  assert.ok(render([{...original, consulta:''}]).includes('sql='));
-  // Només es deduplica quan coincideixen tots tres camps, sense escurçar-los.
-  for (const diferent of [
-    {...original, eina:'altra_eina'},
-    {...original, args:{...original.args, proposta:'5.2'}},
-    {...original, consulta:sql + ' LIMIT 1'},
-  ]) {
-    const dues = render([original, duplicada, diferent]);
-    assert.ok(dues.includes('<summary>Com ho he comprovat</summary>'));
-    assert.equal((dues.match(/class="xatia-consulta"/g) || []).length, 2);
-  }
+  const nomesText = '<div class="xatia-missatge xatia-missatge--ia"><p>Resposta inventada</p></div>';
+  assert.equal(html, nomesText); // Sense bloc, SQL, arguments, sessions ni errors de consultes.
+  assert.equal(p.htmlMissatge({role:'assistant', content:r.text}), nomesText);
   p.estat.missatges = [missatge];
   p.desa();
   p.estat.missatges = [];
   p.llegeixMemoria();
   assert.equal(p.estat.missatges[0].consultes[0].total_id, 23);
+  assert.deepEqual(JSON.parse(JSON.stringify(p.estat.missatges[0].consultes)), consultes);
+  assert.equal(p.htmlMissatge(p.estat.missatges[0]), nomesText); // Tampoc en converses desades.
   const enviat = JSON.parse(JSON.stringify(p.perAlServidor()));
   assert.deepEqual(enviat, [{role:'assistant', content:'Resposta inventada'}]);
 })().catch((error) => { console.error(error); process.exitCode = 1; });
