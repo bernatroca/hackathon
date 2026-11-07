@@ -9,6 +9,7 @@ import importlib
 import math
 import re
 import threading
+import unicodedata
 from collections import Counter
 
 from nivell1 import dades
@@ -71,17 +72,24 @@ def _carrega(proposta='avui'):
 
 
 def _dia(dia):
-    noms = dict(zip(('dilluns', 'dimarts', 'dimecres', 'dijous', 'divendres'), DIES))
-    d = noms.get(str(dia).lower(), str(dia).upper())
-    if d not in DIES:
-        raise EntradaError('Dia invàlid: L, M, X, J, V o el nom en català.')
-    return d
+    nom = ''.join(c for c in unicodedata.normalize('NFD', str(dia).strip().lower())
+                  if not unicodedata.combining(c))
+    noms = {nom: codi for codi, variants in zip(DIES, (
+        ('l', 'dilluns', 'lunes', 'monday'),
+        ('m', 'dimarts', 'martes', 'tuesday'),
+        ('x', 'dimecres', 'miercoles', 'wednesday'),
+        ('j', 'dijous', 'jueves', 'thursday'),
+        ('v', 'divendres', 'viernes', 'friday'))) for nom in variants}
+    if nom not in noms:
+        raise EntradaError('Dia invàlid: L, M, X, J o V (també el nom del dia).')
+    return noms[nom]
 
 
 def _hora(h):
-    if not isinstance(h, str) or not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d', h):
-        raise EntradaError('Hora invàlida: cal HH:MM.')
-    return nb.hm(h)
+    match = re.fullmatch(r'([01]?\d|2[0-3])(?:(?:[:.])([0-5]\d)|h)?', str(h).strip().lower())
+    if not match:
+        raise EntradaError('Hora invàlida: indica 16, 16:00, 16.00 o 16h.')
+    return int(match[1])*60 + int(match[2] or 0)
 
 
 def _modul(nom):
@@ -108,12 +116,32 @@ def _files(b, p):
                'assignatura': s.codi, 'tipus': s.tipus, 'grup': s.grup}
 
 
-def horari_grup(titulacio, curs, grup, dia=None, setmana=None, proposta='avui'):
-    celles_grup = _modul('components.graella').celles_grup
+def horari_grup(grup, titulacio=None, curs=None, dia=None, setmana=None, proposta='avui'):
+    graella = _modul('components.graella')
     b, p = _carrega(proposta)
-    cs = celles_grup(b, p, _setmana(b, setmana), str(titulacio), str(curs), str(grup))
-    rows = [_json(c) for c in cs if dia is None or c.dia == _dia(dia)]
-    return _retorn(rows, f'celles_grup(proposta={proposta}, titulacio={titulacio}, curs={curs}, grup={grup}, setmana={_setmana(b, setmana)}, dia={dia})')
+    numero = str(grup).strip().rsplit('/', 1)[-1]
+    tipus = str(grup).split('/', 1)[0].upper() if '/' in str(grup) else None
+    seleccions = set()
+    for s in b.sessions.values():
+        if s.grup.rsplit('/', 1)[-1] != numero or (tipus and s.tipus != tipus):
+            continue
+        for cohort in s.cohorts:
+            tit, c = cohort.rsplit(':', 1)
+            if (titulacio is None or tit == str(titulacio)) and (curs is None or c == str(curs)):
+                seleccions.add((tit, c, s.linia))
+    w = _setmana(b, setmana)
+    d = _dia(dia) if dia is not None else None
+    rows = []
+    for tit, c, linia in sorted(seleccions):
+        cs = graella.celles(b, p, w, cohort=f'{tit}:{c}', linia=linia)
+        rows.extend(dict(_json(cella), titulacio=tit, curs=c) for cella in cs if d is None or cella.dia == d)
+    horaris = {}
+    for r in rows[:LIMIT]:
+        key = (r['titulacio'], r['curs'])
+        horaris.setdefault(key, {'titulacio': key[0], 'curs': key[1], 'files': []})['files'].append(r)
+    return _retorn({'total': len(rows), 'horaris': list(horaris.values())},
+                   f'celles(grup={grup}, titulacio={titulacio}, curs={curs}, setmana={w}, dia={d}, proposta={proposta})',
+                   [r['id_sessio'] for r in rows[:LIMIT]])
 
 
 def ocupacio_aula(aula, dia=None, setmana=None, proposta='avui'):
@@ -139,7 +167,7 @@ def aules_lliures(hora_ini, durada_min, places_min, dia=None, data=None, tipus=N
         for r in dades.connexio().cursor().execute('SELECT data, ini_min, fi_min, aules_addicionals_partida FROM sessions').fetchall():
             if r[0] == date and r[1] < ini+durada_min and r[2] > ini:
                 ocupades.update((r[3] or '').split('|'))
-    rows = [{'aula': a.aula, 'capacitat': a.capacitat, 'tipus': a.tipus, 'data': date, 'h_ini': hora_ini, 'h_fi': nb.fmt(ini+durada_min)}
+    rows = [{'aula': a.aula, 'capacitat': a.capacitat, 'tipus': a.tipus, 'data': date, 'h_ini': nb.fmt(ini), 'h_fi': nb.fmt(ini+durada_min)}
             for a in b.aules.values() if a.aula not in ocupades and a.capacitat >= places_min and (a.tipus == tipus if tipus else a.ordinaria)]
     return _retorn(sorted(rows, key=lambda r: (r['capacitat'], r['aula'])), f'aules_lliures(data={date}, hora_ini={hora_ini}, durada_min={durada_min}, places_min={places_min}, tipus={tipus}, proposta={proposta}); solapament: inici < fi AND final > inici')
 
@@ -156,16 +184,19 @@ def xifra(id):
 
 
 def resultat_proposta(apartat):
-    servei = _modul('servei')
     _apartat(apartat)
-    # El servei encara apunta al worktree: llegim els informes de l'arrel principal com a reserva.
-    r = servei.validacio_part2(apartat)
     carpeta = nb.RESULTATS_PRINCIPAL / apartat
-    informe = json.loads((carpeta / 'informe.json').read_text())
-    if r is None:
-        resum = json.loads((carpeta / 'resum.json').read_text())
-        r = {k: v for k, v in resum.items() if isinstance(v, (int, float, bool))}
-    return _retorn({'veredicte': informe['veredicte'], 'restriccions': informe.get('restriccions', {}), 'resum': r}, f'informes nivell2/{apartat}/informe.json; servei.validacio_part2({apartat})')
+    informe = json.loads((carpeta / 'informe.json').read_text(encoding='utf-8'))
+    # L'informe és suficient: el 5.1 no sempre té resum.json. Conservem
+    # també el mode nomes_aules i qualsevol altra metadada del verificador.
+    resultat = dict(informe)
+    resultat.setdefault('restriccions', {})
+    consulta = f'informes nivell2/{apartat}/informe.json'
+    resum_path = carpeta / 'resum.json'
+    if resum_path.is_file():
+        resultat['resum'] = json.loads(resum_path.read_text(encoding='utf-8'))
+        consulta += f'; nivell2/{apartat}/resum.json'
+    return _retorn(resultat, consulta)
 
 
 def consulta_sql(sql):
@@ -246,7 +277,7 @@ def prova_canvi(apartat, canvi):
                     a.data = (d-dt.timedelta(days=d.weekday())+dt.timedelta(days=DIES.index(a.dia))).isoformat()
             if 'hora_ini' in canvi:
                 _hora(canvi['hora_ini'])
-                a.h_ini = canvi['hora_ini']
+                a.h_ini = nb.fmt(_hora(canvi['hora_ini']))
             if 'aula' in canvi:
                 if canvi['aula'] not in b.aules:
                     raise EntradaError('Aula desconeguda.')
@@ -341,17 +372,17 @@ def _str(description):
 
 _PROPOSTA = {'type': 'string', 'enum': ['avui', *APARTATS], 'default': 'avui'}
 _APARTAT = {'type': 'string', 'enum': list(APARTATS)}
-_COMMON = {'dia': _str('L, M, X, J, V o nom català'), 'setmana': _str('ISO 2027-W07 o data; per defecte setmana típica del segon semestre'), 'proposta': _PROPOSTA}
+_COMMON = {'dia': _str('L, M, X, J o V (també el nom del dia)'), 'setmana': _str('ISO 2027-W07 o data; per defecte setmana típica del segon semestre'), 'proposta': _PROPOSTA}
 _CANVI = {'oneOf': [
-    _obj({'tipus': {'const': 'moure', 'type': 'string'}, 'id_sessio': _str('Una sola sessió'), 'activitat_id': _str('Totes les sessions de l’activitat; tria això o id_sessio'), 'dia': _COMMON['dia'], 'hora_ini': _str('HH:MM'), 'aula': _str('Codi exacte d’aula')}, ['tipus']),
+    _obj({'tipus': {'const': 'moure', 'type': 'string'}, 'id_sessio': _str('Una sola sessió'), 'activitat_id': _str('Totes les sessions de l’activitat; tria això o id_sessio'), 'dia': _COMMON['dia'], 'hora_ini': _str('Hora: 16, 16:00, 16.00 o 16h'), 'aula': _str('Codi exacte d’aula')}, ['tipus']),
     _obj({'tipus': {'const': 'imprevist', 'type': 'string'},
           'aules_tancades': {'type': 'array', 'items': _obj({k: _str(v) for k, v in [('aula', 'Codi aula'), ('data_ini', 'AAAA-MM-DD inclosa'), ('data_fi', 'AAAA-MM-DD inclosa')]}, ['aula', 'data_ini', 'data_fi'])},
           'grups_creixen': {'type': 'array', 'items': _obj({'codi': _str('Codi assignatura'), 'grup': _str('Grup exacte, p. ex. TE/81'), 'alumnes': {'type': 'integer', 'minimum': 0}}, ['codi', 'grup', 'alumnes'])},
           'sessions_cancel_lades': {'type': 'array', 'items': _obj({'id_sessio': _str('Sessió cancel·lada'), 'recuperar_fins': _str('Data límit AAAA-MM-DD')}, ['id_sessio', 'recuperar_fins'])}}, ['tipus'])]}
 
 _DEFS = [
-    ('horari_grup', 'Classes de teoria i subgrups d’una titulació, curs i grup en una setmana.', _obj({**_COMMON, 'titulacio': _str('Codi titulació'), 'curs': _str('1r, 2n, 3r, 4t…'), 'grup': _str('Número del grup de teoria, p. ex. 81')}, ['titulacio', 'curs', 'grup'])),
-    ('aules_lliures', 'Aules lliures durant tota la franja en la proposta triada; ordinàries per defecte. Indica dia o data.', _obj({**_COMMON, 'data': _str('AAAA-MM-DD; exclou dia'), 'hora_ini': _str('HH:MM'), 'durada_min': {'type': 'integer', 'minimum': 1}, 'places_min': {'type': 'integer', 'minimum': 0}, 'tipus': _str('Tipus exacte de l’inventari; substitueix el filtre ordinària')}, ['hora_ini', 'durada_min', 'places_min'])),
+    ('horari_grup', 'Horari del grup i els seus subgrups en una setmana. Només cal grup: no preguntis titulació ni curs; si falten, retorna totes les coincidències agrupades per titulació i curs (màxim 50 files en total).', _obj({**_COMMON, 'titulacio': _str('Codi titulació'), 'curs': _str('1r, 2n, 3r, 4t…'), 'grup': _str('Grup: 81, TE/81, 811…; inclou la línia associada de teoria i subgrups')}, ['grup'])),
+    ('aules_lliures', 'Aules lliures durant tota la franja en la proposta triada; ordinàries per defecte. Indica dia o data.', _obj({**_COMMON, 'data': _str('AAAA-MM-DD; exclou dia'), 'hora_ini': _str('Hora: 16, 16:00, 16.00 o 16h'), 'durada_min': {'type': 'integer', 'minimum': 1}, 'places_min': {'type': 'integer', 'minimum': 0}, 'tipus': _str('Tipus exacte de l’inventari; substitueix el filtre ordinària')}, ['hora_ini', 'durada_min', 'places_min'])),
     ('ocupacio_aula', 'Sessions que ocupen una aula durant una setmana de la proposta triada.', _obj({**_COMMON, 'aula': _str('Codi exacte d’aula')}, ['aula'])),
     ('xifra', 'Troballa de la part 1: xifra, frase i mètode. Un ID incorrecte retorna els IDs disponibles.', _obj({'id': _str('ID de la troballa')}, ['id'])),
     ('resultat_proposta', 'Veredicte oficial i recomptes per regla d’una proposta 5.1–5.4.', _obj({'apartat': _APARTAT}, ['apartat'])),
