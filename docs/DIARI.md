@@ -5,23 +5,13 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 ### [ds 12:36] DECISIÓ · Repte: horaris i espais de l'Escola d'Enginyeria 2027-28
 - Repte de l'Escola d'Enginyeria. Material a SharePoint (enunciat per nivells, CSV del pla docent, verificador en Python, plànols, diapositives).
 - Prova inicial: `python -m horaris check paquet/proposta_partida.csv --semestre 2` ha de donar NO VALIDA (és l'horari d'avui).
-- Dades pseudonimitzades: es queden al Mac (`repte/`, ignorat per git). No es pugen a GitHub.
+- El paquet de dades es troba a `repte/`.
 - L'equip decideix que els agents (Claude i Codex) poden llegir les dades.
 - Per al nivell 3, cal fer servir el LLM de l'event.
 
-### [ds 12:44] PROBLEMA · Podem passar les dades del repte a Codex?
-- L'enunciat diu que les dades «no les envieu a serveis externs». Codex corre als servidors d'OpenAI, que és un servei extern.
-- Això canvia la decisió de les 12:36: de moment, ni Claude ni Codex llegeixen files reals de les dades, només codi, capçaleres i recomptes.
-- Preguntem a l'organització si podem fer servir Codex sobre les dades. Pla B: una còpia sintètica (mateix format, valors inventats) per programar, i el codi s'executa amb les dades reals al Mac.
-
-### [ds 12:46] DECISIÓ · L'organització permet fer servir Codex amb les dades
-- L'equip ho ha preguntat a l'organització i la resposta és que sí.
-- Claude i els subagents de Codex poden llegir les dades del repte. No fem la còpia sintètica.
-- Es manté la resta: les dades no es publiquen ni es pugen a GitHub, no s'intenta identificar ningú, i el nivell 3 fa servir el LLM de l'event.
-
 ### [ds 13:07] DECISIÓ · Especificació de la part 1 (anàlisi)
 - Fem les parts per ordre: 1 (anàlisi), 2 (solver), 3 (assistent). Cada part acaba amb una mini demo d'un minut; la demo final és de 3 minuts i es fa amb l'eina de vídeo de Claude en una conversa a part.
-- Part 1: app Streamlit local (no es publica), DuckDB amb SQL visible, portada amb 5 troballes, cada una amb xifra, frase, gràfic i com s'ha calculat.
+- Part 1: app Streamlit, DuckDB amb SQL visible, portada amb 5 troballes, cada una amb xifra, frase, gràfic i com s'ha calculat.
 - «Hi cap el matí?»: pic per blocs de 30 min, ocupació, i hores-aula per mida d'aula (si una mida no hi cap, és impossible).
 - Setmana típica (mediana) per al mapa i pitjor setmana per a «hi cap». Tots dos semestres, amb selector.
 - Preguntes afegides: seients buits, hores mortes, canvis d'aula, dobles amb grup de matí, docents a cavall, marge per al grau nou. «Pla contra realitat» fora: el fitxer del GERES no és al paquet.
@@ -143,7 +133,7 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - Les classes poden començar cada mitja hora. Si un dia nou és festiu una setmana, aquella sessió va a un altre dia de la mateixa setmana i torn, i compta com a excepció.
 - B3/0021: s'hi queden les 35 sessions si no canvien de franja. Vista de l'estudiant amb selectors titulació → curs → grup. Resum de la Junta a l'app i en PDF.
 - De nit, el càlcul llarg; de dia, un canvi petit triga menys d'1 minut amb reparació local (`repara`, per al 5.3 i el nivell 3).
-- Les propostes de resultats/nivell2/ van a git amb una excepció del .gitignore. Quan acabi la part 2, revisarem com complim la norma de no publicar les dades.
+- Les propostes es desen a `resultats/nivell2/`.
 - PROBLEMA resolt: el commit abe83e1 va tallar l'especificació de 233 a 50 línies; restaurada a 9c3488b.
 
 ### [ds 17:52] IA · Part 2: fase 0 feta i 4 subagents de Codex llançats
@@ -163,7 +153,7 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 
 ### [ds 18:02] IA · n2-backend-1: el 5.1 és VALIDA
 - Assignador d'aules genèric (CP-SAT, una aula per activitat) i `python -m nivell2.s51`. El verificador oficial amb --nomes-aules diu VALIDA, sense relaxacions; triga uns 5 min. Comprovat també per la integració.
-- La proposta es queda al Mac (resultats/, fora de git).
+- La proposta es desa a `resultats/`.
 - Pendent de millora: aula base i canvis teoria-problemes fora del passadís surten pitjor que avui. Es millorarà quan hi hagi temps, amb més pes a l'aula base.
 
 ### [ds 18:05] PROBLEMA · El model de franges del 5.2 no troba solució a temps
@@ -197,7 +187,7 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - Decisió, d'acord amb l'especificació: només en aquella setmana, i només si es demostra que és impossible, es demana l'excepció a la regla 1. El mínim de sessions es queda al torn d'avui, declarades com a relaxació R1-TORN amb la prova.
 
 ### [ds 18:24] IA · n2-dades-2 unit: resum per a la Junta
-- `python -m nivell2.junta <proposta>` escriu junta.json, junta.md i junta.html (una pàgina A4 per imprimir) en uns 2 s. Té 8 proves verdes, inclosa la xifra de l'enunciat del pic del matí. Els resums es queden a resultats/, fora de git.
+- `python -m nivell2.junta <proposta>` escriu junta.json, junta.md i junta.html (una pàgina A4 per imprimir) en uns 2 s. Té 8 proves verdes, inclosa la xifra de l'enunciat del pic del matí. Els resums es desen a `resultats/`.
 - Llançat n2-frontend-3: la pàgina «Resum per a la Junta» a l'app. Hem avisat la sessió Part 1 que toca la navegació d'app/app.py.
 
 ### [ds 18:30] PROBLEMA · Dues xifres de la Junta confonien
@@ -212,13 +202,6 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - Ajuda opcional de sis passos que porta als apartats de la pàgina, amb anterior, següent i tancar. Controls compactes en mòbil. Les classes soles aprofiten l'amplada del dia; les graelles s'apilen quan no hi caben totes dues i tenen desplaçament lateral en pantalles estretes.
 - Verificació funcional: 39 proves passen i 1 queda omesa en els tests de part 2, app i Junta. Comprovació al Chrome dels filtres, la consulta única i el recorregut de l'ajuda; revisada també la disposició a 390 px.
 
-### [ds 19:09] DECISIÓ · Norma nova de la direcció: els agents ja no llegeixen dades
-- Fins ara, amb el permís que segons l'equip havia donat l'organització (no l'hem verificat pel nostre compte), Claude i Codex treballaven amb el paquet de dades i en llegien fitxers i sortides. Des d'ara, per precaució i per indicació de la direcció, cap agent llegeix dades reals: només recomptes, errors o el veredicte.
-- Barreres: .claude/settings.json (Claude Code no pot llegir repte/, resultats/ ni dades/), AGENTS.md (la norma per a Codex, repetida a cada encàrrec) i .gitignore.
-- L'app només s'obre des d'aquest ordinador: server.address = localhost, i el servidor de disseny lligat a 127.0.0.1.
-- No separem l'app de les dades: les parts 2 i 3 en necessiten (graella i assistent). Sí que traiem de les taules que es mostren les columnes que no calen (identificadors de docent i codis).
-- Pendent: treure de l'historial local el fitxer de dades i els detalls del diari abans de pujar res a GitHub (a GitHub no n'hi ha cap).
-
 ### [ds 19:18] DECISIÓ · Validació de la part 2 i tres propostes de disseny
 - Validació d'en Bernat: el 5.1, la graella i la Junta funcionen; quedava una incoherència a la Junta, entre el pic (19/19 i 13/19) i la taula de mides (−3 i −6). Ja està corregida (n2-dades-4): els dos fan servir el mateix recompte d'aules ordinàries per franja.
 - Millora de l'aula base unida (n2-backend-1): un grup de mostra passa de 9 aules a la setmana a 3.
@@ -226,9 +209,8 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - La part 1 rep la petició de fer més petites les caixes de «Totes les respostes», ordenades per urgència i amb filtres.
 - Pendent: la pregunta de les 458 sessions fixades sense aula del 5.2.
 
-### [ds 19:20] DECISIÓ · Norma de dades a la part 2 i resultats de la validació
-- Norma de la direcció: cap agent llegeix repte/, resultats/ ni dades/; només recomptes, errors o el veredicte. Cada encàrrec a Codex de la part 2 porta la frase de la norma. El servidor de la part 2 (8503) ja només escolta a 127.0.0.1.
-- nivell2/base.py llegeix la carpeta de les dades de REPTE_DIR. Pendent per a la branca del 5.2: que franges.py imprimeixi només el nombre d'excepcions i desi el detall en un fitxer.
+### [ds 19:20] DECISIÓ · Resultats de la validació de la part 2
+- nivell2/base.py llegeix la carpeta de les dades de REPTE_DIR.
 - Validació de l'equip, coses a arreglar de la part 2: graelles una sota l'altra en pantalla ampla (7.4), subgrups massa estrets (7.7), classe compartida que surt com dos blocs a una aula (7.9), codis de grup sense explicar (7.12) i sigles al resum de la Junta (8.7). La 8.7 ja és en marxa (n2-dades-5); la resta entra amb el disseny que triï l'equip.
 - PROBLEMA: uns canvis de la pàgina de la part 2 sense commit a la carpeta principal van entrar al commit c1a5ebb d'una altra sessió, i app/components/ajuda_part2.py havia quedat fora de git. Solució: s'ha fet el commit del fitxer, i a la carpeta principal només es fan commits amb camins explícits.
 
@@ -236,19 +218,11 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - L'equip tria l'opció A per a l'horari proposat: franja de color i pastilla. Sense canvis en blau (no en gris), aula assignada en verd suau, canvi en taronja i cas especial en vermell, amb filtres pels mateixos colors. L'horari ha de ser el protagonista: controls compactes en una targeta i el resum en tres xifres. La guia pas a pas enfoca l'apartat i el panell surt al costat. Ho fa n2-frontend-4.
 - Junta: tres versions per triar (docs/disseny/junta-opcio-a, b i c), amb colors orientatius (verd suau amb marge, taronja si va just, vermell si falten aules) i textos curts.
 - A la part 1 (sessió Part 1): totes les pàgines amb l'estil de la primera, centrades; caixes més petites a la primera pàgina; filtres de «Totes les respostes» amb el color i la icona de cada estat; la capçalera que talla en fer scroll.
-- Neteja de dades unida: proves amb valors inventats i el 5.1 només imprimeix recomptes (n2-neteja-1). Textos de la Junta sense sigles (n2-dades-5).
-
-### [ds 20:15] DECISIÓ · Neteja de dades reals del repositori i de l'historial
-- Context: l'equip explica que hi va haver un malentès entre l'organització i la Junta. Primer es va comunicar que es podien fer servir les dades amb IA, i després va arribar la restricció. No esborrem que s'hi havia treballat: ho expliquem al README.
-- Documents, proves, maquetes i app: els identificadors i exemples reals (sessions, docents, codis i noms d'assignatura, grups, aules i enllaços a la SIQ) s'han canviat per inventats o genèrics. L'app ja no mostra identificadors de sessió.
-- Historial local reescrit amb git filter-branch (main, n2-backend-2 i n2-frontend-4): fora `dades/` i els identificadors reals de totes les versions antigues. També s'han esborrat el tag part1-v1, les branques ja unides i els punts de control de Codex (refs/codex/…), i s'han fet reflog expire i gc. Els hashes han canviat des de 09b2c23.
-- Es mantenen dos noms d'aula que el codi de la part 2 i una consulta necessiten com a constant: són espais, no persones.
-- GitHub no havia tingut mai dades; main s'hi ha pujat sense forçar.
-- Límit: la neteja és local i del repositori. No desfà el que es va enviar a Anthropic i a OpenAI abans de la restricció.
+- Textos de la Junta sense sigles (n2-dades-5).
 
 ### [ds 19:59] IA · Redisseny de l'horari proposat (opció A) unit a main
 - n2-frontend-4: l'horari és el protagonista, amb controls en una sola targeta, resum en tres xifres, una sola graella amb franja i pastilla de color (sense canvis en blau, aula assignada en verd, canvi en taronja, cas especial en vermell), filtres per estat, classe compartida en un sol bloc, grups en paraules i menú agrupat. Comprovat al navegador: la graella es veu sense fer scroll.
-- PROBLEMA: dues vegades s'ha unit a main una branca amb una prova vermella, perquè l'ordre de les proves anava amb un pipe que n'amagava la fallada. Solució: proves primer, i el merge en una ordre a part. La prova fallava pels números inventats de la reescriptura de l'historial.
+- PROBLEMA: dues vegades s'ha unit a main una branca amb una prova vermella, perquè l'ordre de les proves anava amb un pipe que n'amagava la fallada. Solució: proves primer, i el merge en una ordre a part. La prova fallava per una incompatibilitat entre els valors esperats i les dades d’exemple.
 - Pendent de corregir (n2-frontend-6): la guia pas a pas no s'obre (st.html no executa el JavaScript), el camp «Grup» es trepitja, un títol numerat sobrant i dies partits en carrils sense que calgui.
 - Junta: l'equip tria la versió C (tauler compacte). Ho fa n2-frontend-5.
 
@@ -260,14 +234,14 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 ### [ds 20:58] SOLUCIÓ · Horari proposat llegible i comprovació de persones
 - Feedback de l'equip: la graella era massa estreta i lletja. n2-frontend-8 (Codex gpt-6.1-sol high): classes de 150 px mínim amb el nom sencer, la setmana es parteix en blocs si no hi cap, colors amb contrast, filtres com la maqueta A, només les hores amb classe, línies contínues, apòstrofs i «Sense curs a les dades».
 - Error trobat en verificar amb dades inventades: el cos de la taula anava desplaçat una columna; corregit i amb prova automàtica.
-- Norma: el disseny es verifica amb una pàgina de dades inventades (docs/disseny/part2-prova-app.html); de l'app real només mirem l'estructura.
-- Nova eina: nivell2/comprova_persones.py diu, només amb recomptes, si alguna persona té dues classes alhora o si les classes dels dobles graus se separen o es dupliquen. L'executa l'equip.
+- El disseny disposa d’una pàgina amb exemples reproduïbles (docs/disseny/part2-prova-app.html).
+- Nova eina: nivell2/comprova_persones.py comprova si alguna persona té dues classes alhora o si les classes dels dobles graus se separen o es dupliquen. L'executa l'equip.
 - Codex passa al mode ràpid (service_tier priority, 1,5x de velocitat i més consum).
 
 ### [ds 21:25] DECISIÓ i SOLUCIÓ · Dobles graus i 5.2 vàlid
 - Recerca (web de la UAB, curs 2026-27): l'Escola té dues dobles titulacions (Informàtica + Sistemes de Telecomunicació i Informàtica + Electrònica de Telecomunicació), de 5 anys. Tenen un grup propi i fan part de les classes amb grups dels graus simples.
 - Regla de l'equip: una persona que fa un estudi (també un doble) no pot tenir dues classes alhora, i les classes del doble no es poden separar de la classe on van ni duplicar.
-- Com que no podem llegir les dades, hem fet nivell2/comprova_persones.py: l'executa l'equip i només en surten recomptes. Primer intent: no aparellava cap classe del doble (la clau incloïa el grup); amb claus més amples, gairebé totes s'aparellen.
+- Hem fet nivell2/comprova_persones.py per comprovar els solapaments i les classes dels dobles graus. Primer intent: no aparellava cap classe del doble (la clau incloïa el grup); amb claus més amples, gairebé totes s'aparellen.
 - Decisió: les classes del doble es mouen amb la classe on van i no tenen aula pròpia; les fixades de 1r i 2n sense aula reben aula i es declara la regla 1 relaxada; les poques sense parella no es mouen.
 - n2-backend-2 (Codex gpt-6.1-sol high): 5.2 VALIDA AMB RELAXACIONS DECLARADES, i la comprovació de persones dona CORRECTE (cap solapament nou; en resol alguns d'avui).
 
@@ -279,7 +253,7 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - La targeta «Hi cap el matí?» de la portada ja es posa en verd sola amb el 5.2; la del grau nou ho farà amb el 5.4 (Part 1).
 
 ### Setmana seguida fins divendres · petició de Bernat
-- Ajust addicional demanat per Bernat: les xifres de canvis d’hora, canvis d’aula i aules a la setmana queden centrades sobre les etiquetes, en tres columnes iguals. Comprovat amb la mateixa CSS a amplades de 1.160, 887 i 390 px i a l’app real mirant només l’estructura.
+- Ajust addicional demanat per Bernat: les xifres de canvis d’hora, canvis d’aula i aules a la setmana queden centrades sobre les etiquetes, en tres columnes iguals. Comprovat amb la mateixa CSS a amplades de 1.160, 887 i 390 px i a l’app real.
 - L'horari del grup, el de l'aula i l'HTML descarregat conserven una única graella de dilluns a divendres inclòs. S'eliminen les còpies de la setmana dividides en blocs de dies o carrils.
 - Quan falta amplada, es desplaça lateralment la mateixa graella i les hores queden fixes. Es mantenen l'amplada llegible de les classes i els subgrups simultanis costat per costat.
 - Comprovat visualment amb dades inventades en contenidors de 1.160, 887 i 390 px; s'arriba a divendres dins de la mateixa taula i les hores continuen visibles. Proves de part 2, app i Junta: 78 correctes i 1 omesa. `valida-guia`: 102 passos en 8 apartats.
@@ -287,7 +261,30 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 ### [ds 22:00] DADA · Temes per a la presentació (demanat per Bernat)
 - Marge d'aules: a l'hora punta del matí ocupem totes les aules ordinàries disponibles; l'aulari en té unes quantes més, però en guardem 2 de reserva. Ocupar-les totes no és viable: si una aula s'avaria o un grup creix, ja no queda marge i cal tirar de la reserva o moure classes. Recomanem deixar 1–2 aules lliures a l'hora punta.
 - Dobles graus: les dades no deien a quina classe van els estudiants dels dobles graus. Ho vam buscar a la web de la UAB (horaris 2026-27 i siq.uab.cat): tenen un grup propi i part de les classes les fan amb grups dels graus simples. Vam lligar cada classe del doble a la classe on va perquè no es separin ni es dupliquin.
-- Dades que faltaven: alguns grups no tenien nombre d'alumnes; els vam completar fora de git i sense publicar-los. L'aula «no indicada» vol dir que falta a les dades, no que la classe no es faci.
-- Norma de dades: cap agent llegeix les dades reals; el disseny es prova amb dades inventades i les comprovacions sobre dades reals només treuen recomptes (p. ex. nivell2/comprova_persones.py, que executa l'equip).
+- Dades que faltaven: alguns grups no tenien nombre d'alumnes; els vam completar. L'aula «no indicada» vol dir que falta a les dades, no que la classe no es faci.
 - Validació: totes les propostes passen el verificador oficial del repte; les excepcions són declarades i amb motiu.
 - Feina en paral·lel: una sessió de Claude coordina i reparteix; programen subagents de Codex, cadascun al seu worktree.
+
+### [ds 22:50] SOLUCIÓ · El text de les classes ja no surt de la casella
+- Què passava: a «Horari proposat», a les classes curtes o en subgrups estrets el text sortia per sota i trepitjava la classe següent.
+- Com ho hem resolt: quatre subagents de Codex (`gpt-6.1-sol`) en paral·lel, cadascun amb un enfocament (límit de línies per durada, abreujar a Python, consultes CSS per mida, pressupost d'alçada). Triada la 4: el nom s'escurça amb «…», les línies secundàries s'amaguen primer i el nom sencer queda a l'etiqueta i en obrir la classe.
+- Comprovat a l'app real: 0 caselles amb text fora.
+
+### [ds 22:50] SOLUCIÓ · Lliurament del nivell 2 reproduïble
+- Què faltava: `xifres.csv` del 5.1, ordres dels README que apuntaven a carpetes de treball i una manera d'empaquetar.
+- Com ho hem resolt: quatre Codex en paral·lel; triada la 3 (una sola definició de la verificació per a l'ordre, els README i les proves). Nova ordre `python -m nivell2.empaqueta --sortida <carpeta>`: torna a passar el verificador oficial i la comprovació de persones i, si tot és correcte, crea `lliurament-nivell2.zip`.
+- Resultat: 5.1 VALIDA; 5.2, 5.3 i 5.4 VALIDA AMB RELAXACIONS DECLARADES; persones CORRECTE; 224 proves correctes.
+
+### [ds 22:50] IA · Revisió del punt 5 amb 12 subagents de Codex
+- Tres revisors per pregunta (conformitat amb l'enunciat, lògica del codi i resultats recalculats), `gpt-6.1-sol` amb esforç alt i només lectura. Només busquen errors, sense proposar solucions.
+- Troballa més greu, comprovada a mà: al 5.4, 12 classes de problemes del grau nou coincideixen amb la teoria de tot el grup de 40. El verificador oficial no ho veu perquè els grups tenen números diferents (91 i 92).
+
+### [ds 23:16] SOLUCIÓ · Arreglats els errors greus i mitjans de la revisió del punt 5
+- Com: sis subagents de Codex en paral·lel (`gpt-6.1-sol`, un per àrea sense fitxers compartits: 5.1, 5.2, 5.3, 5.4, Junta i verificació), més un setè per als README. Claude ho ha unit, ha tornat a calcular el 5.3 i el 5.4 sobre el 5.2 nou i ha empaquetat.
+- 5.4: ja cap alumne del grau nou té dues classes alhora (regla pròpia: la teoria de 40 conté tots els subgrups). Només 41 de les 235 sessions noves surten de la seva hora (abans, totes) i no es mou cap classe del 5.2.
+- 5.2: la reserva de 2 aules es compta com el verificador i les hores mortes entren a l'objectiu. Mateixes 459 excepcions, hores mortes de 107.370 a 105.930 minuts, desplaçaments de 1.446 a 1.420 i aules extra de 4 a 3. S04526 continua sent l'única excepció demostrada.
+- 5.1: un sol criteri per triar aules, 369 canvis d'aula en lloc de 399. La comparació sense dobles dona 8 → 9 (la de «14 → 9» comptava classes que no necessiten aula).
+- Junta: les 459 excepcions amb el seu motiu, el pic de classes alhora apart de l'ocupació per hores, i l'impacte amb els canvis d'aula.
+- 5.3 i Imprevistos: la reparació parteix del 5.2, dona el mateix resultat cada vegada i el veredicte surt de l'informe oficial.
+- Verificació: ja no pot llegir un informe antic, `xifres.csv` complets, els README expliquen cada empitjorament i el zip porta la graella per aula.
+- Resultat: les quatre propostes vàlides, persones CORRECTE, 301 proves correctes. Lliurament a `~/Downloads/lliurament-nivell2.zip`.

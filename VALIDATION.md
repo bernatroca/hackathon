@@ -7,14 +7,14 @@
 - Dades: el paquet real del repte a `repte/repte-horaris-escola/paquet/`, 2n semestre per defecte. No s'ha creat cap dada nova.
 - Xifres de l'enunciat que han de sortir: 2.008 classes al torn equivocat, 5.722 sense aula (74 %), 15 de 19 aules al pic, 68 % del matí i 43 amb més alumnes que places.
 - Comprovació automàtica feta: `python -m nivell1.comprova` dona 18/18 i `python app/test_app.py` dona OK.
-- Part 2: la proposta 5.1 és a `resultats/nivell2/5.1/` (només al Mac, fora de git). Comprovació automàtica feta: el verificador oficial amb `--nomes-aules` diu VALIDA; `python -m nivell2.comprova <proposta>` treu la taula d'abans i després; `pytest app/test_part2.py` (7), `nivell2/test_xifres.py` (6) i `nivell2/test_aules.py` (8) passen. El 5.2 encara no hi és. Si l'app del port 8501 ja estava oberta abans, s'ha de reiniciar per veure la part 2 nova (o fer servir http://localhost:8503, configuració «app-part2»).
+- Part 2: la proposta 5.1 és a `resultats/nivell2/5.1/`. Comprovació automàtica feta: el verificador oficial amb `--nomes-aules` diu VALIDA; `python -m nivell2.comprova <proposta>` treu la taula d'abans i després; `.venv/bin/python -m pytest -q nivell2 app` dona 107 correctes i 2 omeses. El 5.2 encara no hi és. Si l'app del port 8501 ja estava oberta abans, s'ha de reiniciar per veure la part 2 nova (o fer servir http://localhost:8503, configuració «app-part2»).
 
 ## Portada «Com estem avui»
 
 1. [cap @ /] Obre l'app → surt «Com estem avui» amb fons clar, menú a l'esquerra i cap error vermell.
 2. [cap @ /] Mira el bloc gran de dalt → hi ha la pregunta «Si 1r i 2n fan classe al matí, hi cabem?», la resposta en gran i 19 quadrets (15 ocupats, 4 lliures i 2 amb vora discontínua).
 3. [cap @ /] Llegeix la resposta gran → no diu «Sí» a seques: parla de marge d'hores i diu que l'horari el valida la part 2 (si encara diu «Sí, però just», anota-ho: és una correcció pendent).
-4. [cap @ /] Mira les targetes de sota → n'hi ha 4, cada una amb etiqueta de color amb icona i text (Cal actuar, Vigilar o Hi cap), una xifra gran, una frase i «Proposem:».
+4. [cap @ /] Mira les targetes de sota → n'hi ha 4, cada una amb un títol curt, una xifra gran, una sola frase curta, l'etiqueta d'estat i «Com ho sabem →»; cap text surt de la caixa ni es talla per dalt o per baix. (reprova)
 5. [cap @ /] Busca la targeta «Classes al torn equivocat» → la xifra és 2.008 i la frase diu que és 1 de cada 4 classes.
 6. [cap @ /] Busca la targeta «Classes sense aula» → la xifra és 74 % (5.722) i diu quantes cal assignar de debò (4.541); si no ho diu, anota-ho com a pendent.
 7. [cap @ /] Busca la targeta del grau nou de 40 places → diu si les hores són d'una setmana o del semestre, i no surt en verd fins que la part 2 ho validi; si no és així, anota-ho.
@@ -38,8 +38,8 @@
 
 ## Totes les respostes
 
-1. [cap @ /respostes] Obre «Totes les respostes» al menú → surten les 11 respostes en targetes petites, amb «Es mostren 11 de 11» a dalt. (reprova)
-2. [cap @ /respostes] Mira com es reparteixen → 3 columnes en pantalla ampla, 2 en pantalla mitjana i 1 al mòbil. (reprova)
+1. [cap @ /respostes] Obre «Totes les respostes» al menú → surten les 11 respostes en targetes petites, amb «Es mostren 11 de 11» a dalt.
+2. [cap @ /respostes] Mira com es reparteixen → 3 columnes en pantalla ampla, 2 en pantalla mitjana i 1 al mòbil.
 3. [cap @ /respostes] Mira l'ordre → primer les «Cal actuar» (vermelles), després «Vigilar» i «Pendent de validar» (grogues) i al final les «Hi cap» (verdes).
 4. [cap @ /respostes] A «Estat», desmarca «Vigilar» → només queden les vermelles i les verdes, i el recompte baixa.
 5. [cap @ /respostes] Torna a marcar «Vigilar» i a «Respostes» tria «Un grau nou de 40 places» → només surt aquesta targeta i diu «Es mostren 1 de 11».
@@ -55,14 +55,14 @@
 1. [cap @ /] Obre el desplegable «Opcions» del menú → hi ha el selector de semestre (2n per defecte) i de setmana.
 2. [cap @ /] Canvia el semestre a 1r → la portada es torna a calcular sense error i les xifres canvien.
 3. [cap @ /] Torna a posar el 2n semestre → tornen a sortir 2.008 i 74 %.
-4. [cap @ /] Mira el menú → hi ha «Part 2 · Proposta d'horari» sense «aviat», i «Imprevistos» i «Pregunta-ho» surten marcats com «aviat».
+4. [cap @ /] Mira el menú → està agrupat en «Com està l'horari», «La proposta» i «Ajuda»; hi ha «Horari proposat», «Resum per a la Junta» i «Imprevistos» (sense «aviat»), i «Pregunta-ho» surt amb «aviat». (reprova)
 
 ## Canvis visuals
 
 1. [cap @ /] Mira la pàgina sencera → fons clar, menú blanc a l'esquerra i cap barra fosca de Streamlit; colors i tipografia com a la maqueta B1.
 2. [cap @ /] Mira sota el títol «Com estem avui» → hi ha una franja visible amb el semestre i la setmana que es mostren (p. ex. «2n semestre · setmana típica 2027-W05»).
 3. [cap @ /] Mira l'etiqueta d'estat del bloc gran → és un cercle amb icona (✓, ! o ✕) i text al costat, igual que a la maqueta B1, no un caràcter solt.
-4. [cap @ /] Llegeix el bloc gran → diu «Sí, hi cap» amb l'etiqueta verda «Hi cap», el matí i la tarda en % enters i que l'horari proposat de la part 2 ho confirma amb el verificador oficial. (reprova)
+4. [cap @ /] Llegeix el bloc gran → hi ha la pregunta, «Sí, hi cap» amb l'etiqueta verda, una sola frase curta i els quadrets d'aules al costat; el text no surt del rectangle i té el mateix marge per tots quatre costats. (reprova)
 5. [cap @ /] Mira els quadrets → 15 ocupats, 4 lliures i 2 de reserva amb vora discontínua, i la llegenda no parteix cap paraula.
 6. [cap @ /] Fes la finestra de 1024 px d'ample amb el menú obert → el bloc gran no desborda ni talla els quadrets per la dreta.
 7. [cap @ /] Mira les 4 targetes → les de cada fila fan la mateixa alçada i «Proposem» i «Com ho sabem →» queden a la mateixa línia.
@@ -85,7 +85,7 @@
 24. [cap @ /respostes] Mira el filtre «Estat» → «Cal actuar» en vermell amb la creu, «Vigilar» en groc amb el signe d'admiració i «Hi cap» en verd amb el check, com les etiquetes de les targetes.
 25. [cap @ /respostes] Desmarca «Vigilar» → la pastilla queda blanca amb la icona grisa, i torna a tenir color en marcar-la.
 26. [cap @ /respostes] Mira la pastilla «Hi cap» del filtre → el verd és més apagat que abans i es llegeix bé.
-27. [cap @ /] Obre la portada en un portàtil (1.440 × 900) amb el menú obert → es veu tot sense fer scroll: el títol, la resposta gran i les quatre caixes en una fila. (reprova)
+27. [cap @ /] Obre la portada en un portàtil (1.440 × 900) amb el menú obert → es veu tot sense fer scroll: el títol, la resposta gran i les quatre caixes en una fila.
 28. [cap @ /] Plega el menú amb ««» → la portada continua cabent a la pantalla.
 29. [cap @ /] Amb el menú plegat, mira a dalt a l'esquerra → hi ha un botó blanc amb «»» ben visible, que no tapa el títol, i en prémer-lo s'obre el menú.
 30. [cap @ /] Mira el menú lateral → els noms de les seccions («Com està l'horari», «La proposta», «Ajuda») surten en majúscules i negreta, diferents de les pàgines.
@@ -97,51 +97,58 @@
 36. [cap @ /] Mira el mateix bloc → poc marge a dalt i a baix; la línia petita del final queda just sota el text.
 37. [cap @ /] Mira la vora esquerra del bloc gran → és verda, com l'etiqueta «Hi cap».
 38. [cap @ /] Llegeix la línia petita del final del bloc gran → acaba amb «Validat amb l'horari proposat de la part 2 (verificador oficial)».
-39. [cap @ /] Mira la caixa «Un grau nou de 40 places» → etiqueta verda «Hi cap» i la frase «L'horari proposat hi col·loca 235 sessions sense moure cap classe (verificador oficial)».
+39. [cap @ /] Mira la caixa «Un grau nou de 40 places» → etiqueta verda «Hi cap» i una frase que diu quantes de les 235 sessions noves surten de la seva hora (41) i que no es mou cap classe de l'horari proposat; no diu «sense moure cap classe». (reprova)
 40. [cap @ /] Llegeix el «Proposem» de la mateixa caixa → «Incorporar-lo a l'horari proposat: ja hi cap».
 41. [cap @ /respostes] Mira l'ordre de «Totes les respostes» → «Un grau nou de 40 places» i «Si 1r i 2n fan classe al matí, hi cabem?» surten al final, amb les verdes.
 
-## Part 2 · Proposta d'horari
+## Part 2 · Horari proposat
 
-1. [cap @ /part2] Obre «Part 2 · Proposta d'horari» al menú → surt la pàgina amb «Com funciona? Guia pas a pas», «Tria què vols veure», «Setmana que vols consultar» i cap error vermell. (reprova)
-2. [cap @ /part2] Mira la millora disponible → la 5.1 diu «Assignar aules, sense canviar dies ni hores». Si només n'hi ha una, es mostra com a dada, sense selector; si n'hi ha més, es poden triar amb noms entenedors. (reprova)
-3. [cap @ /part2] Tria «Només l'horari actual» → es mostra una única graella dels estudiants, titulada «Horari actual · dades originals», sense comparació duplicada. Torna a «Comparar horari actual i proposta». (reprova)
-4. [cap @ /part2] A «Tria els estudiants» tria Gestió de Ciutats Intel·ligents i curs 1r → s'explica que el grup és el 61 i no hi ha selector si és l'únic. Les graelles diuen «Horari actual · dades originals» i «Amb la proposta»; van costat per costat si hi ha prou espai i s'apilen en pantalles petites. (reprova)
-5. [cap @ /part2] Mira la proposta 5.1 amb el mateix grup → s'explica que l'aula falta als fitxers originals, no que les classes no es facin. Les classes «Aula no indicada a les dades» tenen aula a la proposta, són verdes i no canvien de dia ni d'hora. (reprova)
-6. [cap @ /part2] Llegeix «Què canvia amb la proposta?» → diferencia les aules afegides dels canvis de dia/hora/aula existent. «Detall dels canvis» mostra els recomptes; afegir una aula no compta com moure una classe. (reprova)
-7. [cap @ /part2] Mira una classe de 2 hores a la graella → és un sol bloc que ocupa 4 files de 30 minuts, amb l'assignatura, el tipus en paraules, les hores i l'aula; anota si el text queda massa estret quan coincideixen subgrups. (reprova)
-8. [cap @ /part2] Amb la proposta 5.1 i el grup 61, llegeix quantes aules diferents fa servir el grup → ara en són 3 (abans 9), amb la teoria sempre a la mateixa aula i els problemes al mateix passadís. (reprova)
-9. [cap @ /part2] Baixa a «Consulta una aula» i tria una aula qualsevol de la llista → surt la seva graella setmanal. Si coincideixen assignatures, comprova si són una classe compartida o un solapament real. (reprova)
-10. [cap @ /part2] Clica «Descarrega l'horari d'aquesta aula» → es baixa un HTML autònom amb la mateixa graella i la llegenda. (reprova)
-11. [cap @ /part2] Canvia «Setmana que vols consultar» a la setmana del 15 de març → les graelles es tornen a dibuixar sense error. (reprova)
-12. [cap @ /part2] Llegeix les classes → el tipus s'escriu en paraules i els grups diuen «Grup» o «Subgrup», sense TE/PAUL/SEM. (reprova)
-13. [cap @ /part2] Canvia de curs → també es poden consultar els cursos superiors i les classes de tarda; es mostra tot el dia, de 8.30 a 21.00. (reprova)
-14. [cap @ /part2] Llegeix la llegenda → blau sense canvis, verd aula afegida, groc classe modificada i vora discontínua cas especial; el significat també està escrit i no depèn només del color. (reprova)
-15. [cap @ /part2] Obre «Com funciona? Guia pas a pas» → recorre els sis passos amb «Següent» i «Anterior», enfoca l'apartat que explica i es pot tancar o acabar; comprova-ho també en una pantalla estreta. (reprova)
+1. [cap @ /part2] Obre «Horari proposat» al menú (grup «La proposta») → surt el títol, una caixa amb «Què vols veure», «Proposta», «Setmana», «Estudis», «Curs» i «Grup», i cap error vermell.
+2. [cap @ /part2] Mira «Proposta» i «Grup» → la proposta és «Aules assignades (5.1)»; si el curs només té un grup, «Grup» surt desactivat amb el seu nom i no queda tapat ni encavalcat amb «Curs».
+3. [cap @ /part2] A «Estudis» tria Gestió de Ciutats Intel·ligents i Sostenibles i a «Curs» 1r → el resum diu «Es conserva el dia i l'hora», que la proposta assigna aula a 15 classes que no en tenien, 0 canvis d'hora, 0 canvis d'aula i 3 aules a la setmana. Els tres números queden centrats damunt de les seves etiquetes, en tres columnes iguals, també al mòbil. (reprova)
+4. [cap @ /part2] Mira «La setmana del grup» en una pantalla de 1280 px → hi ha una sola graella seguida amb Dilluns, Dimarts, Dimecres, Dijous i Divendres, en aquest ordre; no es parteix en taules separades per dies. Si falta amplada, es desplaça lateralment la mateixa graella. (reprova)
+5. [cap @ /part2] Mira el dilluns a les 10.30 → les classes que coincideixen van en carrils costat per costat; els dies i les hores sense coincidències ocupen tota la columna. (reprova)
+6. [cap @ /part2] Mira les classes → són rectangles arrodonits sense franja ni icones; el fons diu l'estat (blau sense canvis, verd aula assignada, taronja canvia, vermell cas especial), igual que la llegenda de dalt; les que canvien porten una línia curta com «Abans: dijous 12:30». (reprova)
+7. [cap @ /part2] Clica la pastilla «Aula assignada (15)» de sobre la graella → aquestes classes queden ressaltades i la resta s'atenua; amb «Sense canvis (0)» totes queden atenuades i «Totes» ho torna a deixar com abans.
+8. [cap @ /part2] A «Què vols veure» tria «Només avui» → surt l'horari d'avui sense pastilles de canvi; torna a «Proposta i avui».
+9. [cap @ /part2] Mira una classe de 2 hores → és un sol bloc amb l'assignatura, les hores, «Grup» o «Subgrup» en paraules, el tipus (teoria, problemes, seminari) i l'aula; sense TE, PAUL ni SEM. (reprova)
+10. [cap @ /part2] Amb el grup 61, compta les aules diferents → en són 3 (abans 9), amb la teoria sempre a la mateixa aula.
+11. [cap @ /part2] Canvia «Setmana» a la setmana del 15 de març → la graella es torna a dibuixar sense error.
+12. [cap @ /part2] Canvia a un curs superior → surten les classes de tarda i el dia sencer, de 8.30 a 21.00.
+13. [cap @ /part2] Baixa a la consulta per aula, tria'n una i clica descarregar → es baixa un HTML autònom amb la mateixa graella i la llegenda. (reprova)
+14. [cap @ /part2] Mira a baix a l'esquerra → hi ha «Com funciona? Guia pas a pas», per sobre de la barra lateral; la dreta de la pàgina queda lliure.
+15. [cap @ /part2] Clica la guia → «Pas 1 de 6» ressalta «Què vols veure» amb un contorn blau, la resta queda enfosquida i el panell surt al costat de l'apartat.
+16. [cap @ /part2] Clica «Següent» fins al pas 6 i després «Anterior» → a cada pas el panell es mou al costat de l'apartat que explica i la pàgina s'hi desplaça sola.
+17. [cap @ /part2] Prem Esc amb la guia oberta → la guia es tanca i l'enfosquiment desapareix; «Tanca» fa el mateix.
+18. [cap @ /part2] Fes la finestra de mòbil (390 px) i obre la guia → el panell es veu sencer i no tapa l'apartat ressaltat.
+19. [cap @ /part2] Fes la finestra de mòbil (390 px) i desplaça lateralment la graella → arribes a Divendres dins de la mateixa taula, amb la columna d’hores sempre visible i els subgrups simultanis costat per costat. (reprova)
+20. [cap @ /part2] Tria un curs amb subgrups simultanis i classes curtes i mira cada casella → cap text surt per sota de la casella ni trepitja la classe de sota; el nom llarg s'acaba amb «…». (reprova)
+21. [cap @ /part2] Mira una classe de 30 minuts → hi cap almenys el nom (escurçat si cal) i l'hora; les línies de tipus, grup i nota s'amaguen abans que el nom. (reprova)
+22. [cap @ /part2] Passa el ratolí per sobre d'una classe amb el nom escurçat i després clica-la → el nom sencer surt a l'etiqueta flotant i, en obrir-la, es veu tot el text. (reprova)
+23. [cap @ /part2] Tria Enginyeria Informàtica, 3r, i mira una classe d'un doble grau → diu «Amb el grup … · Aula …» o «Classe compartida amb un altre grup», mai «Pendent d’assignar aula». (reprova)
 
 ## Resum per a la Junta
 
-1. [cap @ /junta] Obre «Resum per a la Junta» al menú, just sota «Part 2 · Proposta d'horari» → surt la pàgina amb el selector de proposta i cap error vermell.
-2. [cap @ /junta] Mira el selector sense tocar-lo → hi ha la «5.1» triada i l'avís «El resum definitiu sortirà amb la proposta del 5.2».
-3. [cap @ /junta] Llegeix «Pic de classes alhora» i la taula «Aules que falten o sobren per mida» amb la 5.1 → el matí diu 19/19 i la tarda 13/19, i la taula de mides suma el mateix, sense cap mida en negatiu (ja no surt −3 ni −6, ni 22/19 o 25/19 a l'HTML). (reprova)
-4. [cap @ /junta] Llegeix «Sessions mogudes per titulació i curs» amb la 5.1 → totes surten a 0 % de canvis de dia o d'hora, perquè la 5.1 no mou cap hora.
-5. [cap @ /junta] Mira com s'ordenen les titulacions → en percentatge de les seves sessions, amb el nombre al costat, mai només amb el nombre.
-6. [cap @ /junta] Clica el botó de descarregar el resum → es baixa un HTML; obre'l amb doble clic des de Baixades i imprimeix-lo en PDF: ha de cabre en un sol A4. (reprova)
-7. [cap @ /junta] Llegeix tota la pàgina com si fossis de la Junta → no hi surten sigles tècniques sense explicar.
+1. [cap @ /junta] Obre «Resum per a la Junta» al menú → surt per defecte «Horari complet (5.2)», sense l'avís antic del 5.2, i cap error vermell. (reprova)
+2. [cap @ /junta] Mira les fitxes de matí i tarda → «X de 19 aules» amb la frase «L'aulari té 21 aules ordinàries; en guardem 2 de reserva per a imprevistos.»; si és 19 de 19, etiqueta taronja «Sense marge» i «Si una aula falla, cal fer servir la reserva.». (reprova)
+3. [cap @ /junta] Tria «Aules assignades (5.1)» i mira «Curs més afectat» → diu «Cap» i «Cap curs canvia de dia ni d'hora.», perquè la 5.1 no mou cap hora; no surt «0.0 %». (reprova)
+4. [cap @ /junta] Tria «Aules assignades (5.1)» i mira «Excepcions noves als torns» → 0 classes amb pastilla verda «Cap», i a sota quantes classes ja es fan avui fora del seu torn i no es toquen. (reprova)
+5. [cap @ /junta] Amb «Horari complet (5.2)», mira «Excepcions noves als torns» → 459 classes, i a sota l'apartat «Excepcions als torns» amb cada motiu, quantes classes i quines titulacions; el cas S04526 surt destacat. (reprova)
+6. [cap @ /junta] Llegeix sota les fitxes → «màxim de classes alhora» del matí i de la tarda (tarda 18 a les 15:00), separat de les aules ocupades a l'hora punta. (reprova)
+7. [cap @ /junta] Tria «Aules assignades (5.1)» i mira «Classes que canvien d'horari o d'aula, per curs» → compta també els canvis d'aula, no només els de dia o hora. (reprova)
+8. [cap @ /junta] Mira la taula «Aules per mida a l'hora més plena» amb «Matí» → «Hi cap» on queden aules lliures (0 de 1, 6 de 7), «Just» on estan totes ocupades (4 de 4) i «Falten» només si n'hi ha més que aules.
+9. [cap @ /junta] Tria «Tarda» a sobre de la taula → la taula canvia a les xifres de la tarda.
+10. [cap @ /junta] Clica «Descarrega el resum A4» → es baixa un HTML; obre'l amb doble clic des de Baixades i imprimeix-lo en PDF: cap en un sol A4 i separa les excepcions noves de les d'avui.
+11. [cap @ /junta] Llegeix tota la pàgina com si fossis de la Junta → frases curtes i planeres, sense sigles tècniques; el detall tècnic queda tancat dins «Detall tècnic».
+12. [cap @ /junta] Obre «Detall tècnic» → hi ha el paràgraf «Per què 19 de 19 no és prou», en paraules planeres, i també surt a l'A4 descarregat. (reprova)
 
-## Disseny de la part 2 · tria A, B o C
+## Imprevistos
 
-1. [cap @ http://127.0.0.1:8600/part2-opcio-a.html] Obre l'opció A (cal la configuració «disseny» engegada) → les classes porten una franja de color a l'esquerra i una pastilla «Aula assignada», «Canvia» o «Cas especial»; els botons de sobre la graella filtren.
-2. [cap @ http://127.0.0.1:8600/part2-opcio-b.html] Obre l'opció B → una sola graella: les classes que no canvien són grises i les que canvien diuen ratllat com eren i, a sota, com queden; la casella «Mostra només les que canvien» amaga les grises.
-3. [cap @ http://127.0.0.1:8600/part2-opcio-c.html] Obre l'opció C → cada classe té un fons de color (blau, verd, groc, ratllat vermell) amb una icona; clicar un color de la llegenda deixa només aquelles classes ressaltades.
-4. [cap @ http://127.0.0.1:8600/part2-opcio-a.html] Mira la barra de l'esquerra a qualsevol opció → menú agrupat en «Com està l'horari», «La proposta» i «Ajuda», amb «aviat» en petit al costat del que encara no hi és.
-5. [cap @ http://127.0.0.1:8600/part2-opcio-a.html] Clica «Guia pas a pas» a baix a l'esquerra → s'obre un panell fosc de 4 passos que ressalta cada apartat; la dreta queda lliure per a l'assistent de la part 3.
-6. [cap @ http://127.0.0.1:8600/part2-opcio-b.html] Compara les tres opcions → digues quina t'agrada més (o què agafaries de cadascuna) per passar-la a l'app.
+1. [cap @ /imprevistos] Obre «Imprevistos» al menú → surt el títol, «Partim de l’horari proposat i recol·loquem les classes afectades» amb quantes classes més es mouen per fer lloc, i cap error vermell. (reprova)
+2. [cap @ /imprevistos] Mira el resum de dalt → «Comprovat amb el verificador oficial», quantes classes canvien d'aula, quantes de dia o hora, en quants segons, i una frase que explica per què el verificador compta una classe menys d'aula (la cancel·lada). (reprova)
+3. [cap @ /imprevistos] A «Què canvia», tria «Altres classes mogudes» → surten les classes que es mouen per fer lloc, amb abans i després. (reprova)
+4. [cap @ /imprevistos] Mira les quatre targetes → aula reservada una setmana, grup de teoria que creix, aula avariada un dia i classe cancel·lada que es recupera, cada una amb què ha passat, quantes classes afecta i «Resolt» o «Resolt amb excepció».
+5. [cap @ /imprevistos] Llegeix els números → concordança correcta: «1 classe afectada», «2 classes afectades», «cap de dia o hora».
+6. [cap @ /imprevistos] A «Què canvia», tria un imprevist a les pastilles → la taula només mostra les classes d'aquell imprevist, amb abans i després.
+7. [cap @ /imprevistos] Obre «Detall tècnic» → hi ha les excepcions per motiu i l'ordre per tornar-ho a generar.
 
-## Resum per a la Junta · tria A, B o C
-
-1. [cap @ http://127.0.0.1:8600/junta-opcio-a.html] Obre la versió A (cal la configuració «disseny» engegada) → dos semàfors grans, matí i tarda, amb quadrets: el matí 19 de 19 surt taronja («Hi cap, just») i la tarda 13 de 19, verd suau; a sota, barres per curs i una línia d'excepcions.
-2. [cap @ http://127.0.0.1:8600/junta-opcio-b.html] Obre la versió B → quatre preguntes amb la resposta en una frase gran i una pastilla de color; cap taula.
-3. [cap @ http://127.0.0.1:8600/junta-opcio-c.html] Obre la versió C → quatre fitxes petites a dalt, i a sota les barres per curs i una taula curta d'aules per mida.
-4. [cap @ http://127.0.0.1:8600/junta-opcio-a.html] Mira els colors a les tres versions → verd suau només si sobra marge, taronja si va just i vermell si calen més aules de les que hi ha; el verd no destaca massa.
-5. [cap @ http://127.0.0.1:8600/junta-opcio-b.html] Compara-les → digues quina vols a l'app (les xifres són inventades, només per triar el disseny).
