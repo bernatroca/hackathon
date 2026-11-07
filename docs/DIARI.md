@@ -165,3 +165,7 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - Assignador d'aules genèric (CP-SAT, una aula per activitat) i `python -m nivell2.s51`. El verificador oficial amb --nomes-aules diu VALIDA, sense relaxacions; triga uns 5 min. Comprovat també per la integració.
 - La proposta es queda al Mac (resultats/, fora de git).
 - Pendent de millora: aula base i canvis teoria-problemes fora del passadís surten pitjor que avui. Es millorarà quan hi hagi temps, amb més pes a l'aula base.
+
+### [ds 18:05] PROBLEMA · El model de franges del 5.2 no troba solució a temps
+- n2-backend-2: el model sencer (totes les sessions, tots dos torns) acaba en UNKNOWN després de 300 s. UNKNOWN no vol dir impossible.
+- Com ho resolem: torna a Codex amb effort high i una estratègia de reparació local. Primer es mouen només les activitats fora de torn o de finestra; matí i tarda per separat; setmana tipus amb conflictes només entre activitats que comparteixen setmana; i primer complir, després optimitzar.

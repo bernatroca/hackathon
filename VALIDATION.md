@@ -1,4 +1,4 @@
-# La part 1 (anàlisi d'espais) es veu bé, s'entén per a un coordinador i les xifres quadren amb l'enunciat
+# La part 1 (anàlisi d'espais) i la pàgina de la part 2 (proposta d'horari) es veuen bé, s'entenen per a un coordinador i les xifres quadren amb l'enunciat
 
 ## Context
 
@@ -7,6 +7,7 @@
 - Dades: el paquet real del repte a `repte/repte-horaris-escola/paquet/`, 2n semestre per defecte. No s'ha creat cap dada nova.
 - Xifres de l'enunciat que han de sortir: 2.008 classes al torn equivocat, 5.722 sense aula (74 %), 15 de 19 aules al pic, 68 % del matí i 43 amb més alumnes que places.
 - Comprovació automàtica feta: `python -m nivell1.comprova` dona 18/18 i `python app/test_app.py` dona OK.
+- Part 2: la proposta 5.1 és a `resultats/nivell2/5.1/` (només al Mac, fora de git). Comprovació automàtica feta: el verificador oficial amb `--nomes-aules` diu VALIDA; `python -m nivell2.comprova <proposta>` treu la taula d'abans i després; `pytest app/test_part2.py` (7), `nivell2/test_xifres.py` (6) i `nivell2/test_aules.py` (8) passen. El 5.2 encara no hi és.
 
 ## Portada «Com estem avui»
 
@@ -48,4 +49,18 @@
 1. [cap @ /] Obre el desplegable «Opcions» del menú → hi ha el selector de semestre (2n per defecte) i de setmana.
 2. [cap @ /] Canvia el semestre a 1r → la portada es torna a calcular sense error i les xifres canvien.
 3. [cap @ /] Torna a posar el 2n semestre → tornen a sortir 2.008 i 74 %.
-4. [cap @ /] Mira el menú → «Proposta d'horari», «Imprevistos» i «Pregunta-ho» surten marcats com «aviat».
+4. [cap @ /] Mira el menú → hi ha «Part 2 · Proposta d'horari» sense «aviat», i «Imprevistos» i «Pregunta-ho» surten marcats com «aviat». (reprova)
+
+## Part 2 · Proposta d'horari
+
+1. [cap @ /part2] Obre «Part 2 · Proposta d'horari» al menú → surt la pàgina amb el selector «Proposta», el de «Setmana de la graella» i cap error vermell.
+2. [cap @ /part2] Obre el selector «Proposta» → hi ha «Avui» i «5.1» (5.2, 5.3 i 5.4 encara no hi són).
+3. [cap @ /part2] Tria «Avui» → surt l'avís blau «Dades de mostra: es fa servir l'horari d'avui».
+4. [cap @ /part2] A «La setmana de l'estudiant» tria Gestió de Ciutats Intel·ligents, curs 1r i grup 61 → surten dues graelles costat per costat, avui i proposta, de dilluns a divendres.
+5. [cap @ /part2] Tria la proposta «5.1» amb el mateix grup → les classes que avui diuen «Sense aula assignada» ara tenen aula, i cap no canvia de dia ni d'hora.
+6. [cap @ /part2] Mira el títol «… classes amb canvis al grup» → només compta canvis d'aula, perquè el 5.1 no mou cap hora; les classes canviades surten en groc.
+7. [cap @ /part2] Llegeix una classe de 2 hores a la graella → surt repetida a cada fila de 30 minuts; anota si costa de llegir (millora prevista: un sol bloc).
+8. [cap @ /part2] Baixa a «La setmana per aula» i tria l'aula Q9/5006 → surt la seva graella setmanal, sense dues classes a la mateixa hora.
+9. [cap @ /part2] Clica «Descarrega l'horari de l'aula per al jurat» → es baixa un fitxer HTML que s'obre sol al navegador amb la mateixa graella.
+10. [cap @ /part2] Canvia «Setmana de la graella» a la setmana del 15 de març → les dues graelles es tornen a dibuixar sense error.
+11. [cap @ /part2] Llegeix tots els textos de la pàgina → no hi surten sigles tècniques sense explicar, com «R1-TORN», «PAUL» o «TE».
