@@ -7,7 +7,7 @@ for carpeta in (ARREL.parent,ARREL):
         sys.path.insert(0,str(carpeta))
 
 import streamlit as st
-from pagines import portada, preguntes
+from pagines import portada, preguntes, part2
 from servei import setmanes, versio_registre
 
 st.set_page_config(page_title="Espais de l’Escola",page_icon='▦',layout='wide')
@@ -30,7 +30,7 @@ def pregunta():
 pagina = st.navigation([
     st.Page(portada.mostra,title='Com estem avui',url_path='avui',default=True),
     st.Page(preguntes.mostra,title='Totes les respostes',url_path='respostes'),
-    st.Page(proposta,title='Proposta d’horari · aviat'),
+    st.Page(part2.mostra,title='Part 2 · Proposta d’horari',url_path='part2'),
     st.Page(imprevistos,title='Imprevistos · aviat'),
     st.Page(pregunta,title='Pregunta-ho · aviat'),
 ])
