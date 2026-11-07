@@ -139,7 +139,7 @@ def mostra_filtres(celles):
     comptes = recomptes_estat(celles)
     actiu = st.session_state.get('p2-filtre', 'totes')
     with st.container(key='p2-filtres'):
-        for columna, (clau, (_, nom, *_)) in zip(st.columns(len(ESTATS)), ESTATS.items()):
+        for columna, (clau, (nom, *_)) in zip(st.columns(len(ESTATS)), ESTATS.items()):
             with columna, st.container(key='p2-filtre-' + clau):
                 n = sum(comptes.values()) if clau == 'totes' else comptes[clau]
                 st.button(f'{nom} ({n})', key='p2-boto-' + clau,
