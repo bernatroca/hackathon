@@ -50,6 +50,19 @@ def setmana_inventada():
     ]
 
 
+def setmana_carrils_inventada(carrils=(2, 2, 1, 3, 2)):
+    """Distribució del cas comunicat per l'equip, sense dades reals."""
+    return [Cella(
+        f'INVENTADA-DENSA-{dia}-{i}', dia, 570, 630,
+        'Aula inventada amb una denominació extraordinàriament llarga',
+        ('Organització i Gestió de Sistemes Experimentals',
+         'Probabilitat i Processos Interdisciplinaris',
+         'Electromagnetisme i desenvolupament de sistemes interdisciplinaris experimentals')[i % 3],
+        'Problemes', f'PAUL/99{i}', True, False,
+        abans='Abans: dijous 12:30 · Aula inventada anterior',
+    ) for dia, n in zip(('L', 'M', 'X', 'J', 'V'), carrils) for i in range(n)]
+
+
 def genera():
     celles = setmana_inventada()
     resum = '''<section class="p2-resum amb-canvis"><div>
@@ -61,7 +74,14 @@ def genera():
         + resum
         + filtres_html(celles)
         + taula_html(celles, 'Setmana inventada', estils=False)
-        + '</section>' for ample in (1160, 887, 390))
+        + '</section>' for ample in (1160, 900, 390))
+    casos += ''.join(
+        f'<section class="prova" style="width:{ample}px"><h2>{nom} · {ample} px</h2>'
+        + taula_html(setmana_carrils_inventada(carrils), nom, estils=False)
+        + '</section>'
+        for nom, carrils in (('Carrils 2,2,1,3,2', (2,2,1,3,2)),
+                             ('Quatre carrils', (4,3,3,3,3)))
+        for ample in (1160, 900, 390))
     return '''<!doctype html>
 <html lang="ca"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">

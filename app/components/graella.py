@@ -238,7 +238,7 @@ CSS = """
 .p2-horari{container:p2-graella / inline-size;width:100%;max-width:100%;min-width:0;color:#1a1a18;font:13px/1.35 system-ui}
 .p2-horari .horari-scroll{width:100%;max-width:100%;min-width:0;overflow-x:auto;overscroll-behavior-x:contain;border:1px solid #e6e5e0;border-radius:16px;background:#fff;}
 .p2-horari .horari-scroll:focus-visible{outline:3px solid #2a78d6;outline-offset:2px;}
-.p2-horari .horari{position:relative;isolation:isolate;display:grid;column-gap:10px;row-gap:0;padding:14px 16px 16px;box-sizing:border-box;background:#fff;}
+.p2-horari .horari{min-width:0px;position:relative;isolation:isolate;display:grid;column-gap:10px;row-gap:0;padding:14px 16px 16px;box-sizing:border-box;background:#fff;}
 .p2-horari .horari-titol{grid-column:1/-1;margin:0 0 10px;font-size:16px;font-weight:600;}
 .p2-horari .dia-cap{font-size:14px;font-weight:600;padding:4px 4px 10px;border-bottom:1px solid #e6e5e0;}
 .p2-horari .hora-cap,.p2-horari .hores{position:sticky;left:0;z-index:2;background:#fff;box-shadow:-16px 0 #fff,10px 0 #fff;}
@@ -247,7 +247,7 @@ CSS = """
 .p2-horari .hora{font-size:12px;color:#8a8984;font-weight:400;transform:translateY(-7px);font-variant-numeric:tabular-nums;}
 .p2-horari .hora-plena{color:#3d3c39;font-weight:600;}
 .p2-horari .dia-horari{column-gap:6px;background-image:var(--linies);background-position:0 6px;background-repeat:repeat;}
-.p2-horari .classe{position:relative;z-index:1;color:#1a1a18;border:0;border-radius:10px;padding:8px 10px;margin:3px 0;min-width:0;min-height:0;box-sizing:border-box;word-break:normal;overflow-wrap:normal;hyphens:none;}
+.p2-horari .classe{container:p2-classe / inline-size;position:relative;z-index:1;color:#1a1a18;border:0;border-radius:10px;padding:8px 10px;margin:3px 0;min-width:0;min-height:0;box-sizing:border-box;word-break:normal;overflow-wrap:normal;hyphens:none;}
 .p2-horari .classe b{display:block;color:#1a1a18;font-size:14px;font-weight:600;line-height:1.25;white-space:normal;word-break:normal;overflow-wrap:normal;hyphens:none;font-family:system-ui,sans-serif;font-variant-ligatures:none;letter-spacing:normal;word-spacing:normal;text-transform:none;}
 .p2-horari .classe summary{display:flex;flex-direction:column;gap:3px;cursor:pointer;list-style:none;}
 .p2-horari .classe summary::-webkit-details-marker{display:none;}
@@ -266,9 +266,27 @@ CSS = """
 .p2-horari .classe:not([open]) .ubicacio{display:var(--mostra-ubicacio);}
 .p2-horari .classe:not([open]) summary>small:not([class]){display:var(--mostra-grup);}
 .p2-horari .classe:not([open]) .nota{display:var(--mostra-nota);}
-.p2-horari .classe[open] b,.p2-horari .classe[open] small{overflow-wrap:break-word;}
+/* Cada paraula és atòmica: només saltem de línia entre paraules.
+   Si no cap sola, l'el·lipsi marca l'abreviació a l'amplada real disponible. */
+.p2-horari .classe .nom-paraula{display:inline-block;vertical-align:bottom;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.p2-horari .classe[open] b{overflow-x:auto;}
+.p2-horari .classe[open] .nom-paraula{max-width:none;overflow:visible;}
+.p2-horari .classe[open] small{overflow-wrap:anywhere;}
 .p2-horari .classe[open]{z-index:3;align-self:start;min-height:calc(100% - 6px);box-shadow:0 4px 12px #0002;}
 .p2-horari .classe .detall{padding-top:6px;border-top:1px solid #e6e5e0;margin-top:6px;}
+
+/* El mínim de carril només s'aplica per sota de 900px de contenidor. */
+@container p2-graella (width < 900px){
+  .p2-horari .horari{min-width:var(--ample-mobil);}
+}
+/* Amplada real de la casella, també quan una classe ocupa tot el dia.
+   Amagar secundàries allibera espai sense excedir el pressupost vertical. */
+@container p2-classe (width < 90px){
+  .p2-horari .classe:not([open]) summary>small:not([class]),
+  .p2-horari .classe:not([open]) .nota{display:none;}
+  .p2-horari .classe:not([open]) b{-webkit-line-clamp:min(var(--linies-nom),3);max-height:calc(min(var(--linies-nom),3)*17.5px);}
+}
+
 .p2-llegenda{display:flex;flex-wrap:wrap;gap:8px;padding:0;list-style:none;font:13px/1.35 system-ui;color:#1a1a18;}
 .p2-llegenda li{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border:1px solid #e6e5e0;border-radius:999px;background:#fff;}
 .p2-llegenda i{display:inline-block;width:10px;height:10px;border-radius:3px;}
@@ -281,8 +299,15 @@ CSS = """
 # fons CSS de cada dia i no necessiten mesurar files ni observar redimensions.
 LINIES_JS = "function preparaLiniesHorari() { return ()=>{}; }"
 
-MIN_CARRIL = 120
+MIN_CARRIL = 72
 AMPLE_HORES = 56
+
+
+def nom_assignatura_html(nom):
+    """Paraules completes al DOM; CSS abreuja amb … només les que no caben."""
+    return ' '.join(
+        '<span class="nom-paraula">' + escape(paraula).replace('’', '&#8217;').replace('‘', '&#8216;') + '</span>'
+        for paraula in nom.split())
 
 
 def pressupost_classe(durada, *, nota=False):
@@ -335,15 +360,16 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
             coincideix = any(o is not c and o.ini < c.fi and c.ini < o.fi for o in classes)
             entrades.append((carril, coincideix, c))
         carrils[dia] = (max(1, len(ocupats)), entrades)
-    columnes = '56px ' + ' '.join(f'minmax(0, {n}fr)' for n, _ in carrils.values())
-    # Incloem el padding, els espais entre dies i entre carrils al mínim.
-    ample = AMPLE_HORES + 32 + 5 * 10 + sum(n * MIN_CARRIL + (n - 1) * 6 for n, _ in carrils.values())
+    columnes = f'{AMPLE_HORES}px ' + ' '.join('minmax(0, 1fr)' for _ in DIES)
+    # Només al mòbil: dies iguals i almenys MIN_CARRIL per carril.
+    maxim = max(n for n, _ in carrils.values())
+    ample = AMPLE_HORES + 32 + 5 * 10 + 5 * (maxim * MIN_CARRIL + (maxim - 1) * 6)
     primer = '#d9d8d2' if inici_dia % 60 == 0 else '#efeee9'
     segon = '#efeee9' if inici_dia % 60 == 0 else '#d9d8d2'
     linies = f'repeating-linear-gradient(to bottom,{primer} 0 1px,transparent 1px 48px,{segon} 48px 49px,transparent 49px 96px)'
     html = (estil + '<div class="p2-horari"><div class="p2-setmana">'
         f'<div class="horari-scroll" tabindex="0" role="region" aria-label="{escape(titol, quote=True)} · Dilluns – Divendres">'
-        f'<div class="horari" style="min-width:{ample}px;grid-template-columns:{columnes};--files:repeat({final_dia-inici_dia},1.6px);--linies:{linies}">'
+        f'<div class="horari" style="--ample-mobil:{ample}px;grid-template-columns:{columnes};--files:repeat({final_dia-inici_dia},1.6px);--linies:{linies}">'
         f'<div class="horari-titol">{escape(titol)}</div><div class="dia-cap hora-cap">Hora</div>')
     html += ''.join(f'<div class="dia-cap" role="heading" aria-level="3">{nom}</div>' for nom in NOMS_DIES)
     html += '<div class="hores" aria-label="Hores">'
@@ -382,7 +408,7 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
                 etiqueta += ' · ' + avis
             if c.compartida:
                 etiqueta += ' · Classe compartida'
-            nom_assignatura = escape(c.assignatura).replace('’', '&#8217;').replace('‘', '&#8216;')
+            nom_assignatura = nom_assignatura_html(c.assignatura)
             contingut = (f'<b>{nom_assignatura}</b><small class="ubicacio">{fmt(c.ini)}–{fmt(c.fi)} · {escape(ubicacio)}</small>'
                         f'<small>{escape(tipus)} · {escape(grup)}</small>')
             if nota:
