@@ -1,0 +1,177 @@
+/* Xat amb la IA. Tot va amb el prefix .xatia per no xocar amb els estils del programa.
+   Els colors són variables: el programa pot posar-hi els seus a :root (--xatia-accent, etc.).
+   Segueix el tema clar/fosc del sistema; amb <html data-theme="light|dark"> el tria el programa. */
+
+:root {
+  --xatia-fons: #f5f2ec;
+  --xatia-paper: #ffffff;
+  --xatia-paper-alt: #ece7de;
+  --xatia-vora: #e0d9cc;
+  --xatia-text: #1d1a16;
+  --xatia-text-fluix: #5f584e;
+  --xatia-accent: #ba3d17;
+  --xatia-sobre-accent: #ffffff;
+  --xatia-error: #b42318;
+  --xatia-ombra: 0 12px 40px rgba(60, 45, 20, 0.14);
+  --xatia-radi: 12px;
+  --xatia-amplada: 420px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --xatia-fons: #0f1113;
+    --xatia-paper: #171a1e;
+    --xatia-paper-alt: #1f2328;
+    --xatia-vora: #2a2e34;
+    --xatia-text: #e8e9ea;
+    --xatia-text-fluix: #9aa0a7;
+    --xatia-accent: #e65e35;
+    --xatia-sobre-accent: #0f1113;
+    --xatia-error: #ff8a7a;
+    --xatia-ombra: 0 12px 40px rgba(0, 0, 0, 0.45);
+  }
+}
+:root[data-theme="dark"] {
+  --xatia-fons: #0f1113;
+  --xatia-paper: #171a1e;
+  --xatia-paper-alt: #1f2328;
+  --xatia-vora: #2a2e34;
+  --xatia-text: #e8e9ea;
+  --xatia-text-fluix: #9aa0a7;
+  --xatia-accent: #e65e35;
+  --xatia-sobre-accent: #0f1113;
+  --xatia-error: #ff8a7a;
+  --xatia-ombra: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.xatia { --xatia-teclat: 0px; font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--xatia-text); }
+.xatia *, .xatia *::before, .xatia *::after { box-sizing: border-box; }
+.xatia [hidden] { display: none !important; }
+
+/* ---------- el botó de baix a la dreta ---------- */
+
+.xatia-boto {
+  position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 2147483000;
+  display: flex; align-items: center; gap: 8px; height: 50px; padding: 0 20px 0 16px;
+  border: 0; border-radius: 999px; cursor: pointer; font: inherit; font-size: 15px; font-weight: 650;
+  background: var(--xatia-accent); color: var(--xatia-sobre-accent);
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--xatia-accent) 38%, transparent), var(--xatia-ombra);
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+.xatia-boto:hover { filter: brightness(1.08); transform: translateY(-1px); }
+.xatia-boto:focus-visible { outline: 3px solid color-mix(in srgb, var(--xatia-accent) 45%, transparent); outline-offset: 3px; }
+
+/* ---------- el plafó ---------- */
+
+.xatia-fons { position: fixed; inset: 0; z-index: 2147483001; background: rgba(0, 0, 0, 0.35); }
+.xatia-plafo {
+  position: fixed; top: 0; right: 0; bottom: var(--xatia-teclat); z-index: 2147483002; width: 100%;
+  display: flex; flex-direction: column; background: var(--xatia-paper); border-left: 1px solid var(--xatia-vora);
+  box-shadow: var(--xatia-ombra); transform: translateX(105%); visibility: hidden;
+  transition: transform 0.22s ease, visibility 0s linear 0.22s, width 0.22s ease;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) 0;
+}
+.xatia--obert .xatia-plafo { transform: none; visibility: visible; transition: transform 0.22s ease, width 0.22s ease; }
+@media (prefers-reduced-motion: reduce) { .xatia-plafo, .xatia--obert .xatia-plafo { transition: none; } }
+
+.xatia-cap { display: flex; align-items: center; gap: 6px; padding: 12px 14px; border-bottom: 1px solid var(--xatia-vora); }
+.xatia-titol { flex: 1; display: flex; align-items: center; gap: 8px; font-weight: 650; color: var(--xatia-accent); }
+
+.xatia-cos { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 14px; }
+.xatia-peu { border-top: 1px solid var(--xatia-vora); padding: 10px 14px 14px; }
+.xatia-columna { display: flex; flex-direction: column; gap: 10px; width: 100%; margin-inline: auto; }
+.xatia-conversa { display: flex; flex-direction: column; gap: 10px; }
+
+/* Arrossegant una captura a sobre. */
+.xatia-plafo--deixant::after {
+  content: 'Deixa-la aquí'; position: absolute; inset: 10px; display: grid; place-items: center; pointer-events: none;
+  border: 2px dashed var(--xatia-accent); border-radius: var(--xatia-radi); color: var(--xatia-accent); font-weight: 650;
+  background: color-mix(in srgb, var(--xatia-paper) 85%, transparent);
+}
+
+/* ---------- missatges ---------- */
+
+.xatia-missatge { padding: 10px 12px; border-radius: var(--xatia-radi); white-space: pre-wrap; overflow-wrap: anywhere; }
+.xatia-missatge--jo { align-self: flex-end; max-width: 85%; background: var(--xatia-paper-alt); border: 1px solid var(--xatia-vora); }
+.xatia-missatge--ia { align-self: stretch; background: var(--xatia-paper-alt); border: 1px solid var(--xatia-vora); border-left: 2px solid var(--xatia-accent); white-space: normal; }
+.xatia-missatge--ia p { margin: 0 0 8px; }
+.xatia-missatge--ia ul, .xatia-missatge--ia ol { margin: 0 0 8px; padding-left: 20px; }
+.xatia-missatge--ia > :last-child { margin-bottom: 0; }
+.xatia-missatge--ia code { font-size: 0.92em; padding: 1px 4px; border-radius: 4px; background: var(--xatia-paper); }
+.xatia-missatge--ia a { color: var(--xatia-accent); }
+.xatia-titolet { font-weight: 650; }
+.xatia-pensant { color: var(--xatia-text-fluix); }
+.xatia-escrivint > :last-child::after { content: '▍'; margin-left: 2px; color: var(--xatia-accent); animation: xatia-cursor 1s steps(2) infinite; }
+@keyframes xatia-cursor { 50% { opacity: 0; } }
+
+.xatia-captures { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.xatia-captures img { width: 96px; height: 72px; object-fit: cover; border-radius: 8px; display: block; cursor: zoom-in; border: 1px solid var(--xatia-vora); }
+.xatia-nota { display: block; font-size: 11px; color: var(--xatia-text-fluix); margin-bottom: 4px; }
+
+/* ---------- el peu: error, què veu, preguntes, captures i la caixa ---------- */
+
+.xatia-error { margin: 0; color: var(--xatia-error); font-size: 13px; }
+.xatia-veu { margin: 0 0 -4px; font-size: 12px; color: var(--xatia-text-fluix); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.xatia-ajuda { margin: 0; font-size: 13px; color: var(--xatia-text-fluix); }
+.xatia-preguntes { display: flex; flex-wrap: wrap; gap: 6px; }
+.xatia-preguntes:empty, .xatia-preparades:empty { display: none; }
+.xatia-fitxa {
+  font: inherit; font-size: 13px; text-align: left; padding: 6px 10px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--xatia-vora); background: transparent; color: var(--xatia-text);
+}
+.xatia-fitxa:hover:not(:disabled) { border-color: var(--xatia-accent); }
+.xatia-fitxa:disabled { opacity: 0.5; cursor: default; }
+
+.xatia-preparades { display: flex; flex-wrap: wrap; gap: 8px; }
+.xatia-preparada { position: relative; }
+.xatia-preparada img { width: 72px; height: 54px; object-fit: cover; border-radius: 8px; border: 1px solid var(--xatia-vora); display: block; cursor: zoom-in; }
+.xatia-preparada button {
+  position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; padding: 0; border-radius: 999px; cursor: pointer;
+  display: grid; place-items: center; border: 1px solid var(--xatia-vora); background: var(--xatia-paper); color: var(--xatia-text);
+}
+
+.xatia-entrada { display: flex; gap: 8px; align-items: flex-end; }
+.xatia-entrada textarea {
+  flex: 1; min-width: 0; font: inherit; font-size: 16px; /* 16px: l'iPhone no fa zoom en escriure */
+  padding: 10px 12px; border-radius: var(--xatia-radi); resize: none;
+  border: 1px solid var(--xatia-vora); background: var(--xatia-fons); color: var(--xatia-text);
+}
+.xatia-entrada textarea:focus { outline: none; border-color: var(--xatia-accent); }
+
+.xatia-icona {
+  flex-shrink: 0; width: 40px; height: 40px; display: grid; place-items: center; padding: 0; cursor: pointer;
+  border: 1px solid var(--xatia-vora); border-radius: var(--xatia-radi); background: transparent; color: var(--xatia-text);
+}
+.xatia-icona:hover:not(:disabled) { border-color: var(--xatia-accent); color: var(--xatia-accent); }
+.xatia-icona:disabled { opacity: 0.45; cursor: default; }
+.xatia-icona--ple { background: var(--xatia-accent); border-color: var(--xatia-accent); color: var(--xatia-sobre-accent); }
+.xatia-icona--ple:hover:not(:disabled) { color: var(--xatia-sobre-accent); filter: brightness(1.08); }
+.xatia-cap .xatia-icona { width: 32px; height: 32px; border-color: transparent; }
+
+/* ---------- la captura en gran ---------- */
+
+.xatia-lupa { position: fixed; inset: 0; z-index: 2147483003; display: grid; place-items: center; padding: 24px; background: rgba(0, 0, 0, 0.8); cursor: zoom-out; }
+.xatia-lupa img { max-width: 100%; max-height: 100%; border-radius: 8px; box-shadow: var(--xatia-ombra); }
+
+/* ---------- mòbil: el plafó ocupa tota la pantalla, sense botó de fer gran ---------- */
+
+@media (max-width: 699px) {
+  .xatia-nomes-ordinador { display: none !important; }
+  .xatia-boto { width: 56px; height: 56px; padding: 0; justify-content: center; }
+  .xatia-boto span { display: none; }
+  /* Amb conversa, les preguntes en una sola línia que llisca: que es llegeixi la resposta. */
+  .xatia--amb-conversa .xatia-preguntes { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-inline: -14px; padding-inline: 14px; }
+  .xatia--amb-conversa .xatia-fitxa { white-space: nowrap; flex-shrink: 0; }
+}
+
+/* ---------- ordinador: a la dreta, sense enfosquir; o gran, a tota la pantalla ---------- */
+
+@media (min-width: 700px) {
+  .xatia-plafo { width: var(--xatia-amplada); }
+  .xatia-fons { background: transparent; }
+  .xatia--gran .xatia-plafo { width: 100%; border-left: 0; }
+  .xatia--gran .xatia-fons { background: rgba(0, 0, 0, 0.35); }
+  /* En gran, la conversa en una columna llegible al mig. */
+  .xatia--gran .xatia-columna { max-width: 820px; }
+  .xatia--gran .xatia-cos { padding: 24px; }
+  .xatia--gran .xatia-missatge { font-size: 15px; }
+}

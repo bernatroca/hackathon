@@ -64,3 +64,21 @@ Codex no ha vist la conversa. Només sap el que hi ha al prompt i al seu worktre
 ## Decidit
 
 - Res que surti de les dades del repte va a git: `.gitignore` ignora `resultats/`, `dades/` i `*.csv`. Les propostes es queden al Mac i es lliuren al jurat directament.
+
+## Part 3 · Assistent d'IA (`.plans/part3-ia-spec.md`)
+
+Tres tasques en paral·lel, cada una al seu worktree. La base del zip ja és a `app/xat/`: `servidor.py` (el `xat_ia.py` original), `web/xat-ia.js`, `web/xat-ia.css`, `instruccions.md` (el prompt aprovat), `GUIA-ZIP.md` (com funciona el widget) i `env.exemple`.
+
+**Contracte entre les tres peces** (perquè no s'esperin):
+
+- `app/xat/eines.py` exposa `EINES: list[dict]` (definicions de tools en format OpenAI: `{"type": "function", "function": {"name", "description", "parameters"}}`) i `executa(nom: str, args: dict) -> dict`. `executa` no llença mai excepcions: torna `{"ok": True, "resultat": …, "id_sessio": [...], "consulta": "…"}` o `{"ok": False, "error": "…"}`.
+- `app/xat/servidor.py` exposa `arrenca(port: int = 8502) -> str`. Arrenca un sol cop un `ThreadingHTTPServer` de la biblioteca estàndard en un fil dimoni, amb `GET` i `POST /api/xat` (el contracte del zip) i CORS per a `http://localhost:8501` i `http://127.0.0.1:8501`. Torna l'adreça de l'API. Si el port està ocupat per un servidor seu, el reaprofita.
+- `app/xat/widget.py` exposa `posa_widget(pantalla: dict | None)`: arrenca el servidor (amb `st.cache_resource`), injecta el JS i el CSS a la pàgina un sol cop i crida `XatIA.pantalla(pantalla)` a cada renderitzat. `pantalla = {"resum", "text", "preguntes"}`.
+
+| Títol | Rol | Tasca | Fitxers permesos | Fet quan |
+|---|---|---|---|---|
+| `p3-backend-1` | Backend | **Servidor i bucle d'eines.** Adapta `servidor.py`: llegeix el `.env` de l'arrel del repositori, envia `tools` a la IA, executa les crides amb `eines.executa`, posa cada resultat al missatge `tool` dins de `<dades>…</dades>`, i fa com a molt 6 voltes per pregunta. El text final surt en directe (SSE com al zip). Mantén la IA de reserva i `IA_PROVA=1`; en mode de prova ha de fer servir almenys una eina falsa. Afegeix `arrenca()`. | `app/xat/servidor.py`, `app/xat/test_servidor.py` | `pytest app/xat/test_servidor.py` passa amb una IA falsa i unes eines falses: validació de missatges, bucle de tools (una crida, diverses i el límit de 6), error d'eina, `<dades>`, CORS i flux SSE. Sense obrir cap port als tests. |
+| `p3-dades-1` | Dades | **Eines.** `horari_grup`, `aules_lliures`, `ocupacio_aula`, `xifra`, `resultat_proposta`, `consulta_sql` (només un `SELECT`, com a molt 50 files i 5 s) i `prova_canvi` (amb `nivell2.reparacio.repara` i el verificador, sense desar res). `proposta` pot ser `avui`, `5.1`, `5.2`, `5.3` o `5.4`. Fes servir el que ja existeix (`nivell1.dades.connexio`, `servei.una`, `servei.validacio_part2`, les rutes de `nivell2.base`, que funcionen des d'un worktree). Cada resultat porta els `id_sessio` i la consulta feta. | `app/xat/eines.py`, `app/xat/test_eines.py` | `pytest app/xat/test_eines.py` passa amb un paquet inventat petit, i `python -m app.xat.eines` executa cada eina un cop sobre les dades reals i n'imprimeix només el nombre de files i els 3 primers `id_sessio`. |
+| `p3-frontend-1` | Frontend | **Widget a l'app.** `widget.py` amb `posa_widget()`. A `app/app.py`: treu la pàgina «Pregunta-ho · aviat» (i la secció «Ajuda» si queda buida) i crida `posa_widget()` després de `pagina.run()`, amb una pantalla feta a partir de la pàgina oberta, el semestre, la setmana i el que hi hagi a `st.session_state` (proposta, grup o aula triats). Preguntes proposades per pàgina segons l'especificació. Colors del widget amb les variables `--xatia-*` iguals que `app/estil.css`. Streamlit és la 1.67. | `app/xat/widget.py`, `app/xat/web/xat-ia.css`, `app/xat/test_widget.py`, `app/app.py` | `pytest app/xat/test_widget.py` passa, i amb `IA_PROVA=1 streamlit run app/app.py` el botó surt a totes les pàgines, s'obre, «Veu: …» canvia en canviar de pàgina i una pregunta rep la resposta de prova. |
+
+No toquis `app/pagines/part2.py`, `app/components/graella.py` ni `docs/RESUM-PRESENTACIO.md`: hi treballen altres sessions.
