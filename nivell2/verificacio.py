@@ -11,7 +11,7 @@ OPCIONS = {
     '5.1': {'nomes_aules': True},
     '5.2': {},
     '5.3': {'escenari': CONTINGENCIES, 'referencia': Path('5.2/proposta.csv')},
-    '5.4': {'escenari': GRAU_NOU},
+    '5.4': {'escenari': GRAU_NOU, 'referencia': Path('5.2/proposta.csv')},
 }
 VALIDES = {'VALIDA', 'VALIDA AMB RELAXACIONS DECLARADES'}
 

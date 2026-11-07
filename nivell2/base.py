@@ -170,15 +170,25 @@ def verifica(proposta: Path, *, escenari: Path | None = None, referencia: Path |
              relaxacions: Path | None = None, nomes_aules: bool = False, json_path: Path | None = None,
              violacions_path: Path | None = None) -> Informe:
     """Executa `python -m horaris check` (la mateixa ordre que el jurat) des de la carpeta del repte."""
+    import hashlib
     with tempfile.TemporaryDirectory() as tmp:
+        digest = hashlib.sha256(Path(proposta).read_bytes()).hexdigest()
         jp = Path(json_path) if json_path else Path(tmp) / 'informe.json'
         cmd = ordre_verificador(proposta, escenari=escenari, referencia=referencia,
                                 relaxacions=relaxacions, nomes_aules=nomes_aules,
                                 json_path=jp, violacions_path=violacions_path)
+        jp.unlink(missing_ok=True)
         r = subprocess.run(cmd, cwd=REPTE, capture_output=True, text=True)
-        if r.returncode == 2 or not jp.exists():
-            raise RuntimeError(f'El verificador no ha pogut llegir la proposta:\n{r.stderr or r.stdout}')
-        return Informe(json.loads(jp.read_text(encoding='utf-8')), r.stdout)
+        if r.returncode not in (0, 1) or not jp.is_file():
+            raise RuntimeError(f'Error del verificador (codi {r.returncode})')
+        report = json.loads(jp.read_text(encoding='utf-8'))
+        expected = {'VALIDA': 0, 'VALIDA AMB RELAXACIONS DECLARADES': 0, 'NO VALIDA': 1}
+        if expected.get(report.get('veredicte')) != r.returncode:
+            raise RuntimeError('Codi i veredicte incoherents')
+        if (report.get('context', {}).get('proposta_sha256') != digest
+                or hashlib.sha256(Path(proposta).read_bytes()).hexdigest() != digest):
+            raise RuntimeError('Empremta de la proposta incorrecta')
+        return Informe(report, r.stdout)
 
 
 def avalua_rapid(base: Base, proposta: Proposta, *, nomes_aules: bool = False, referencia: Proposta | None = None):

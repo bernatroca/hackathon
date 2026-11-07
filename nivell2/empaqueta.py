@@ -9,6 +9,7 @@ import io
 import zipfile
 from pathlib import Path
 
+from nivell2.xifres_lliurament import genera, graelles
 from nivell2.base import RESULTATS
 from nivell2.comprova_persones import comprova as comprova_persones
 from nivell2.verificacio import OPCIONS, VALIDES, ordre, ordre_oficial, verifica_pregunta
@@ -46,6 +47,7 @@ def empaqueta(sortida, *, sense_zip=False, arrel=RESULTATS):
             report = verifica_pregunta(pregunta, arrel)
             verdict = report.veredicte
             ok = verdict in VALIDES and not report.compten()
+            genera(pregunta, arrel)
             complete = contracte(arrel / pregunta, pregunta)
         except Exception:
             verdict, ok, complete = 'ERROR de verificació o contracte', False, False
@@ -61,10 +63,13 @@ def empaqueta(sortida, *, sense_zip=False, arrel=RESULTATS):
     valid &= persones
     if not valid:
         return 1
+    folder = graelles(sortida, arrel)
     if not sense_zip:
         temporary = sortida / 'lliurament-nivell2.zip.tmp'
         try:
             with zipfile.ZipFile(temporary, 'w', zipfile.ZIP_DEFLATED) as archive:
+                for path in sorted(folder.glob('*.html')):
+                    archive.write(path, f'graelles/{path.name}')
                 for pregunta in OPCIONS:
                     for name in (*OBLIGATORIS, 'relaxacions.csv'):
                         path = arrel / pregunta / name
