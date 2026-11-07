@@ -7,6 +7,7 @@ from components.format import numero
 from servei import AULES_DISPONIBLES, AULES_RESERVA, inventari
 from presentacio import DIES, context, valor
 from textos import PROBLEMES
+from components.taules import dades_troballa
 
 
 def quadrets(t):
@@ -22,7 +23,7 @@ def quadrets(t):
 
 
 def figura(fig, clau):
-    fig.update_layout(template='plotly_white', height=350, margin=dict(l=12,r=65,t=35,b=25),
+    fig.update_layout(template='plotly_white', height=fig.layout.height or 350, margin=dict(l=12,r=65,t=35,b=25),
         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
         font=dict(family='-apple-system, Segoe UI, system-ui, sans-serif',color='#0b0b0b',size=15),
         separators=',.', showlegend=False, dragmode=False)
@@ -33,16 +34,20 @@ def figura(fig, clau):
 
 def barres(labels, values, clau, unitat=''):
     df = pd.DataFrame({'nom':list(labels),'valor':list(values)}).dropna(subset=['valor'])
+    retallat = len(df) > 8
     df = df.sort_values('valor',ascending=False).head(8)
     if df.empty:
         st.info('No hi ha casos per mostrar en aquesta setmana.')
         return
-    fig = go.Figure(go.Bar(x=df.valor,y=df.nom,orientation='h',marker_color='#2a78d6',
+    fig = go.Figure(go.Bar(x=df.valor,y=df.nom,orientation='h',width=.6,marker=dict(color='#2a78d6',cornerradius=4),
         text=[f'{numero(v)}' + (' cas' if v == 1 else ' casos') if unitat == ' casos' else f'{numero(v)}{unitat}' for v in df.valor],textposition='outside',cliponaxis=False,
         hovertemplate='%{y}: %{text}<extra></extra>'))
+    fig.update_layout(height=60+36*len(df))
     fig.update_xaxes(visible=False)
     fig.update_yaxes(autorange='reversed',ticks='')
     figura(fig,clau)
+    if retallat:
+        st.caption('Es mostren els 8 casos amb el valor més alt.')
 
 
 def planol(t):
@@ -66,7 +71,7 @@ def planol(t):
                 # Escala absoluta de percentatge: cap ocupació inventada per a les dades absents.
                 intensitat = min(1,max(0,float(pct)/100)) if pct is not None else None
                 color = '#f1f0ec' if intensitat is None else 'rgb(' + ','.join(str(round(a+(b-a)*intensitat)) for a,b in zip((205,226,251),(24,79,149))) + ')'
-                tinta = '#fff' if intensitat is not None and intensitat > .65 else '#0b0b0b'
+                tinta = '#ffffff' if intensitat is not None and intensitat >= .72 else '#000000'
                 tip = f'{r.aula} · {numero(r.capacitat)} places · ' + (f'{numero(pct)} % ocupada' if pct is not None else 'ocupació no disponible')
                 html += f'<div class="rajola" tabindex="0" title="{escape(tip)}" aria-label="{escape(tip)}" style="background:{color};color:{tinta}"><b>{escape(r.aula)}</b>{escape(numero(r.capacitat))} places<small class="ocupacio-rajola">{escape(numero(pct)) + ' %' if pct is not None else 'Sense dada'}</small></div>'
             html += '</div>'
@@ -74,7 +79,7 @@ def planol(t):
     st.markdown(html+'</div><p class="escala">Poc ocupada <i></i> Molt ocupada</p>',unsafe_allow_html=True)
 
 
-def grafics(t, clau='detall', altres=None):
+def _grafics(t, clau='detall', altres=None):
     df = t.taula
     if t.id == 'hi-cap-mati':
         pic = pd.DataFrame((t.extra or {}).get('pic', df))
@@ -130,3 +135,8 @@ def grafics(t, clau='detall', altres=None):
     if t.id == 'aforament':
         labels = labels + ' · ' + df.dia.map(lambda d:DIES.get(d,d)) + ' ' + df.h_ini.astype(str)
     barres(labels,values,clau,unitat)
+
+
+def grafics(t, clau='detall', altres=None):
+    _grafics(t, clau, altres)
+    dades_troballa(t)

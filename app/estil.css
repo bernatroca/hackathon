@@ -28,7 +28,7 @@ h1 { font-size: 36px; margin: 0 0 4px; letter-spacing: -0.01em; }
 .targeta p { margin: 0; color: var(--tinta-2); }
 .proposem { padding-top: 12px; border-top: 1px solid var(--linia); font-size: 15px; color: var(--tinta-2); }
 .proposem b { color: var(--tinta); }
-a.mes { color: var(--blau); text-decoration: none; font-size: 15px; white-space: nowrap; }
+a.mes { color: #256abf; text-decoration: none; font-size: 15px; white-space: nowrap; }
 .versio { position: fixed; right: 16px; bottom: 16px; background: var(--tinta); color: #fff; font-size: 13px; padding: 6px 12px; border-radius: 999px; }
 /* Adaptació del disseny B1 als contenidors de Streamlit. */
 .stApp {background:var(--fons);color:var(--tinta);font:17px/1.5 -apple-system,"Segoe UI",system-ui,sans-serif;}
@@ -45,7 +45,7 @@ h2,h3 {letter-spacing:-.02em;}
 .st-key-targetes [data-testid="stHorizontalBlock"] {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;}
 .st-key-targetes [data-testid="stColumn"] {width:100%!important;min-width:0!important;}
 .st-key-targetes [data-testid="stVerticalBlockBorderWrapper"] {background:white;border-radius:16px;}
-.st-key-targetes button {color:var(--blau);border:0;background:transparent;padding-left:0;}
+.st-key-targetes button {color:#256abf;border:0;background:transparent;padding-left:0;}
 .estat {margin:0 0 8px;}
 .aules {display:grid;grid-template-columns:repeat(7,28px);gap:6px;margin:12px 0;}
 .aules i {width:28px;height:28px;border-radius:6px;background:var(--blau);}
@@ -58,7 +58,8 @@ h2,h3 {letter-spacing:-.02em;}
 .rajoles {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}
 .rajola {border-radius:8px;padding:8px;font-size:13px;position:relative;}
 .rajola b {display:block;}
-.rajola:hover,.rajola:focus {outline:2px solid var(--blau);}
+.rajola:focus-visible {outline:2px solid #256abf;outline-offset:2px;}
+@media (hover:hover) {.rajola:hover {outline:2px solid #256abf;}}
 .escala {font-size:14px;color:var(--tinta-2);}
 .escala i {display:inline-block;width:100px;height:12px;background:linear-gradient(to right,#cde2fb,#184f95);border-radius:3px;margin:0 8px;}
 @media(max-width:1000px) {.espines {grid-template-columns:repeat(2,minmax(0,1fr));}.block-container {padding:24px 20px 60px;}}
@@ -72,14 +73,11 @@ main {padding:0;max-width:none;}
 }
 /* El contingut útil, amb el menú obert, determina quan s'apila l'heroi. */
 .block-container {container-type:inline-size;container-name:contingut;}
-@container contingut (max-width:1100px) {
+@container contingut (max-width:760px) {
  .st-key-heroi [data-testid="stHorizontalBlock"] {flex-direction:column;}
  .st-key-heroi [data-testid="stColumn"] {width:100%!important;flex:1 1 100%!important;min-width:0!important;}
 }
-@media(max-width:1100px) {
- .st-key-heroi [data-testid="stHorizontalBlock"] {flex-direction:column;}
- .st-key-heroi [data-testid="stColumn"] {width:100%!important;flex:1 1 100%!important;min-width:0!important;}
-}
+
 .aules {grid-template-columns:repeat(7,minmax(0,28px));max-width:100%;}
 .aules i {width:100%;height:auto;aspect-ratio:1;}
 .aules-peu {word-break:normal;overflow-wrap:normal;hyphens:none;white-space:normal;max-width:38rem;}
@@ -121,7 +119,7 @@ main {padding:0;max-width:none;}
  flex-direction: column;
 }
 .targeta-cor {display:flex;flex-direction:column;gap:12px;}
-.targeta-cor h3,.targeta-cor p {margin:0;}
+.targeta-cor h2,.targeta-cor p {margin:0;}
 .targeta-cor .estat {align-self:flex-start;}
 .st-key-targetes .proposem {
  margin-top: auto;
@@ -132,5 +130,19 @@ main {padding:0;max-width:none;}
  flex: 0 0 auto;
 }
 .desglos:empty {display:none;}
-/* Streamlit conserva els elements antics durant una recàrrega: els amaguem. */
-[data-testid="stMain"] [data-stale="true"] {visibility:hidden;}
+/* Manté el context visible mentre es recalculen les dades. */
+[data-testid="stMain"] [data-stale="true"] {opacity:.6;}
+
+.targeta-cor p {font-size:17px;line-height:1.5;color:#52514e;}
+.franja-context {font-size:16px;color:#52514e;margin:0 0 20px;}
+.franja-context strong {font-weight:600;}
+.marca-escola {font-size:20px;font-weight:700;margin-bottom:24px;}
+.st-key-heroi button {color:#256abf;}
+@media (max-width:650px) {.st-key-targetes .proposem {min-height:0;}}
+
+.st-key-heroi h2.pregunta {font-size:18px!important;font-weight:400;line-height:1.5;}
+.st-key-heroi:has(h2.pregunta) h3 {font-size:clamp(32px,4vw,48px)!important;line-height:1.05;}
+
+.st-key-torna button {color:#256abf;}
+
+.targeta-cor h2 {font-size:20px!important;line-height:1.3;}

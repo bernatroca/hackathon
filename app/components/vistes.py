@@ -5,6 +5,7 @@ from mostra import exemples
 from presentacio import text, abast, desglos, valor
 from servei import una
 from textos import PROBLEMES
+from errors import mostra_error
 
 
 def carrega(id_):
@@ -15,11 +16,11 @@ def carrega(id_):
         return una(id_, st.session_state.semestre, st.session_state.setmana, st.session_state.versio)
     except KeyError as exc:
         if exc.args != (id_,):
-            st.error(f'Error de dades a «{id_}»: {exc}')
+            mostra_error()
             return None
         return exemples().get(id_)
     except Exception as exc:
-        st.error(f'No s’ha pogut carregar «{id_}»: {exc}')
+        mostra_error()
         return None
 
 
@@ -36,8 +37,11 @@ def contingut(t):
 
 
 def estat(info):
-    icona = {'vermell':'✕','ambre':'!','verd':'✓'}[info['estat']]
-    return f'<span class="estat {info["estat"]}">{icona} {escape(info["etiqueta"])}</span>'
+    cami = {'vermell': '<path d="m5 5 6 6m0-6-6 6"/>',
+            'ambre': '<path d="M8 4v5m0 2v1"/>',
+            'verd': '<path d="m4.5 8 2.5 2.5 4.5-5"/>'}[info['estat']]
+    svg = f'<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="7" fill="currentColor"/><g fill="none" stroke="#fff" stroke-width="2">{cami}</g></svg>'
+    return f'<span class="estat {info["estat"]}">{svg}{escape(info["etiqueta"])}</span>'
 
 
 def mostra_avis(t):
@@ -48,6 +52,7 @@ def mostra_avis(t):
 def obre(t):
     if st.button('Com ho sabem →',key='obre-'+t.id):
         st.session_state.detall_id = t.id
+        st.query_params['resposta'] = t.id
         st.rerun()
 
 
@@ -58,7 +63,7 @@ def heroi(t):
         esquerra,dreta = st.columns([3,1],gap='large')
         with esquerra:
             st.markdown(estat(info),unsafe_allow_html=True)
-            st.markdown(f'<p class="pregunta">{escape(info["titol"])}</p>',unsafe_allow_html=True)
+            st.markdown(f'<h2 class="pregunta">{escape(info["titol"])}</h2>',unsafe_allow_html=True)
             st.subheader(info['c']['resposta'])
             st.write(info['frase'])
             if info['c'].get('coll_ampolla'):
@@ -66,7 +71,10 @@ def heroi(t):
             obre(t)
         with dreta:
             quadrets(t)
-        st.caption(abast(t))
+        st.caption(('Setmana més plena per al pic: ' if st.session_state.get('setmana') is None else 'Setmana seleccionada: ') + str((t.extra or {}).get('setmana', 'no indicada')))
+        torns = (t.extra or {}).get('torns')
+        if torns is not None and 'setmana_pitjor' in torns:
+            st.caption('Balanç de cada torn a la seva setmana més plena: ' + ' · '.join(f"{r.torn}: {r.setmana_pitjor}" for r in torns.itertuples()))
         st.caption('El recompte orienta sobre l’espai necessari; cal validar que les classes es poden repartir en un horari.')
 
 
@@ -79,7 +87,7 @@ def targeta(t, posicio=0):
         if percent is not None:
             metre = f'<div class="metre" role="img" aria-label="{percent:.1f} %"><i style="width:{max(0,min(100,percent)):.2f}%;background:var(--blau)"></i></div>'
         detall_desglos = desglos(t.extra) if t.id == 'hores-aula' else ''
-        st.markdown(f'<article class="targeta-cor">{estat(info)}<h3>{escape(info["titol"])}</h3>'
+        st.markdown(f'<article class="targeta-cor">{estat(info)}<h2>{escape(info["titol"])}</h2>'
             f'<div class="xifra-targeta">{escape(info["c"]["xifra"])}</div>'
             f'<p class="desglos">{escape(detall_desglos)}</p>{metre}<p>{escape(info["frase"])}</p></article>',unsafe_allow_html=True)
         # Un sol peu natiu: la proposta i el botó comparteixen l'alineació.
@@ -95,7 +103,7 @@ def detall(t):
     info = contingut(t)
     mostra_avis(t)
     st.markdown(estat(info),unsafe_allow_html=True)
-    st.title(info['titol'])
+    st.header(info['titol'])
     resposta = info['c'].get('resposta',info['c']['xifra'])
     st.markdown(f'<div class="xifra-targeta resposta-gran">{escape(resposta)}</div>',unsafe_allow_html=True)
     st.caption(abast(t) + ' · La xifra principal resumeix el semestre; la comparació mostra la setmana seleccionada.'
@@ -115,7 +123,7 @@ def detall(t):
         st.caption('El gràfic mostra com a màxim les vuit categories amb més casos de la setmana. La llista inclou també la resta i les recomanacions sense recompte; les categories poden coincidir en una mateixa classe.')
     st.subheader('Com ho hem calculat')
     st.write(info.get('metode_planer', 'Consulta les definicions detallades al desplegable tècnic.'))
-    with st.expander('Per a tècnics: consulta SQL i sessions d’exemple',expanded=False):
+    with st.expander('Detalls informàtics: consulta SQL i identificadors',expanded=False):
         st.write(t.metode)
         st.code(t.sql,language='sql')
         st.caption('id_sessio per buscar al CSV original')
@@ -126,11 +134,19 @@ def detall(t):
 
 
 def detall_obert():
-    id_ = st.session_state.get('detall_id')
+    id_ = st.query_params.get('resposta') or st.session_state.get('detall_id')
     if not id_:
         return False
     if st.button('← Torna a les respostes',key='torna'):
         st.session_state.detall_id = None
+        st.query_params.pop('resposta', None)
         st.rerun()
     detall(carrega(id_))
     return True
+
+
+def franja_context(semestre, setmana, tipica=None):
+    nom = '2n' if semestre == 2 else '1r'
+    etiqueta = 'setmana típica' if setmana is None else 'setmana'
+    valor = setmana or tipica or 'pendent de carregar'
+    return f'<div class="franja-context"><strong>{nom} semestre</strong> · <strong>{etiqueta}</strong> {escape(str(valor))}</div>'

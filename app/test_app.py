@@ -30,7 +30,7 @@ class TestApp(unittest.TestCase):
     def test_portada_real(self):
         app = self.carrega()
         self.comprova(app)
-        self.assertTrue(any(t.value == 'Espais de l’Escola' for t in app.title))
+        self.assertEqual(len(app.title),1)
         self.assertTrue(any(t.value == 'Com estem avui' for t in app.title))
         self.assertTrue(any(t.value == 'Hi ha marge d’hores' for t in app.subheader))
         self.assertFalse(any('Sí, però just' in m.value for m in list(app.markdown)+list(app.subheader)))
@@ -46,7 +46,7 @@ class TestApp(unittest.TestCase):
             self.assertTrue(any(s.value == 'Què vol dir' for s in app.subheader))
             self.assertTrue(any(s.value == 'Com ho hem calculat' for s in app.subheader))
             self.assertTrue(any(s.language == 'sql' for s in app.code))
-            self.assertFalse(next(e for e in app.expander if e.label.startswith('Per a tècnics')).proto.expanded)
+            self.assertFalse(next(e for e in app.expander if e.label.startswith('Detalls informàtics')).proto.expanded)
             self.assertEqual(len(app.get('plotly_chart')),1)
             app.button(key='torna').click().run(timeout=90)
 
@@ -221,6 +221,90 @@ preguntes.mostra()
         for peu in peus:
             self.assertEqual(len(peu.button),1)
             self.assertIn('Proposem:',peu.markdown[0].value)
+
+    def test_bloc_gran_vermell_quan_falta_mida(self):
+        from servei import totes, versio_registre
+        mapa = {t.id:copy.deepcopy(t) for t in totes(2,None,versio_registre())}
+        t = mapa['hi-cap-mati']
+        t.extra.update(falla_per_mida=True, coll_ampolla={'llindar':88,'torn':'tarda',
+            'setmana':'2027-W06','demanda_h':120.,'oferta_h':100.})
+        t.extra['per_mida'] = pd.DataFrame([{'llindar':88,'falla':True,'demanda_h':120.,'oferta_h':100.}])
+        with patch('components.vistes.una',side_effect=lambda id_, *args:mapa[id_]):
+            app = self.carrega()
+        self.comprova(app)
+        self.assertTrue(any('Falten aules d’algunes mides' == h.value for h in app.subheader))
+        html = '\n'.join(m.value for m in app.markdown)
+        self.assertIn('estat vermell',html)
+        self.assertIn('Cal actuar',html)
+        self.assertIn('en falten 20 h',html)
+        self.assertIn('a la tarda',html)
+        self.assertIn('2027-W06',html)
+        self.assertIn('aria-hidden="true"',html)
+        t.extra['falla_per_mida'] = False
+        self.assertEqual(text(t)['estat'],'vermell')
+
+    def test_adreca_detall_franja_i_dades(self):
+        app = AppTest.from_file(str(ARREL/'app.py'))
+        app.query_params['resposta'] = 'fora-torn'
+        app.run(timeout=90)
+        self.comprova(app)
+        self.assertEqual(len(app.title),1)
+        self.assertTrue(any(h.value == 'Classes al torn equivocat' for h in app.header))
+        self.assertTrue(any(e.label == 'Veure les dades' for e in app.expander))
+        self.assertGreater(len(app.dataframe),0)
+        html = '\n'.join(m.value for m in app.markdown)
+        self.assertIn('2n semestre',html)
+        self.assertIn('setmana típica',html)
+        self.assertIn('2027-W',html)
+        self.assertIn(app.query_params['resposta'],('fora-torn',['fora-torn']))
+        app.button(key='torna').click().run(timeout=90)
+        self.comprova(app)
+        self.assertNotIn('resposta',app.query_params)
+        app.button(key='obre-fora-torn').click().run(timeout=90)
+        self.assertIn(app.query_params['resposta'],('fora-torn',['fora-torn']))
+
+    def test_error_planer_sense_excepcio_visible(self):
+        from errors import MISSATGE
+        with patch('components.vistes.una',side_effect=RuntimeError('DETALL PRIVAT')), \
+                self.assertLogs('espais.part1',level='ERROR'):
+            app = self.carrega()
+        self.assertEqual(list(app.exception),[])
+        self.assertGreater(len(app.error),0)
+        self.assertTrue(all(e.value == MISSATGE for e in app.error))
+        self.assertFalse(any('DETALL PRIVAT' in m.value for m in app.markdown))
+
+    def test_taula_completa_i_barres_limitades(self):
+        from components.grafics import barres
+        app = AppTest.from_string("""
+import pandas as pd
+from components.grafics import barres
+from components.taules import mostra_taula
+barres([str(i) for i in range(12)],list(range(12)),'casos',' casos')
+with __import__('streamlit').expander('Veure les dades'):
+    mostra_taula(pd.DataFrame({'hores':list(range(12))}))
+""").run(timeout=90)
+        self.comprova(app)
+        self.assertTrue(any(c.value == 'Es mostren els 8 casos amb el valor més alt.' for c in app.caption))
+        self.assertEqual(len(app.dataframe[0].value),12)
+        self.assertIn('Temps d’espera (h)',app.dataframe[0].value.columns)
+        with patch('components.grafics.st.plotly_chart') as mostra:
+            barres(['A','B'],[1,2],'petit')
+        fig = mostra.call_args.args[0]
+        self.assertEqual(fig.data[0].marker.cornerradius,4)
+        self.assertLessEqual((fig.layout.height-60)/2 * fig.data[0].width,24)
+
+    def test_part2_amb_css_compartit(self):
+        app = AppTest.from_string(f"""
+from pathlib import Path
+import streamlit as st
+from pagines import part2
+st.markdown('<style>'+Path({str(ARREL/'estil.css')!r}).read_text()+'</style>',unsafe_allow_html=True)
+st.title('Part 2 · Proposta d’horari')
+part2.mostra()
+""").run(timeout=90)
+        self.assertEqual(list(app.exception),[])
+        self.assertEqual(list(app.error),[])
+        self.assertTrue(any(h.value == 'La setmana de l’estudiant' for h in app.subheader))
 
     def test_canvi_semestre(self):
         app = self.carrega()

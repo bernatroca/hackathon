@@ -56,6 +56,33 @@ def coll_ampolla(extra):
     return f'El més ajustat: les aules de més de {numero(mida)} places, {torn}, la setmana {setmana}.'
 
 
+def falta_mida(extra):
+    """Descriu el dèficit amb les mateixes hores que retorna el mòdul de dades."""
+    candidats = []
+    coll = taula_extra(extra.get('coll_ampolla', []))
+    if not coll.empty:
+        candidats.append(coll)
+    for nom in ('per_mida_setmanes', 'per_mida'):
+        df = taula_extra(extra.get(nom, []))
+        if 'variant' in df:
+            df = df[df.variant == 'oficial']
+        if {'demanda_h','oferta_h'}.issubset(df.columns):
+            candidats.append(df[df.demanda_h > df.oferta_h])
+    for df in candidats:
+        if df.empty:
+            continue
+        for r in df.to_dict('records'):
+            demanda, oferta = r.get('demanda_h'), r.get('oferta_h')
+            if demanda is None or oferta is None or demanda <= oferta:
+                continue
+            torn = 'al matí' if r.get('torn', 'mati') in ('mati','matí') else 'a la tarda'
+            setmana = r.get('setmana', extra.get('setmana', 'no indicada'))
+            mida = r.get('llindar', 0)
+            lloc = f'Per a grups de més de {numero(mida)} alumnes' if mida and mida > 0 else 'Per al torn en conjunt'
+            return f'{lloc}, {torn}, la setmana {setmana}, calen {numero(demanda)} h d’aula i se n’ofereixen {numero(oferta)}: en falten {numero(demanda-oferta)} h.'
+    return coll_ampolla(extra) or 'El balanç per mida indica un dèficit; el resultat encara no concreta les hores que falten.'
+
+
 def desglos(extra):
     df = taula_extra(extra.get('desglos', []))
     if df.empty:
@@ -85,8 +112,12 @@ def context(t, altres=None):
         if 'ocupacio_pct' in ocupacio and not ocupacio.empty:
             c['ocupacio'] = numero(round(float(ocupacio.iloc[0].ocupacio_pct)))
         mida = pd.DataFrame(extra.get('per_mida', []))
-        c['falla'] = ('falla' in mida and bool(mida.falla.any())) or c.get('pic_n', 0) > AULES_DISPONIBLES
-        c['resposta'] = 'Hi ha marge d’hores'
+        c['falla'] = bool(extra.get('falla_per_mida', False)) or ('falla' in mida and bool(mida.falla.any()))
+        totes_mides = taula_extra(extra.get('per_mida_setmanes', []))
+        if 'variant' in totes_mides:
+            totes_mides = totes_mides[totes_mides.variant == 'oficial']
+        c['falla'] = c['falla'] or ('falla' in totes_mides and bool(totes_mides.falla.any()))
+        c['resposta'] = 'Falten aules d’algunes mides' if c['falla'] else 'Hi ha marge d’hores'
         c['torns'] = f"Matí {c['ocupacio']} %. Que l’horari encaixi de debò ho valida la part 2."
         torns = taula_extra(extra.get('torns', []))
         if {'torn', 'ocupacio_pct'}.issubset(torns.columns):
@@ -130,7 +161,9 @@ def text(t, altres=None):
         if t.id == 'marge-grau-nou':
             resultat['frase'] = f"Necessita {c['hores_noves']} h d’aula a la setmana i en queden {c['hores_lliures']} h lliures. Algunes mides d’aula no cobreixen la demanda."
     if t.id == 'hi-cap-mati':
-        resultat.update(etiqueta='Pendent de validar', estat='ambre', frase=c['torns'])
+        resultat.update(etiqueta='Cal actuar' if c['falla'] else 'Pendent de validar',
+            estat='vermell' if c['falla'] else 'ambre',
+            frase=c['torns'] + (' ' + falta_mida(t.extra) if c['falla'] else ''))
     if t.id == 'marge-grau-nou' and (t.extra.get('estat_provisional') or not t.extra.get('validat_part2', False)):
         resultat.update(etiqueta='Pendent de validar', estat='ambre')
     resultat.update(c=c)
