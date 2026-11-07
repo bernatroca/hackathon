@@ -34,7 +34,7 @@ def sessio(sid, tipus='TE', grup='TE/81', data=date(2027, 3, 8), **kwargs):
 
 def crea_base():
     sessions = [sessio('S90001'), sessio('S90002', 'PAUL', 'PAUL/811'),
-        sessio('S90003', 'SEM', 'SEM/907'), sessio('S90004', grup='TE/914'),
+        sessio('S90003', 'SEM', 'SEM/813'), sessio('S90004', grup='TE/914'),
         sessio('S90005', 'PLAB', 'PLAB/905'),
         sessio('S90006', data=date(2027, 3, 15))]
     return Base({s.id: s for s in sessions}, {})
