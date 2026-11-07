@@ -31,15 +31,15 @@ def pregunta():
 # La navegació i la capçalera s'envien abans de qualsevol lectura de dades.
 pagina = st.navigation({
     'Com està l’horari': [
-        st.Page(portada.mostra,title='Com estem avui',url_path='avui',default=True),
-        st.Page(preguntes.mostra,title='Totes les respostes',url_path='respostes'),
+        st.Page(portada.mostra,title='Com estem avui',url_path='avui',default=True,icon=':material/dashboard:'),
+        st.Page(preguntes.mostra,title='Totes les respostes',url_path='respostes',icon=':material/list_alt:'),
     ],
     'La proposta': [
-        st.Page(part2.mostra,title='Horari proposat',url_path='part2'),
-        st.Page(junta.mostra,title='Resum per a la Junta',url_path='junta'),
-        st.Page(imprevistos,title='Imprevistos · aviat'),
+        st.Page(part2.mostra,title='Horari proposat',url_path='part2',icon=':material/calendar_month:'),
+        st.Page(junta.mostra,title='Resum per a la Junta',url_path='junta',icon=':material/description:'),
+        st.Page(imprevistos,title='Imprevistos · aviat',icon=':material/event_busy:'),
     ],
-    'Ajuda': [st.Page(pregunta,title='Pregunta-ho · aviat')],
+    'Ajuda': [st.Page(pregunta,title='Pregunta-ho · aviat',icon=':material/chat:')],
 })
 with st.sidebar:
     st.markdown('<div class="marca-escola">Espais de l’Escola</div>', unsafe_allow_html=True)

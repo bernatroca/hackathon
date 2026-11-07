@@ -71,11 +71,13 @@ def heroi(t):
             obre(t)
         with dreta:
             quadrets(t)
-        st.caption(('Setmana més plena per al pic: ' if st.session_state.get('setmana') is None else 'Setmana seleccionada: ') + str((t.extra or {}).get('setmana', 'no indicada')))
+        # Una sola línia de context perquè la portada càpiga a la primera pantalla.
+        parts = [('Setmana més plena per al pic: ' if st.session_state.get('setmana') is None else 'Setmana seleccionada: ')
+                 + str((t.extra or {}).get('setmana', 'no indicada'))]
         torns = (t.extra or {}).get('torns')
         if torns is not None and 'setmana_pitjor' in torns:
-            st.caption('Balanç de cada torn a la seva setmana més plena: ' + ' · '.join(f"{r.torn}: {r.setmana_pitjor}" for r in torns.itertuples()))
-        st.caption('El recompte orienta sobre l’espai necessari; cal validar que les classes es poden repartir en un horari.')
+            parts.append('més plena de cada torn: ' + ', '.join(f"{r.torn} {r.setmana_pitjor}" for r in torns.itertuples()))
+        st.caption(' · '.join(parts) + '. És una orientació: cal validar que les classes es poden repartir en un horari.')
 
 
 def resum_grau(info):
@@ -97,7 +99,8 @@ def targeta(t, posicio=0):
         xifra = resum_grau(info) if t.id == 'marge-grau-nou' else f'<div class="xifra-targeta">{escape(info["c"]["xifra"])}</div>'
         st.markdown(f'<article class="targeta-cor">{estat(info)}<h2>{escape(info["titol"])}</h2>'
             f'{xifra}'
-            f'<p class="desglos">{escape(detall_desglos)}</p>{metre}<p>{escape(info["frase"])}</p></article>',unsafe_allow_html=True)
+            f'<p class="desglos">{escape(detall_desglos)}</p>{metre}'
+            f'{"" if t.id == "marge-grau-nou" else "<p>" + escape(info["frase"]) + "</p>"}</article>',unsafe_allow_html=True)
         # Un sol peu natiu: la proposta i el botó comparteixen l'alineació.
         with st.container(key='peu-targeta-'+t.id):
             st.markdown(f'<div class="proposem"><b>Proposem:</b> {escape(info["proposem"])}</div>',unsafe_allow_html=True)

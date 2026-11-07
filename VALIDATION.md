@@ -85,6 +85,13 @@
 24. [cap @ /respostes] Mira el filtre «Estat» → «Cal actuar» en vermell amb la creu, «Vigilar» en groc amb el signe d'admiració i «Hi cap» en verd amb el check, com les etiquetes de les targetes.
 25. [cap @ /respostes] Desmarca «Vigilar» → la pastilla queda blanca amb la icona grisa, i torna a tenir color en marcar-la.
 26. [cap @ /respostes] Mira la pastilla «Hi cap» del filtre → el verd és més apagat que abans i es llegeix bé.
+27. [cap @ /] Obre la portada en un portàtil (1.440 × 900) amb el menú obert → es veu tot sense fer scroll: el títol, la resposta gran i les quatre caixes en una fila. (reprova)
+28. [cap @ /] Plega el menú amb ««» → la portada continua cabent a la pantalla.
+29. [cap @ /] Amb el menú plegat, mira a dalt a l'esquerra → hi ha un botó blanc amb «»» ben visible, que no tapa el títol, i en prémer-lo s'obre el menú.
+30. [cap @ /] Mira el menú lateral → els noms de les seccions («Com està l'horari», «La proposta», «Ajuda») surten en majúscules i negreta, diferents de les pàgines.
+31. [cap @ /] Mira les pàgines del menú → cadascuna té una icona al davant.
+32. [cap @ /] Fes la finestra de mòbil (375 px) i plega el menú → el botó d'obrir-lo no tapa «Com estem avui».
+33. [cap @ /] Fes scroll a la portada → cap barra talla la part de dalt del contingut.
 
 ## Part 2 · Proposta d'horari
 

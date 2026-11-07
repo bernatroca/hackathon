@@ -166,3 +166,55 @@ main {padding:0;max-width:none;}
 header[data-testid="stHeader"] {background:transparent!important;height:0!important;min-height:0!important;box-shadow:none!important;border:0!important;}
 [data-testid="stDecoration"] {display:none!important;}
 [data-testid="stSidebarHeader"] {height:auto!important;min-height:0!important;padding:12px 16px 0!important;margin-bottom:0!important;}
+
+/* ds 21:30 · Botó per obrir el menú: sempre visible, a dalt a l'esquerra, quan el menú està plegat. */
+[data-testid="stExpandSidebarButton"] {
+ position:fixed!important;top:12px!important;left:12px!important;z-index:1000001;
+ width:40px!important;height:40px!important;border-radius:10px!important;
+ background:#fff!important;border:1px solid var(--linia)!important;box-shadow:0 1px 3px rgba(0,0,0,.12)!important;
+ display:flex!important;align-items:center;justify-content:center;
+}
+[data-testid="stExpandSidebarButton"] span {color:var(--tinta)!important;}
+[data-testid="stExpandSidebarButton"]:hover {border-color:#256abf!important;}
+[data-testid="stExpandSidebarButton"]:focus-visible {outline:2px solid #256abf;outline-offset:2px;}
+
+/* Menú: els noms de les seccions es distingeixen de les pàgines. */
+[data-testid="stNavSectionHeader"] {
+ font-size:13px!important;font-weight:700!important;color:var(--tinta)!important;
+ text-transform:uppercase;letter-spacing:.06em;margin:18px 0 6px!important;padding-left:8px;
+}
+[data-testid="stNavSectionHeader"] * {font-weight:700!important;color:var(--tinta)!important;}
+[data-testid="stSidebarNavItems"] > :first-child [data-testid="stNavSectionHeader"],
+[data-testid="stSidebarNavItems"] [data-testid="stNavSectionHeader"]:first-child {margin-top:4px!important;}
+[data-testid="stSidebarNavLink"] {padding-left:14px!important;}
+[data-testid="stSidebarNavLink"] span {font-size:15px;}
+
+/* Portada: tot a la primera pantalla d'un portàtil (1.440 × 900). */
+.block-container {padding-top:24px!important;}
+h1 {font-size:28px!important;margin-bottom:0!important;}
+.franja-context {margin:0 0 8px;}
+.st-key-heroi {padding:18px 24px;margin:8px 0 16px;}
+.st-key-heroi h2,.st-key-heroi:has(h2.pregunta) h3 {font-size:clamp(26px,2.6vw,34px)!important;margin:2px 0 4px;}
+.st-key-heroi h2.pregunta {font-size:16px!important;margin:0!important;}
+.st-key-heroi p {margin:0 0 4px;font-size:15px;}
+.st-key-heroi [data-testid="stCaptionContainer"] p {font-size:13px;margin:0;}
+.st-key-heroi [data-testid="stVerticalBlock"] {gap:6px;}
+.aules {grid-template-columns:repeat(7,minmax(0,22px));gap:5px;margin:4px 0;}
+@container contingut (min-width:1000px) {
+ .st-key-targetes [data-testid="stHorizontalBlock"] {grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;}
+}
+.st-key-targetes .targeta-cor {gap:6px;}
+.st-key-targetes .targeta-cor h2 {font-size:16px!important;}
+.st-key-targetes .xifra-targeta {font-size:clamp(22px,2vw,28px);margin:0;}
+.st-key-targetes .targeta-cor p {font-size:14px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+.st-key-targetes .desglos:not(:empty) {font-size:13px!important;}
+.st-key-targetes .proposem {font-size:13px;line-height:1.4;padding-top:6px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+.st-key-targetes [data-testid="stVerticalBlock"] {gap:6px;}
+.st-key-targetes button {font-size:14px;min-height:0;padding-top:0;padding-bottom:0;}
+/* Portada: menys aire entre els elements de dalt perquè també hi càpiga amb el menú obert. */
+.block-container:has(.st-key-heroi) {padding-top:16px!important;}
+.block-container:has(.st-key-heroi) [data-testid="stVerticalBlock"] {gap:10px;}
+.block-container:has(.st-key-heroi) h1 {padding:0!important;}
+.block-container:has(.st-key-heroi) .st-key-heroi {margin:4px 0 8px;}
+/* Amb el menú plegat, el botó per obrir-lo no tapa el títol. */
+.stApp:has([data-testid="stExpandSidebarButton"]) .block-container {padding-top:64px!important;}
