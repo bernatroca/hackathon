@@ -53,7 +53,7 @@ def dades_inventades():
                    'justificacio': 'L’aula està tancada; canviem l’aula d’una classe fixada i conservem el dia i l’hora.'}]
     noms = {s.codi: f'Assignatura Inventada {i + 1}' for i, s in enumerate(sessions)}
     return calcula(base, contingencies, abans, despres, relaxacions,
-                   resum={'veredicte': 'VALIDA AMB RELAXACIONS DECLARADES', 'temps_s': 1.24}, noms=noms)
+                   resum={'temps_s': 1.24}, informe={'veredicte': 'VALIDA AMB RELAXACIONS DECLARADES'}, noms=noms)
 
 
 if __name__ == '__main__':

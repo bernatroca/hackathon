@@ -1,5 +1,6 @@
 """Imprevistos sobre l'horari proposat; admet dades inventades injectades."""
 import csv
+import hashlib
 from html import escape
 import json
 from pathlib import Path
@@ -48,7 +49,16 @@ def _fitxers():
     from nivell2.base import RESULTATS_PRINCIPAL
     abans, despres = RESULTATS_PRINCIPAL / '5.2', RESULTATS_PRINCIPAL / '5.3'
     return (abans / 'proposta.csv', despres / 'proposta.csv',
-            abans / 'relaxacions.csv', despres / 'relaxacions.csv', despres / 'resum.json')
+            abans / 'relaxacions.csv', despres / 'relaxacions.csv', despres / 'informe.json',
+            despres / 'resum.json')
+
+
+def _informe_validat(path, proposta):
+    informe = json.loads(path.read_text(encoding='utf-8'))
+    sha = hashlib.sha256(proposta.read_bytes()).hexdigest()
+    if informe.get('context', {}).get('proposta_sha256') != sha:
+        raise ValueError('L’informe oficial no correspon al CSV actual.')
+    return informe
 
 
 def _llegeix_relaxacions(path):
@@ -62,32 +72,35 @@ def _llegeix_relaxacions(path):
 def _carrega(paths, versions):
     """Les versions dels resultats invaliden la memòria cau en regenerar-los."""
     from nivell2.base import CONTINGENCIES, PAQUET, Proposta, carrega_oficial
-    abans, despres, relax_abans, relax_despres, resum = map(Path, paths)
+    abans, despres, relax_abans, relax_despres, informe_path, resum = map(Path, paths)
+    informe = _informe_validat(informe_path, despres)
     with (PAQUET / 'activitats.csv').open(encoding='utf-8-sig', newline='') as f:
         noms = {r['codi']: r['assignatura'] for r in csv.DictReader(f)}
     return calcula(carrega_oficial(), carrega_oficial(CONTINGENCIES),
                    Proposta.llegeix(abans), Proposta.llegeix(despres),
                    _llegeix_relaxacions(relax_despres),
                    relaxacions_referencia=_llegeix_relaxacions(relax_abans),
-                   resum=json.loads(resum.read_text(encoding='utf-8')), noms=noms)
+                   resum=json.loads(resum.read_text(encoding='utf-8')) if resum.is_file() else {},
+                   informe=informe, noms=noms)
 
 
 def carrega():
     paths = _fitxers()
     if not paths[1].is_file():
         return None
-    # El resum oficial és necessari per mostrar un veredicte.
+    # Només un informe oficial corresponent al CSV permet mostrar un veredicte.
     if not paths[0].is_file() or not paths[4].is_file():
         raise ValueError('La proposta és incompleta.')
     return _carrega(tuple(map(str, paths)),
-                    tuple(p.stat().st_mtime_ns if p.is_file() else None for p in paths))
+                    tuple((p.stat().st_mtime_ns, hashlib.sha256(p.read_bytes()).hexdigest())
+                          if p.is_file() else None for p in paths))
 
 
 def veredicte(resum):
     valor = resum.get('veredicte', '')
     if valor in ('VALIDA', 'VALIDA AMB RELAXACIONS DECLARADES'):
         return 'verd', 'Comprovat amb el verificador oficial'
-    if valor == 'INVALIDA':
+    if valor in ('NO VALIDA', 'INVALIDA'):
         return 'vermell', 'La proposta no supera la comprovació oficial'
     return 'ambre', 'Pendent de comprovació oficial'
 
@@ -124,12 +137,20 @@ def resum_html(resum):
     xifres.append((durada, 'temps de càlcul'))
     excepcions = (' Amb les excepcions declarades.'
                   if resum.get('veredicte') == 'VALIDA AMB RELAXACIONS DECLARADES' else '')
+    oficials = resum.get('canvis_aula_oficials')
+    recuperades = resum.get('canvis_aula_recuperades', 0)
+    nota = ''
+    if (oficials is not None and recuperades
+            and resum['canvis_aula_vs_referencia'] == oficials+recuperades):
+        nota = (f'<p>El CSV inclou {resum["canvis_aula_vs_referencia"]} canvis d’aula. '
+                f'El verificador en compta {oficials}: no compta el canvi d’aula '
+                'de la classe cancel·lada que recuperem.</p>')
     return ('<section class="imp-resum" aria-label="Resum de la proposta">'
             + estat({'estat': color, 'etiqueta': text})
             + '<p>Canvis respecte de l’horari proposat.' + excepcions + '</p>'
             + '<div class="imp-xifres">'
             + ''.join(f'<div><b>{escape(str(n))}</b> <span>{etiqueta}</span></div>' for n, etiqueta in xifres)
-            + '</div></section>')
+            + '</div>' + nota + '</section>')
 
 
 def targetes_html(targetes, validada=True):
@@ -178,8 +199,6 @@ def mostra(dades=None):
     """La navegació posa el títol; la prova autònoma també el posa abans."""
     with st.container(key='imp-pagina'):
         st.markdown(CSS, unsafe_allow_html=True)
-        st.markdown('<p class="imp-intro">Partim de l’horari proposat i només movem '
-                    'les classes afectades.</p>', unsafe_allow_html=True)
         try:
             if dades is None:
                 dades = carrega()
@@ -188,6 +207,9 @@ def mostra(dades=None):
                 st.code(ORDRE, language='bash')
                 return
             resum = dades['resum']
+            st.markdown('<p class="imp-intro">Partim de l’horari proposat i recol·loquem '
+                        'les classes afectades. ' + suport(resum.get('classes_de_suport', 0))
+                        + '</p>', unsafe_allow_html=True)
             st.markdown(resum_html(resum), unsafe_allow_html=True)
             st.markdown(targetes_html(dades['imprevistos'], veredicte(resum)[0] == 'verd'),
                         unsafe_allow_html=True)

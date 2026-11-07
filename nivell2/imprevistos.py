@@ -28,8 +28,8 @@ def nom_grup(grup, tipus):
 
 def motiu_planer(text):
     """Tradueix les abreviatures que poden venir de les justificacions."""
-    regles = {'R1': 'torn i classes fixades', 'R2': 'coincidències de classes',
-              'R3': 'aules i capacitat', 'R4': 'classes de laboratori',
+    regles = {'R1': 'torn i classes fixades', 'R2': 'finestra horària',
+              'R3': 'aules i capacitat', 'R4': 'solapaments d’aula, professorat o alumnat',
               'R5': 'recuperació de classes', 'R6': 'aula habitual',
               'R7': 'aules de laboratori', 'R8': 'aules de reserva'}
     text = re.sub(r'\bR[1-8](?:-[A-Z0-9_]+)?\b',
@@ -72,12 +72,12 @@ def _relaxacions(files):
 
 
 def calcula(base_52, contingencies, proposta_52, proposta_53, relaxacions, *,
-            relaxacions_referencia=(), resum=None, noms=None):
+            relaxacions_referencia=(), resum=None, informe=None, noms=None):
     """Torna resum, quatre targetes i files ordenades, tots serialitzables.
 
     ``relaxacions`` conté totes les declaracions del 5.3; es resten les del 5.2
-    per sessió, regla i justificació. ``resum`` aporta el veredicte oficial i el
-    temps: no es dedueix la validesa del fet de disposar d'una proposta.
+    per sessió, regla i justificació. ``informe`` aporta el veredicte oficial
+    un cop comprovada l'empremta del CSV pel carregador; ``resum`` només el temps.
     ``noms`` associa codis amb noms d'assignatura, sense exposar-ne els codis.
     """
     ids = set(base_52.sessions)
@@ -86,6 +86,7 @@ def calcula(base_52, contingencies, proposta_52, proposta_53, relaxacions, *,
         raise ValueError('Les bases i les propostes han de contenir les mateixes classes.')
     noms = noms or {}
     resum = resum or {}
+    informe = informe or {}
     afectades = {clau: set() for clau, _ in IMPREVISTOS}
     afectades['recuperacio'] = set(contingencies.cancellades)
     if not afectades['recuperacio'] <= ids:
@@ -168,9 +169,11 @@ def calcula(base_52, contingencies, proposta_52, proposta_53, relaxacions, *,
     directes = set().union(*afectades.values())
     return {
         'resum': {
-            'veredicte': resum.get('veredicte', ''), 'temps_s': resum.get('temps_s'),
-            'canvis_aula_vs_referencia': resum.get('canvis_aula_vs_referencia', len(canvis_aula)),
-            'canvis_franja_vs_referencia': resum.get('canvis_franja_vs_referencia', len(canvis_franja)),
+            'veredicte': informe.get('veredicte', ''), 'temps_s': resum.get('temps_s'),
+            'canvis_aula_vs_referencia': len(canvis_aula),
+            'canvis_franja_vs_referencia': len(canvis_franja),
+            'canvis_aula_oficials': informe.get('objectius', {}).get('canvis_aula_vs_referencia'),
+            'canvis_aula_recuperades': len(canvis_aula & set(contingencies.cancellades)),
             'sessions_afectades_per_imprevist': {k: len(v) for k, v in afectades.items()},
             'classes_de_suport': len(mogudes - directes),
             'relaxacions_per_motiu': [{'motiu': motiu, 'sessions': len(sessions)}
