@@ -1,6 +1,6 @@
 # Especificació de la part 2 · Proposta d'horari
 
-> **Estat.** Afinada amb l'equip (entrevista del ds 7-11). No es programa ni es publica res fins que l'equip doni l'OK.
+> **Estat.** Afinada amb l'equip (entrevistes del ds 7-11, matí i tarda). No es programa ni es publica res fins que l'equip doni l'OK.
 > La graella fa servir el disseny confirmat del nivell 1: B1, semàfor amb la resposta en gran (`docs/disseny/opcio-b1-resposta-gran.html`).
 
 ## La pregunta i la persona
@@ -34,9 +34,71 @@ Les regles són per ordre de prioritat. Quan dues xoquen, guanya la primera.
 1. **Les regles del verificador.** Cap relaxació en silenci: totes es declaren amb el motiu.
 2. **La rutina és una prioritat forta, no una regla dura** (decisió del ds 16:25). Planifiquem per activitat (`activitat_id`), no per sessió. Primer intentem que totes les sessions d'una activitat vagin al mateix dia, la mateixa hora i la mateixa aula totes les setmanes. Si el calendari (festius, aturades, avaluació) o una setmana concreta ho impedeixen, s'hi admeten excepcions puntuals: cada una es compta a la taula de xifres i s'explica. La rutina mai no passa per davant del verificador.
 3. **El torn de l'estudiant.** Al 5.1, al 5.3 i al 5.4 cap sessió no canvia de torn. Al 5.2 una sessió només canvia de torn si la regla 1 l'hi obliga. Mai no es mou cap a l'altre torn una sessió que ja és al seu.
-4. **Mínims canvis respecte d'avui.** Un canvi d'hora o de dia pesa més que un canvi d'aula. Quan una sessió s'ha de moure, primer es prova el mateix dia; només si no hi cap, o si hi guanya molt, va a un altre dia.
+4. **Mínims canvis respecte d'avui.** Un canvi d'hora o de dia pesa més que un canvi d'aula (pesos a «Detalls per programar»). Quan una sessió s'ha de moure, primer es prova el mateix dia; només va a un altre dia si no hi cap o si el cost total baixa. La rutina (2) va davant dels mínims canvis (decisió del ds 7-11, tarda).
 5. **Aula base i passadís.** La teoria i els problemes d'un grup, a la mateixa aula o al mateix passadís (mateixa espina i planta).
 6. **Poques hores mortes.** Les classes mogudes s'enganxen a les altres del grup aquell dia.
+
+## Detalls per programar
+
+Decisions de l'equip del ds 7-11 a la tarda. Són el que un subagent necessita per escriure el model sense suposar res.
+
+### Paraules
+
+- **Sessió:** una classe en una data (`id_sessio`). És la fila de la proposta.
+- **Activitat** (`activitat_id`): les sessions d'un mateix grup, dia i hora al llarg del semestre. És la unitat que planifiquem.
+- **Grup d'estudiants:** cohort (titulació i curs, `GED:1r`) i línia (els primers dígits del grup: TE/81, PAUL/811 i PAUL/812 són la línia 8). És el mateix que fa servir el verificador per a l'aula base i les hores mortes.
+- **TE** teoria · **PAUL** problemes d'aula (subgrups de la teoria) · **SEM** seminari · **PLAB** laboratori (no es toca).
+- **Franja:** una hora d'inici possible (vegeu «Hores d'inici»). La reserva de dues aules (R8) es compta per franges d'**una hora** (8.30, 9.30 … 20.30), com fa el verificador.
+- **Passadís:** mateixa espina i planta (Q9/5017 i Q9/5018 són al mateix passadís).
+- **CP-SAT:** el solver de restriccions d'OR-Tools. Acaba amb un d'aquests estats: OPTIMAL (el millor possible), FEASIBLE (n'ha trobat una de bona), INFEASIBLE (ha demostrat que no n'hi ha cap) o UNKNOWN (no ha acabat a temps; no vol dir que sigui impossible).
+
+### Pesos del solver
+
+El solver minimitza la suma d'aquests costos. Són constants en un sol lloc del codi, perquè es puguin canviar.
+
+| Què | Cost |
+|---|---:|
+| Una sessió canvia de dia o d'hora respecte d'avui | 10 |
+| Una sessió canvia d'aula respecte d'avui (si avui en tenia) | 3 |
+| Un canvi d'aula entre dues classes seguides d'un grup fora del mateix passadís | 2 |
+| Cada 30 minuts d'hora morta d'un grup | 1 |
+
+La rutina va per davant: una activitat que trenca la rutina en una setmana es compta a part, i el solver ho evita abans que tota la resta.
+
+### Hores d'inici
+
+- Una classe pot començar **cada mitja hora**: 8.30, 9.00, 9.30 … sempre que acabi dins la finestra del seu torn (matí 8.30-14.30, tarda 14.30-21.00).
+- Les 22 sessions que avui comencen a i quart es queden a la seva hora si no s'han de moure; si es mouen, van a una hora en punt o a i mitja.
+
+### Festius i setmanes diferents
+
+- Els candidats de dia es generen per **data real** (calendari, festius, no lectius, aturades, avaluació).
+- Si una activitat es mou a un dia que alguna setmana és festiu o no lectiu, la sessió d'aquella setmana va a un altre dia lliure de la mateixa setmana i del mateix torn. Compta com a excepció de rutina i s'explica a les xifres.
+
+### Alumnes dels grups sense dada
+
+Ja resolt (commit `e956847`): el model llegeix `dades/alumnes_sense_dada.json` (vegeu «Riscos tècnics»).
+
+### Aules d'altres centres
+
+- Les 35 sessions que avui es fan a **B3/0021** s'hi queden si no canvien de franja. Si el solver les mou de franja, van a l'aulari. No s'hi porta cap sessió nova.
+- Cap sessió del 2n semestre no és avui a les aules J.
+
+### De nit i de dia
+
+- **De nit** (quan no ho fa servir ningú) es fa el càlcul llarg: el 5.2 sencer i les millores. Primer una proposta vàlida i desada, després la millora amb el temps que calgui. Cada proposta bona es desa de seguida.
+- **De dia**, un canvi petit (un imprevist, afegir o moure una classe) triga **menys d'1 minut**. Es fa amb **reparació local**: es parteix de l'horari de nit, es fixen totes les sessions i només es deixen moure les afectades. Si no hi ha solució, s'amplia el cercle pas a pas: les que comparteixen grup, docent o aula; després, el mateix dia; després, la setmana.
+- La reparació és una funció, `repara(proposta, canvi)`, que fan servir el 5.3 i, després, l'assistent del nivell 3. A l'app només hi va si sobra temps.
+
+### Vista de l'estudiant
+
+- Tres selectors: titulació → curs → grup de teoria (GED → 1r → 81).
+- La graella ensenya la setmana de l'estudiant: la teoria del grup i els seus problemes i seminaris (81, 811, 812…).
+
+### Propostes a git
+
+- `.gitignore` ignora `*.csv`. Hi afegim l'excepció `!resultats/nivell2/**/*.csv`, perquè no es perdi una proposta bona feta de nit. Les propostes només porten `id_sessio`, dia, hora i aula.
+- Abans de fer cap `git push` (el repositori és privat a GitHub), l'equip ho revisa amb la norma de les dades (vegeu el diari, ds 12:36).
 
 ## 5.2: què es pot moure
 
@@ -160,7 +222,7 @@ Passa com amb les enquestes: qui té més temps sempre contesta més, i comparar
 - Alternativa: els desdoblaments de PAUL i SEM possibles, i les hores d'aula mitjana que alliberarien.
 - Les fusions proposades, amb el que estalvien.
 
-Format per defecte: una pàgina a l'app i el mateix en PDF. *(L'equip no ho ha triat.)*
+Format: una pàgina a l'app i el mateix exportat a PDF.
 
 ## Visualització
 
@@ -236,4 +298,4 @@ L'entrega és diumenge a les 12:00, i a les 2:00 es congela el codi. L'ordre és
 
 ## Pendent de confirmar
 
-1. El format del resum de la Junta (ara per defecte: una pàgina a l'app i el mateix en PDF).
+Res. L'especificació està a punt per a l'OK de l'equip.

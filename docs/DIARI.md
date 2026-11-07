@@ -137,3 +137,11 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 
 ### [ds 17:40] IA · Recerca de dades amb Claude
 - Claude (orquestrador) va buscar al paquet, l'enunciat, l'ordinador i el Drive (no hi era). Després, al web: va trobar el SIQ i les guies docents i en va llegir les taules.
+
+### [ds 17:47] DECISIÓ · Últims detalls de l'especificació de la part 2
+- La rutina va davant dels mínims canvis. Pesos del solver: canvi de franja 10, d'aula 3, fora del passadís 2, cada 30 min d'hora morta 1.
+- Les classes poden començar cada mitja hora. Si un dia nou és festiu una setmana, aquella sessió va a un altre dia de la mateixa setmana i torn, i compta com a excepció.
+- B3/0021: s'hi queden les 35 sessions si no canvien de franja. Vista de l'estudiant amb selectors titulació → curs → grup. Resum de la Junta a l'app i en PDF.
+- De nit, el càlcul llarg; de dia, un canvi petit triga menys d'1 minut amb reparació local (`repara`, per al 5.3 i el nivell 3).
+- Les propostes de resultats/nivell2/ van a git amb una excepció del .gitignore. Quan acabi la part 2, revisarem com complim la norma de no publicar les dades.
+- PROBLEMA resolt: el commit abe83e1 va tallar l'especificació de 233 a 50 línies; restaurada a 9c3488b.
