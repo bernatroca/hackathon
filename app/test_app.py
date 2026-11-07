@@ -16,6 +16,7 @@ from nivell1.troballes import PORTADA, una
 from components.grafics import grafics
 from presentacio import context, proporcio, text, coll_ampolla
 from servei import AULES_DISPONIBLES, AULES_RESERVA, inventari
+from prova_portada import dades_inventades
 
 
 def grau_inventat():
@@ -39,6 +40,79 @@ def info_inventada(t):
     color = t.extra['estat_inventat']
     return dict(estat=color, etiqueta={'vermell':'Cal actuar','ambre':'Pendent de validar','verd':'Hi cap'}[color],
         titol=t.titol, frase=t.frase, c={'xifra':t.xifra})
+
+
+def portada_inventada():
+    return AppTest.from_string(f"""
+from pathlib import Path
+import streamlit as st
+from prova_portada import dades_inventades
+from pagines import portada
+st.markdown('<style>'+Path({str(ARREL/'estil.css')!r}).read_text()+'</style>',unsafe_allow_html=True)
+if 'resultats' not in st.session_state:
+    st.session_state.resultats = dades_inventades()
+st.session_state.semestre = 2
+st.session_state.setmana = None
+st.session_state.versio = ()
+portada.mostra()
+""").run(timeout=90)
+
+
+class TestPortadaInventada(unittest.TestCase):
+    def test_frases_curtes_i_mateixes_xifres_i_estats(self):
+        from presentacio import text_portada
+        for escenari in ('Validat', 'Pendent de validar', 'Falten aules'):
+            mapa = dades_inventades(escenari)
+            for id_, t in mapa.items():
+                with self.subTest(escenari=escenari, id=id_):
+                    detall = text(t, mapa)
+                    resum = text_portada(t, detall)
+                    self.assertLessEqual(len(resum['frase'].split()),15 if id_ == 'hi-cap-mati' else 12)
+                    self.assertEqual(resum['c'],detall['c'])
+                    self.assertEqual(resum['estat'],detall['estat'])
+                    self.assertEqual(resum['etiqueta'],detall['etiqueta'])
+                    self.assertEqual(resum['proposem'],detall['proposem'])
+
+    def test_prova_autonoma_i_enllac_a_cada_caixa(self):
+        # Una lectura accidental de dades fa fallar immediatament aquesta prova.
+        with patch('components.vistes.una',side_effect=AssertionError('La mostra ha de ser autònoma')), \
+                patch('nivell1.dades.connexio',side_effect=AssertionError('Només dades inventades')):
+            app = AppTest.from_file(str(ARREL/'prova_portada.py')).run(timeout=90)
+            for escenari in ('Validat', 'Pendent de validar', 'Falten aules'):
+                if escenari != 'Validat':
+                    app.selectbox[0].select(escenari).run(timeout=90)
+                self.assertEqual(list(app.exception),[])
+                self.assertEqual(list(app.error),[])
+                self.assertEqual(len([b for b in app.button if b.label == 'Com ho sabem →']),len(PORTADA))
+                for id_ in PORTADA[1:]:
+                    caixa = next(b for b in app.get('flex_container') if b.proto.id.endswith('targeta-'+id_))
+                    self.assertEqual(len(caixa.button),1)
+                    self.assertEqual(caixa.button[0].label,'Com ho sabem →')
+                    self.assertEqual(caixa.button[0].key,'obre-'+id_)
+                html = '\n'.join(m.value for m in app.markdown)
+                self.assertNotIn('Proposem:',html)
+                self.assertNotIn('class="metre"',html)
+                frases = re.findall(r'<p class="frase-(heroi|targeta)">(.*?)</p>',html)
+                self.assertEqual(len(frases),len(PORTADA))
+                for tipus, frase in frases:
+                    self.assertLessEqual(len(frase.split()),15 if tipus == 'heroi' else 12)
+
+    def test_css_text_sense_retalls_ni_alcada_fixa(self):
+        css = (ARREL/'estil.css').read_text()
+        contenidors = r'st-key-heroi|st-key-targetes|targeta-cor|frase-heroi|estat(?:-text)?'
+        for regla in re.finditer(r'([^{}]+)\{([^{}]*)\}',css):
+            selector, declaracions = regla.groups()
+            if not re.search(contenidors,selector) or selector.strip() == '.estat svg':
+                continue
+            with self.subTest(selector=selector.strip()):
+                self.assertNotRegex(declaracions,r'(?<![-\w])(?:max-)?height\s*:\s*(?!auto\b)[^;]+')
+                self.assertNotRegex(declaracions,r'overflow(?:-[xy])?\s*:\s*(hidden|clip)')
+                self.assertNotIn('line-clamp',declaracions)
+        botons = re.search(r'\.st-key-heroi button,\.st-key-targetes button[^{}]*\{([^{}]+)\}',css)[1]
+        self.assertRegex(botons,r'min-height:\s*(4[0-9]|[5-9][0-9])px')
+        self.assertIn('padding:10px 12px',botons)
+        self.assertRegex(css,r'\.st-key-heroi\s*\{[^}]*padding:32px;')
+        self.assertIn('font:16px/1.45',css)
 
 
 class TestApp(unittest.TestCase):
@@ -120,28 +194,29 @@ preguntes.mostra()
         self.assertEqual(AULES_DISPONIBLES+AULES_RESERVA,len(inventari().query("tipus == 'Aules docents'")))
 
     def test_camps_nous_i_provisional(self):
-        from servei import totes, versio_registre
-        resultat = copy.deepcopy(totes(2,None,versio_registre()))
-        mapa = {t.id:t for t in resultat}
+        mapa = dades_inventades()
         mapa['hi-cap-mati'].extra.update(
             torns=pd.DataFrame({'torn':['mati','tarda'],'ocupacio_pct':[67.5,81.2]}),
             coll_ampolla={'llindar':88,'torn':'mati','setmana':'2027-W05'})
         mapa['hores-aula'].extra['desglos'] = {'per_assignar':4541,'laboratoris':919,'dobles':262}
         mapa['marge-grau-nou'].extra.update(estat_provisional=True,validat_part2=True)
-        with patch('components.vistes.una',side_effect=lambda id_, *args: mapa[id_]):
-            app = self.carrega()
+        with patch('prova_portada.dades_inventades',return_value=mapa):
+            app = portada_inventada()
         self.comprova(app)
         html = '\n'.join(m.value for m in app.markdown)
-        self.assertIn('Matí 68 % · Tarda 81 %',html)
-        self.assertIn('El més ajustat: les aules de més de 88 places, al matí, la setmana 2027-W05',html)
-        self.assertIn('4.541 per assignar de debò',html)
-        self.assertIn('919 laboratoris (no es toquen)',html)
-        self.assertIn('262 dobles (sense aula pròpia)',html)
+        self.assertNotIn('per assignar de debò',html)
+        self.assertNotIn('El més ajustat:',html)
+        self.assertIn('Matí 68 % · Tarda 81 %',text(mapa['hi-cap-mati'])['frase'])
         marge = text(mapa['marge-grau-nou'])
         self.assertEqual(marge['etiqueta'],'Pendent de validar')
         self.assertEqual(marge['estat'],'ambre')
         self.assertIn('Pendent de validar',html)
-        self.assertIn('A part, 2 aules de reserva (vora discontínua)',html)
+        app.button(key='obre-hores-aula').click().run(timeout=90)
+        self.comprova(app)
+        detall = '\n'.join(m.value for m in app.markdown)
+        self.assertIn('4.541 per assignar de debò',detall)
+        self.assertIn('919 laboratoris (no es toquen)',detall)
+        self.assertIn('262 dobles (sense aula pròpia)',detall)
 
     def test_proporcions_i_metodes(self):
         from textos import TEXTOS
@@ -258,39 +333,42 @@ preguntes.mostra()
         self.assertIn('verificador oficial',info['frase'])
 
     def test_css_injectat_alinea_targetes(self):
-        app = self.carrega()
+        app = portada_inventada()
         self.comprova(app)
         css = next(m.value for m in app.markdown if m.value.startswith('<style>'))
         self.assertIn('align-items: stretch',css)
         self.assertIn('margin-top: auto',css)
         self.assertIn('stLayoutWrapper',css)
         self.assertIn('flex-direction: column',css)
-        self.assertIn('height: 100%',css)
-        # La proposta i el botó han d'estar dins el mateix peu natiu.
+        # Cada peu conserva l'enllaç; les propostes són al detall.
         peus = [b for b in app.get('flex_container') if any('peu-targeta-' in str(v) for v in [b.proto.id])]
         self.assertEqual(len(peus),len(PORTADA)-1)
         for peu in peus:
             self.assertEqual(len(peu.button),1)
-            self.assertIn('Proposem:',peu.markdown[0].value)
+            self.assertEqual(peu.button[0].label,'Com ho sabem →')
+            self.assertEqual(len(peu.markdown),0)
 
     def test_bloc_gran_vermell_quan_falta_mida(self):
-        from servei import totes, versio_registre
-        mapa = {t.id:copy.deepcopy(t) for t in totes(2,None,versio_registre())}
+        mapa = dades_inventades()
         t = mapa['hi-cap-mati']
         t.extra.update(falla_per_mida=True, coll_ampolla={'llindar':88,'torn':'tarda',
             'setmana':'2027-W06','demanda_h':120.,'oferta_h':100.})
         t.extra['per_mida'] = pd.DataFrame([{'llindar':88,'falla':True,'demanda_h':120.,'oferta_h':100.}])
-        with patch('components.vistes.una',side_effect=lambda id_, *args:mapa[id_]):
-            app = self.carrega()
+        with patch('prova_portada.dades_inventades',return_value=mapa):
+            app = portada_inventada()
         self.comprova(app)
         self.assertTrue(any('Falten aules d’algunes mides' == h.value for h in app.subheader))
         html = '\n'.join(m.value for m in app.markdown)
-        self.assertIn('estat vermell',html)
+        self.assertIn('data-estat="vermell"',html)
         self.assertIn('Cal actuar',html)
-        self.assertIn('en falten 20 h',html)
-        self.assertIn('a la tarda',html)
-        self.assertIn('2027-W06',html)
+        self.assertIn('Falta espai per a algunes mides d’aula',html)
         self.assertIn('aria-hidden="true"',html)
+        app.button(key='obre-hi-cap-mati').click().run(timeout=90)
+        self.comprova(app)
+        detall = '\n'.join(m.value for m in app.markdown)
+        self.assertIn('en falten 20 h',detall)
+        self.assertIn('a la tarda',detall)
+        self.assertIn('2027-W06',detall)
         t.extra['falla_per_mida'] = False
         self.assertEqual(text(t)['estat'],'vermell')
 
@@ -376,8 +454,8 @@ detall(t)
 """).run(timeout=90)
         self.comprova(app)
         html = '\n'.join(m.value for m in app.markdown)
-        self.assertEqual(html.count('a la setmana que necessita'),3)  # la targeta ja no repeteix la frase
-        self.assertEqual(html.count('de marge en tot el semestre'),3)
+        self.assertEqual(html.count('a la setmana que necessita'),2)  # només al detall
+        self.assertEqual(html.count('de marge en tot el semestre'),2)
         self.assertIn('lliures a la setmana més plena',html)
         self.assertIn('26 h',html)
         self.assertIn('181 h',html)

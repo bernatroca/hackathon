@@ -1,9 +1,9 @@
 from html import escape
 import streamlit as st
-from components.grafics import grafics, quadrets
+from components.grafics import grafics
 from mostra import exemples
-from presentacio import text, abast, desglos, valor
-from servei import una
+from presentacio import text, text_portada, abast, desglos, valor
+from servei import una, AULES_DISPONIBLES, AULES_RESERVA
 from textos import PROBLEMES
 from errors import mostra_error
 
@@ -41,7 +41,7 @@ def estat(info):
             'ambre': '<path d="M8 4v5m0 2v1"/>',
             'verd': '<path d="m4.5 8 2.5 2.5 4.5-5"/>'}[info['estat']]
     svg = f'<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="7" fill="currentColor"/><g fill="none" stroke="#fff" stroke-width="2">{cami}</g></svg>'
-    return f'<span class="estat {info["estat"]}">{svg}{escape(info["etiqueta"])}</span>'
+    return f'<span class="estat {info["estat"]}">{svg}<span class="estat-text">{escape(info["etiqueta"])}</span></span>'
 
 
 def mostra_avis(t):
@@ -57,29 +57,25 @@ def obre(t):
 
 
 def heroi(t):
-    info = contingut(t)
+    info = text_portada(t, contingut(t))
     with st.container(key='heroi'):
         mostra_avis(t)
         esquerra,dreta = st.columns([1.7,1],gap='medium',vertical_alignment='center')
         with esquerra:
-            st.markdown(estat(info),unsafe_allow_html=True)
-            st.markdown(f'<h2 class="pregunta">{escape(info["titol"])}</h2>',unsafe_allow_html=True)
+            st.markdown(f'<h2 class="pregunta" data-estat="{info["estat"]}">{escape(info["titol"])}</h2>',unsafe_allow_html=True)
             st.subheader(info['c']['resposta'])
-            st.write(info['frase'])
-            if info['c'].get('coll_ampolla'):
-                st.write(info['c']['coll_ampolla'])
+            st.markdown(f'<p class="frase-heroi">{escape(info["frase"])}</p>',unsafe_allow_html=True)
             obre(t)
         with dreta:
-            quadrets(t)
-        # Una sola línia de context perquè la portada càpiga a la primera pantalla.
-        parts = [('Setmana més plena per al pic: ' if st.session_state.get('setmana') is None else 'Setmana seleccionada: ')
-                 + str((t.extra or {}).get('setmana', 'no indicada'))]
-        torns = (t.extra or {}).get('torns')
-        if torns is not None and 'setmana_pitjor' in torns:
-            parts.append('més plena de cada torn: ' + ', '.join(f"{r.torn} {r.setmana_pitjor}" for r in torns.itertuples()))
-        final = ('. Validat amb l’horari proposat de la part 2 (verificador oficial).' if info['c'].get('validat')
-                 else '. És una orientació: cal validar que les classes es poden repartir en un horari.')
-        st.caption(' · '.join(parts) + final)
+            ocupades = info['c'].get('pic_n')
+            if ocupades is None:
+                st.info('No s’ha indicat el pic d’aules.')
+            else:
+                icones = ''.join('<i class="' + ('' if n < ocupades else 'l') + '"></i>'
+                    for n in range(AULES_DISPONIBLES)) + '<i class="r"></i>' * AULES_RESERVA
+                peu = f'{ocupades} ocupades · {max(0, AULES_DISPONIBLES - ocupades)} lliures · {AULES_RESERVA} de reserva'
+                st.markdown(f'<figure class="aules-portada"><div class="aules" role="img" aria-label="Aules: {escape(peu)}">'
+                    f'{icones}</div><figcaption>{escape(peu)}</figcaption></figure>',unsafe_allow_html=True)
 
 
 def resum_grau(info):
@@ -90,22 +86,13 @@ def resum_grau(info):
 
 
 def targeta(t, posicio=0):
-    info = contingut(t)
-    with st.container(border=True, height='stretch', key='targeta-'+t.id):
+    info = text_portada(t, contingut(t))
+    with st.container(border=True, key='targeta-'+t.id):
         mostra_avis(t)
-        percent = info['c'].get('percent')
-        metre = ''
-        if percent is not None:
-            metre = f'<div class="metre" role="img" aria-label="{percent:.1f} %"><i style="width:{max(0,min(100,percent)):.2f}%;background:var(--blau)"></i></div>'
-        detall_desglos = desglos(t.extra) if t.id == 'hores-aula' else ''
-        xifra = resum_grau(info) if t.id == 'marge-grau-nou' else f'<div class="xifra-targeta">{escape(info["c"]["xifra"])}</div>'
-        st.markdown(f'<article class="targeta-cor">{estat(info)}<h2>{escape(info["titol"])}</h2>'
-            f'{xifra}'
-            f'<p class="desglos">{escape(detall_desglos)}</p>{metre}'
-            f'{"" if t.id == "marge-grau-nou" and not info["c"].get("validat") else "<p>" + escape(info["frase"]) + "</p>"}</article>',unsafe_allow_html=True)
-        # Un sol peu natiu: la proposta i el botó comparteixen l'alineació.
+        st.markdown(f'<article class="targeta-cor"><h2>{escape(info["titol"])}</h2>'
+            f'<div class="xifra-targeta">{escape(info["c"]["xifra"])}</div>'
+            f'<p class="frase-targeta">{escape(info["frase"])}</p>{estat(info)}</article>',unsafe_allow_html=True)
         with st.container(key='peu-targeta-'+t.id):
-            st.markdown(f'<div class="proposem"><b>Proposem:</b> {escape(info["proposem"])}</div>',unsafe_allow_html=True)
             obre(t)
 
 
@@ -124,6 +111,18 @@ def detall(t):
     grafics(t,clau='detall-'+t.id,altres=st.session_state.get('resultats',{}))
     st.subheader('Què vol dir')
     st.write(info['frase'])
+    if t.id == 'hi-cap-mati':
+        if info['c'].get('coll_ampolla'):
+            st.write(info['c']['coll_ampolla'])
+        parts = [('Setmana més plena per al pic: ' if st.session_state.get('setmana') is None else 'Setmana seleccionada: ')
+            + str((t.extra or {}).get('setmana', 'no indicada'))]
+        torns = (t.extra or {}).get('torns')
+        if torns is not None and 'setmana_pitjor' in torns:
+            parts.append('més plena de cada torn: ' + ', '.join(f'{r.torn} {r.setmana_pitjor}' for r in torns.itertuples()))
+        st.caption(' · '.join(parts) + (' · Horari validat amb el verificador oficial.' if info['c'].get('validat')
+            else ' · Cal validar que les classes es poden repartir en un horari.'))
+    if t.id == 'hores-aula' and desglos(t.extra):
+        st.write(desglos(t.extra))
     st.subheader('Proposem')
     st.write(info['proposem'])
     if t.id == 'problemes-millores' and {'problema','proposta'}.issubset(t.taula.columns):
