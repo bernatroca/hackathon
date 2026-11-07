@@ -231,3 +231,9 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - nivell2/base.py llegeix la carpeta de les dades de REPTE_DIR. Pendent per a la branca del 5.2: que franges.py imprimeixi només el nombre d'excepcions i desi el detall en un fitxer.
 - Validació de l'equip, coses a arreglar de la part 2: graelles una sota l'altra en pantalla ampla (7.4), subgrups massa estrets (7.7), classe compartida que surt com dos blocs a una aula (7.9), codis de grup sense explicar (7.12) i sigles al resum de la Junta (8.7). La 8.7 ja és en marxa (n2-dades-5); la resta entra amb el disseny que triï l'equip.
 - PROBLEMA: uns canvis de la pàgina de la part 2 sense commit a la carpeta principal van entrar al commit c1a5ebb d'una altra sessió, i app/components/ajuda_part2.py havia quedat fora de git. Solució: s'ha fet el commit del fitxer, i a la carpeta principal només es fan commits amb camins explícits.
+
+### [ds 19:30] DECISIÓ · Disseny de la part 2: opció A, i tres versions de la Junta
+- L'equip tria l'opció A per a l'horari proposat: franja de color i pastilla. Sense canvis en blau (no en gris), aula assignada en verd suau, canvi en taronja i cas especial en vermell, amb filtres pels mateixos colors. L'horari ha de ser el protagonista: controls compactes en una targeta i el resum en tres xifres. La guia pas a pas enfoca l'apartat i el panell surt al costat. Ho fa n2-frontend-4.
+- Junta: tres versions per triar (docs/disseny/junta-opcio-a, b i c), amb colors orientatius (verd suau amb marge, taronja si va just, vermell si falten aules) i textos curts.
+- A la part 1 (sessió Part 1): totes les pàgines amb l'estil de la primera, centrades; caixes més petites a la primera pàgina; filtres de «Totes les respostes» amb el color i la icona de cada estat; la capçalera que talla en fer scroll.
+- Neteja de dades unida: proves amb valors inventats i el 5.1 només imprimeix recomptes (n2-neteja-1). Textos de la Junta sense sigles (n2-dades-5).
