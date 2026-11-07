@@ -1,0 +1,381 @@
+"""5.4: grau nou sobre el 5.2, amb rutina i sense desdoblaments.
+
+Les dades només les llegeix aquest solver. La consola només mostra recomptes.
+Un INFEASIBLE amb el 5.2 congelat és resposta 2, mai resposta 4.
+"""
+from __future__ import annotations
+
+import argparse
+import copy
+import datetime as dt
+import itertools
+import json
+import shutil
+import time
+from collections import Counter, defaultdict
+from pathlib import Path
+
+from ortools.sat.python import cp_model
+
+from nivell2.base import (ARREL, GRAU_NOU, PYTHON, RESULTATS, RESULTATS_PRINCIPAL,
+                          Proposta, carrega_model, carrega_oficial, verifica)
+from nivell2.franges import _candidats, _referencia, _regles, _setmana
+from nivell2.s52 import escriu_csv
+from nivell2.comprova_persones import (colloca_avui, comprova_dobles, conflictes,
+                                      parelles_dobles)
+from horaris.check import (FRANGES, RESERVA_MIN, Informe as InformeIntern,
+                           _col_loca, _espai_ok, avalua)
+from horaris.model import DIES, MATI, a_traslladar, fmt, llegeix_relaxacions
+
+
+VALIDES = {'VALIDA', 'VALIDA AMB RELAXACIONS DECLARADES'}
+
+
+def referencia_completa(base, referencia):
+    """Afegeix les sessions noves sense alterar cap fila del 5.2."""
+    if not set(referencia.files) <= set(base.sessions):
+        raise ValueError('La referència conté sessions alienes a l’escenari')
+    p = Proposta.de_base(base)
+    p.files.update(copy.deepcopy(referencia.files))
+    return p
+
+
+def _activitats(base, noves):
+    """Rutines també si l'escenari no porta activitat_id (mai una per fila).
+
+    La definició d'activitat de l'especificació és grup, dia i hora recurrents.
+    Sense identificador, es reconstrueix amb assignatura, tipus, grup i franja
+    original. Dues classes setmanals del mateix grup continuen sent diferents.
+    """
+    def key(s):
+        return ('activitat', s.activitat) if s.activitat else (
+            'inferida', s.codi, s.tipus, s.grup, s.dia, s.ini, s.durada)
+
+    parent = {key(base.sessions[s]): key(base.sessions[s]) for s in noves}
+
+    def root(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    units = defaultdict(list)
+    for sid in sorted(noves):
+        units[base.sessions[sid].unitat].append(base.sessions[sid])
+    for rows in units.values():
+        for s in rows[1:]:
+            parent[root(key(s))] = root(key(rows[0]))
+    acts = defaultdict(list)
+    for sid in sorted(noves):
+        s = base.sessions[sid]
+        acts[root(key(s))].append(s)
+    return list(acts.values())
+
+
+def _solapa(a, b, c, d):
+    return a < d and c < b
+
+
+def resol_congelat(base, referencia, *, temps_s=60, llavor=0):
+    """Model conjunt exacte dins les condicions: rutina dura i 5.2 congelat.
+
+    Una opció és (dia, hora, aula) per a totes les setmanes d'una activitat.
+    Es comproven dates reals, aforament sumat de compartides, tipus, tancaments,
+    aula, docent, alumnat, PLAB i la unió d'aules per cubell R8 d'una hora.
+    Cap retall heurístic de capacitat ni exempció nova.
+    """
+    if temps_s <= 0:
+        raise ValueError('El temps ha de ser positiu')
+    begin = time.monotonic()
+    ref = referencia_completa(base, referencia)
+    noves = set(base.sessions) - set(referencia.files)
+    if not noves:
+        raise ValueError('L’escenari no afegeix sessions')
+    if any(base.sessions[s].fixada or base.sessions[s].aula or
+           base.sessions[s].sense_espai or base.sessions[s].torn != 'mati' for s in noves):
+        raise ValueError('Les sessions noves han de ser movibles, de matí i sense aula')
+    acts = _activitats(base, noves)
+    fixed = defaultdict(list)
+    occupied = defaultdict(set)
+    ordinary = {a for a, room in base.aules.items() if room.ordinaria}
+    for sid in referencia.files:
+        s = base.sessions[sid]
+        date, start = _referencia(s, ref)
+        room = ref.files[sid].aula
+        fixed[date].append((s, start, start+s.durada, room))
+        if room in ordinary and not s.sense_espai:
+            for f in FRANGES:
+                if _solapa(start, start+s.durada, f, f+60):
+                    occupied[date, f].add(room)
+    rooms = sorted(base.aules)
+    rid = {r: i for i, r in enumerate(rooms)}
+    options, rejected = [], Counter()
+    diagnostics = []
+    for rows in acts:
+        domain = set.intersection(*(set(_candidats(base, s, ref, {})) for s in rows))
+        # Dues classes físiques de la mateixa setmana no poden tenir el
+        # mateix dia, hora i aula. No es fusionen ni es desdoblen.
+        week_units = defaultdict(set)
+        for s in rows:
+            week_units[_setmana(s)].add(s.unitat)
+        if any(len(us) > 1 for us in week_units.values()):
+            domain.clear()
+        eligible = {a for a in rooms if not a_traslladar(a) and a != 'B3/0021'
+                    and all(_espai_ok(base, s, a) for s in rows)}
+        units = defaultdict(list)
+        for s in rows:
+            units[s.unitat].append(s)
+        size = max(sum(s.alumnes for s in ss) for ss in units.values())
+        eligible = {a for a in eligible if base.aules[a].capacitat >= size}
+        allowed = []
+        for slot in sorted(domain):
+            dates = [(_setmana(s)+dt.timedelta(days=slot//1440), s) for s in rows]
+            start = slot % 1440
+            if any(s.unitat != other.unitat and _regles(s, other)
+                   and _solapa(start, start+s.durada, t, end)
+                   for date, s in dates for other, t, end, _ in fixed[date]):
+                rejected['persones_o_plab'] += 1
+                continue
+            blocked_rooms = {oldroom for date, s in dates for other, t, end, oldroom in fixed[date]
+                             if not other.sense_espai and other.unitat != s.unitat
+                             and _solapa(start, start+s.durada, t, end)}
+            for room in sorted(eligible):
+                if room in blocked_rooms:
+                    rejected['aula_ocupada'] += 1
+                    continue
+                if any(t.aula == room and t.data_ini <= date <= t.data_fi
+                       and _solapa(start, start+s.durada, t.ini, t.fi)
+                       for date, s in dates for t in base.tancaments):
+                    rejected['aula_tancada'] += 1
+                    continue
+                if len(ordinary) >= RESERVA_MIN and room in ordinary and any(
+                        room not in occupied[date, f]
+                        and len(occupied[date, f]) >= len(ordinary)-RESERVA_MIN
+                        for date, s in dates for f in FRANGES
+                        if _solapa(start, start+s.durada, f, f+60)):
+                    rejected['reserva'] += 1
+                    continue
+                allowed.append((slot, rid[room]))
+        options.append(allowed)
+        diagnostics.append({'sessions': [s.id for s in rows], 'franges_calendari': len(domain),
+                            'aules_compatibles': len(eligible), 'opcions': len(allowed)})
+    stats = {'condicions': 'rutina obligatòria; 5.2 congelat; mateix torn; sense desdoblaments',
+             'sessions_noves': len(noves), 'activitats_noves': len(acts),
+             'sessions_noves_amb_activitat_id': sum(bool(base.sessions[s].activitat) for s in noves),
+             'opcions_per_activitat': [len(o) for o in options],
+             'rebuigs': dict(rejected), 'diagnostic_activitats': diagnostics}
+    if any(not o for o in options):
+        stats.update(estat='INFEASIBLE', causa='domini_buit', temps_s=time.monotonic()-begin)
+        return None, stats
+    stats['temps_candidats_s'] = time.monotonic()-begin
+    model = cp_model.CpModel()
+    slots, roomvars = [], []
+    for opts in options:
+        slot = model.new_int_var_from_domain(cp_model.Domain.from_values(sorted({s for s, _ in opts})), 'franja')
+        room = model.new_int_var_from_domain(cp_model.Domain.from_values(sorted({r for _, r in opts})), 'aula')
+        model.add_allowed_assignments([slot, room], opts)
+        slots.append(slot)
+        roomvars.append(room)
+    for a, b in itertools.combinations(range(len(acts)), 2):
+        durations = set()
+        for s in acts[a]:
+            for t in acts[b]:
+                if _setmana(s) == _setmana(t):
+                    durations.add((s.durada, t.durada, bool(_regles(s, t))))
+        for da, db, people in durations:
+            before = model.new_bool_var('abans')
+            after = model.new_bool_var('despres')
+            model.add(slots[a]+da <= slots[b]).only_enforce_if(before)
+            model.add(slots[b]+db <= slots[a]).only_enforce_if(after)
+            alternatives = [before, after]
+            if not people:
+                different = model.new_bool_var('aules_diferents')
+                model.add(roomvars[a] != roomvars[b]).only_enforce_if(different)
+                alternatives.append(different)
+            model.add_bool_or(alternatives)
+    # R8 compta aules diferents, també quan dues classes consecutives en
+    # comparteixen una dins del mateix cubell. No comptem classes simultànies.
+    usage = defaultdict(lambda: defaultdict(set))
+    if len(ordinary) >= RESERVA_MIN:
+        for a, opts in enumerate(options):
+            for slot, r in opts:
+                room = rooms[r]
+                if room not in ordinary:
+                    continue
+                for s in acts[a]:
+                    date = _setmana(s)+dt.timedelta(days=slot//1440)
+                    for f in FRANGES:
+                        if room not in occupied[date, f] and _solapa(slot%1440, slot%1440+s.durada, f, f+60):
+                            usage[date, f, r][a].add(slot)
+    cache = {}
+
+    def member(a, room, values):
+        key = a, room, tuple(sorted(values))
+        if key not in cache:
+            lit = model.new_bool_var('ocupa_cubell')
+            in_slot = model.new_bool_var('franja_del_cubell')
+            model.add_linear_expression_in_domain(slots[a], cp_model.Domain.from_values(key[2])).only_enforce_if(in_slot)
+            complement = sorted({s for s, _ in options[a]} - values)
+            if complement:
+                model.add_linear_expression_in_domain(slots[a], cp_model.Domain.from_values(complement)).only_enforce_if(in_slot.Not())
+            else:
+                model.add(in_slot == 1)
+            in_room = model.new_bool_var('aula_del_cubell')
+            model.add(roomvars[a] == room).only_enforce_if(in_room)
+            model.add(roomvars[a] != room).only_enforce_if(in_room.Not())
+            model.add(lit <= in_slot)
+            model.add(lit <= in_room)
+            model.add(lit >= in_slot+in_room-1)
+            cache[key] = lit
+        return cache[key]
+
+    buckets = defaultdict(list)
+    union_cache = {}
+    for (date, f, r), uses in usage.items():
+        literals = [member(a, r, values) for a, values in uses.items()]
+        signature = tuple(sorted(l.index for l in literals))
+        if signature not in union_cache:
+            used = model.new_bool_var('aula_ocupada')
+            model.add_max_equality(used, literals)
+            union_cache[signature] = used
+        used = union_cache[signature]
+        buckets[date, f].append(used)
+    seen = set()
+    for (date, f), literals in buckets.items():
+        available = len(ordinary)-RESERVA_MIN-len(occupied[date, f])
+        signature = available, tuple(sorted(l.index for l in literals))
+        if signature not in seen:
+            model.add(sum(literals) <= available)
+            seen.add(signature)
+    # El nombre de canvis al 5.2 té la cota inferior assolida de zero.
+    solver = cp_model.CpSolver()
+    solver.parameters.max_time_in_seconds = max(.001, temps_s-(time.monotonic()-begin))
+    solver.parameters.num_search_workers = 2
+    solver.parameters.random_seed = llavor
+    stats['temps_construccio_s'] = time.monotonic()-begin
+    status = solver.solve(model)
+    stats.update(estat=solver.status_name(status), temps_s=time.monotonic()-begin,
+                 branques=solver.num_branches, conflictes_solver=solver.num_conflicts)
+    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        return None, stats
+    for a, rows in enumerate(acts):
+        slot, r = solver.value(slots[a]), solver.value(roomvars[a])
+        for s in rows:
+            ref.files[s.id].dia = DIES[slot//1440]
+            ref.files[s.id].h_ini = fmt(slot%1440)
+            ref.files[s.id].aula = rooms[r]
+    return ref, stats
+
+
+def comprova_proposta(base, proposta, referencia):
+    """Comprovació addicional de persones, vincles, torn i rutina del grau nou."""
+    col = _col_loca(base, proposta.a_files(), InformeIntern())
+    inherited = conflictes(colloca_avui(base))
+    new_conflicts = set(conflictes(col))-set(inherited)
+    pairs, _ = parelles_dobles(base)
+    doubles = comprova_dobles(base, col, pairs)
+    noves = set(base.sessions)-set(referencia.files)
+    routine_errors = sum(len({(col[s.id].data.weekday(), col[s.id].ini, col[s.id].aula) for s in rows}) != 1
+                         for rows in _activitats(base, noves))
+    shift_changes = sum((col[sid].ini < MATI[1]) != (_referencia(base.sessions[sid], referencia)[1] < MATI[1])
+                        for sid in referencia.files)
+    return {'conflictes_persones_nous': len(new_conflicts),
+            'dobles_separades': len(doubles['separades']),
+            'dobles_amb_aula_propia': sum(bool(col[s.id].aula) for s in base.sessions.values() if s.sense_espai),
+            'canvis_torn_52': shift_changes, 'activitats_noves_sense_rutina': routine_errors}
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--temps', type=float, default=300)
+    parser.add_argument('--llavor', type=int, default=0)
+    args = parser.parse_args(argv)
+    out = RESULTATS/'5.4'
+    out.mkdir(parents=True, exist_ok=True)
+    path52 = RESULTATS_PRINCIPAL/'5.2'/'proposta.csv'
+    relax52 = path52.with_name('relaxacions.csv')
+    ref = Proposta.llegeix(path52)
+    base = carrega_model(GRAU_NOU)
+    official = carrega_oficial(GRAU_NOU)
+    if set(ref.files) != set(carrega_oficial().sessions):
+        raise ValueError('La referència no conté exactament el 5.2 complet')
+    relaxations = llegeix_relaxacions(relax52 if relax52.exists() else None)
+    relax_path = out/'relaxacions.csv'
+    if relax52.exists():
+        shutil.copyfile(relax52, relax_path)
+    elif relax_path.exists():
+        relax_path.unlink()
+    proposal, stats = resol_congelat(base, ref, temps_s=args.temps, llavor=args.llavor)
+    (out/'execucio.json').write_text(json.dumps(stats, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
+    summary = {'resposta': 2 if stats['estat'] == 'INFEASIBLE' else 3,
+               'sessions_grau_nou': stats['sessions_noves'], 'sessions_grau_nou_collocades': 0,
+               'sessions_52_mogudes': 0, 'canvis_franja_52': 0, 'canvis_aula': 0,
+               'relaxacions_per_motiu': dict(Counter({r.justificacio: sum(len(t.sessions) for t in relaxations if t.justificacio == r.justificacio) for r in relaxations})),
+               'incompliments_no_declarats': None, 'estat_solver': stats['estat']}
+    if proposal is not None:
+        checks = comprova_proposta(base, proposal, ref)
+        report = avalua(official, proposal.a_files(), relaxacions=relaxations)
+        if report.veredicte not in VALIDES or any(checks.values()):
+            (out/'errors-validacio.json').write_text(json.dumps({'comprovacions': checks, 'restriccions': report.recompte()}, ensure_ascii=False, indent=2)+'\n')
+            raise ValueError('La proposta candidata no supera les comprovacions')
+        path = proposal.escriu(out/'proposta.csv')
+        report = verifica(path, escenari=GRAU_NOU, referencia=path52,
+                          relaxacions=relax_path if relax_path.exists() else None,
+                          json_path=out/'informe.json', violacions_path=out/'violacions.csv')
+        summary.update(resposta=1 if report.veredicte in VALIDES else 3,
+                       sessions_grau_nou_collocades=stats['sessions_noves'],
+                       veredicte=report.veredicte, incompliments_no_declarats=sum(report.compten().values()),
+                       **checks)
+        summary['canvis_franja_52'] = sum(_referencia(base.sessions[s], ref) != _referencia(base.sessions[s], proposal) for s in ref.files)
+        summary['canvis_aula'] = sum(ref.files[s].aula != proposal.files[s].aula for s in ref.files)
+        summary['sessions_52_mogudes'] = sum(ref.files[s] != proposal.files[s] for s in ref.files)
+        summary['minim_sessions_52_mogudes_demostrat'] = summary['sessions_52_mogudes'] == 0
+        before = avalua(official, referencia_completa(base, ref).a_files(), relaxacions=relaxations)
+        escriu_csv(out/'xifres.csv', [{'xifra': k, 'abans': before.objectius.get(k, 0), 'despres': v}
+                                     for k, v in report.objectius.items()], ['xifra', 'abans', 'despres'])
+    else:
+        # No es presenta una proposta parcial ni es conserva un èxit antic.
+        for name in ('proposta.csv', 'violacions.csv', 'xifres.csv'):
+            (out/name).unlink(missing_ok=True)
+        (out/'informe.json').write_text(json.dumps({'veredicte': 'SENSE PROPOSTA', 'resposta': summary['resposta'],
+            'estat_solver': stats['estat'], 'condicions': stats['condicions'],
+            'impossibilitat_global_demostrada': False}, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
+    (out/'resum.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
+    command = f'{PYTHON} -m nivell2.s54 --temps {args.temps:g} --llavor {args.llavor}'
+    (out/'README.md').write_text(
+        '# 5.4 Grau nou\n\n'
+        f"Resposta **{summary['resposta']}**. Estat del solver: {stats['estat']}.\n\n"
+        'Model conjunt de dia, hora i aula per activitat, rutina setmanal, mateix torn i sense desdoblaments. '
+        'El 5.2 queda congelat; les seves relaxacions es copien sense afegir-ne. '
+        'INFEASIBLE en aquestes condicions és resposta 2, no una prova d’impossibilitat global. '
+        'UNKNOWN és resposta 3. El detall dels dominis i rebuigs és a `execucio.json`.\n\n'
+        f'Des del worktree `{ARREL}`:\n```sh\n{command}\n```\n\n'
+        'Comprovació oficial de la proposta (si hi ha solució):\n```sh\n'
+        f'{PYTHON} -c "from pathlib import Path; from nivell2.base import verifica, GRAU_NOU; '
+        f"r=verifica(Path('resultats/nivell2/5.4/proposta.csv'), escenari=GRAU_NOU, "
+        f"relaxacions=Path('resultats/nivell2/5.4/relaxacions.csv') if Path('resultats/nivell2/5.4/relaxacions.csv').exists() else None); print(r.veredicte, sum(r.compten().values()))\"\n"
+        '```\n\nProves i comprovació de persones:\n```sh\n'
+        f'{PYTHON} -m pytest -q nivell2 app\n'
+        f'RESULTATS_DIR=$PWD/resultats/nivell2 {PYTHON} -m nivell2.comprova_persones\n```\n', encoding='utf-8')
+    print('Resposta:', summary['resposta'], '; solver:', stats['estat'])
+    print('Activitats noves:', stats['activitats_noves'], '; opcions:', sum(stats['opcions_per_activitat']))
+    print('Temps de construcció:', round(stats.get('temps_construccio_s', stats['temps_s']), 3),
+          '; temps total:', round(stats['temps_s'], 3))
+    for key in ('sessions_grau_nou_collocades', 'sessions_52_mogudes', 'canvis_aula', 'incompliments_no_declarats'):
+        print(key, ':', summary[key])
+    if 'veredicte' in summary:
+        print(summary['veredicte'])
+    print('Relaxacions heretades:', sum(len(r.sessions) for r in relaxations))
+    return 0 if summary['resposta'] in (1, 2) else 1
+
+
+if __name__ == '__main__':
+    try:
+        raise SystemExit(main())
+    except Exception:
+        import traceback
+        target = RESULTATS/'5.4'
+        target.mkdir(parents=True, exist_ok=True)
+        (target/'error-s54.txt').write_text(traceback.format_exc(), encoding='utf-8')
+        print('Errors d’execució: 1; detall desat fora de git')
+        raise SystemExit(2)
