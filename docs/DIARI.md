@@ -263,3 +263,10 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - Norma: el disseny es verifica amb una pàgina de dades inventades (docs/disseny/part2-prova-app.html); de l'app real només mirem l'estructura.
 - Nova eina: nivell2/comprova_persones.py diu, només amb recomptes, si alguna persona té dues classes alhora o si les classes dels dobles graus se separen o es dupliquen. L'executa l'equip.
 - Codex passa al mode ràpid (service_tier priority, 1,5x de velocitat i més consum).
+
+### [ds 21:25] DECISIÓ i SOLUCIÓ · Dobles graus i 5.2 vàlid
+- Recerca (web de la UAB, curs 2026-27): l'Escola té dues dobles titulacions (Informàtica + Sistemes de Telecomunicació i Informàtica + Electrònica de Telecomunicació), de 5 anys. Tenen un grup propi i fan part de les classes amb grups dels graus simples.
+- Regla de l'equip: una persona que fa un estudi (també un doble) no pot tenir dues classes alhora, i les classes del doble no es poden separar de la classe on van ni duplicar.
+- Com que no podem llegir les dades, hem fet nivell2/comprova_persones.py: l'executa l'equip i només en surten recomptes. Primer intent: no aparellava cap classe del doble (la clau incloïa el grup); amb claus més amples, gairebé totes s'aparellen.
+- Decisió: les classes del doble es mouen amb la classe on van i no tenen aula pròpia; les fixades de 1r i 2n sense aula reben aula i es declara la regla 1 relaxada; les poques sense parella no es mouen.
+- n2-backend-2 (Codex gpt-6.1-sol high): 5.2 VALIDA AMB RELAXACIONS DECLARADES, i la comprovació de persones dona CORRECTE (cap solapament nou; en resol alguns d'avui).
