@@ -95,17 +95,17 @@ CSS_PAGINA = """
 .st-key-p2-pagina .st-key-p2-controls [data-testid="stColumn"]{min-width:0!important;}
 .st-key-p2-pagina .st-key-p2-controls [data-testid="stVerticalBlock"]{gap:4px;}
 .st-key-p2-pagina .st-key-p2-controls p{font-size:14px;margin:0;}
-.st-key-p2-pagina .p2-resum{background:var(--targeta,#fff);border:1px solid var(--linia);border-left:6px solid var(--verd);border-radius:14px;padding:12px 18px;display:flex;gap:20px;align-items:center;justify-content:space-between;}
+.st-key-p2-pagina .p2-resum{background:var(--targeta,#fff);border:1px solid var(--linia);border-left:6px solid var(--verd);border-radius:14px;padding:12px 18px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,360px);gap:20px;align-items:center;}
 .st-key-p2-pagina .p2-resum.amb-canvis{border-left-color:var(--p2-taronja);}
 .st-key-p2-pagina .p2-resum.actual{border-left-color:var(--blau);}
 .st-key-p2-pagina .p2-resum.actual .estat{background:var(--blau-fons,#eef5fd);color:var(--blau);}
 .st-key-p2-pagina .p2-resum p{font-size:15px;margin:4px 0 0;}
 .st-key-p2-pagina .p2-resum .estat{margin:0;}
 .st-key-p2-pagina .p2-resum .estat.ambre{background:var(--p2-taronja-fons);color:var(--p2-taronja-text);}
-.st-key-p2-pagina .p2-xifres{display:flex;gap:22px;flex-shrink:0;}
-.st-key-p2-pagina .p2-xifres div{text-align:right;}
-.st-key-p2-pagina .p2-xifres b{display:block;font-size:28px;line-height:1.2;}
-.st-key-p2-pagina .p2-xifres span{font-size:12px;color:var(--tinta-2);}
+.st-key-p2-pagina .p2-xifres{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;min-width:0;width:100%;}
+.st-key-p2-pagina .p2-xifres div{text-align:center;min-width:0;}
+.st-key-p2-pagina .p2-xifres b{display:block;font-size:28px;line-height:1.2;font-variant-numeric:tabular-nums;}
+.st-key-p2-pagina .p2-xifres span{display:block;font-size:12px;color:var(--tinta-2);}
 .st-key-p2-pagina .st-key-p2-graelles{margin-top:24px;min-width:0;max-width:100%;}
 .st-key-p2-pagina h3{font-size:20px!important;padding:4px 0;}
 .st-key-p2-pagina .st-key-p2-vista-aula button{color:#256abf;}
@@ -119,8 +119,7 @@ CSS_PAGINA = """
 .st-key-p2-pagina .st-key-p2-vista-aula.p2-pas-actiu{max-height:48vh;overflow:auto;}
 @media(prefers-reduced-motion:reduce){.st-key-p2-pagina *{scroll-behavior:auto!important;transition:none!important;animation:none!important;}}
 @container contingut (max-width:680px){
- .st-key-p2-pagina .p2-resum{flex-direction:column;align-items:start;gap:10px;}
- .st-key-p2-pagina .p2-xifres div{text-align:left;}
+ .st-key-p2-pagina .p2-resum{grid-template-columns:minmax(0,1fr);gap:12px;}
  .st-key-p2-pagina .st-key-p2-controls [data-testid="stHorizontalBlock"]{flex-wrap:wrap;}
  .st-key-p2-pagina .st-key-p2-controls [data-testid="stColumn"]{flex:1 1 140px!important;width:auto!important;}
 }

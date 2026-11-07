@@ -237,6 +237,8 @@ Fa servir el disseny B1 del nivell 1, amb textos planers per al tècnic de Gesti
 - Ajuda opcional «Com funciona? Guia pas a pas»: sis passos que expliquen la comparació, els estudiants, les mancances d'aula, els colors, les graelles i la vista per aula. Cada pas porta al seu apartat; es pot retrocedir, acabar o tancar la guia.
 - Es marquen les sessions amb relaxació i el seu motiu.
 - La graella per aula també es lliura en un fitxer (HTML o PDF) per al jurat.
+- **Setmana seguida (petició de Bernat):** una sola graella de dilluns a divendres inclòs, també a la vista per aula i a l'HTML descarregat. No es parteix en blocs de dies ni en taules de carrils. Si falta amplada, es desplaça lateralment la mateixa graella, mantenint les hores a la vista i una amplada llegible per classe.
+- Les tres xifres del resum (canvis d’hora, canvis d’aula i aules a la setmana) van en columnes iguals, centrades amb les etiquetes, tant en escriptori com en mòbil.
 
 ## Com triem la millor proposta
 

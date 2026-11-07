@@ -277,3 +277,9 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - 5.4 (grau nou): resposta 1, hi cap, sense moure cap sessió del 5.2 i amb rutina setmanal.
 - Tots dos: verificador oficial VALIDA AMB RELAXACIONS DECLARADES, 0 incompliments que compten; comprovació de persones CORRECTE a tots els escenaris.
 - La targeta «Hi cap el matí?» de la portada ja es posa en verd sola amb el 5.2; la del grau nou ho farà amb el 5.4 (Part 1).
+
+### Setmana seguida fins divendres · petició de Bernat
+- Ajust addicional demanat per Bernat: les xifres de canvis d’hora, canvis d’aula i aules a la setmana queden centrades sobre les etiquetes, en tres columnes iguals. Comprovat amb la mateixa CSS a amplades de 1.160, 887 i 390 px i a l’app real mirant només l’estructura.
+- L'horari del grup, el de l'aula i l'HTML descarregat conserven una única graella de dilluns a divendres inclòs. S'eliminen les còpies de la setmana dividides en blocs de dies o carrils.
+- Quan falta amplada, es desplaça lateralment la mateixa graella i les hores queden fixes. Es mantenen l'amplada llegible de les classes i els subgrups simultanis costat per costat.
+- Comprovat visualment amb dades inventades en contenidors de 1.160, 887 i 390 px; s'arriba a divendres dins de la mateixa taula i les hores continuen visibles. Proves de part 2, app i Junta: 78 correctes i 1 omesa. `valida-guia`: 102 passos en 8 apartats.

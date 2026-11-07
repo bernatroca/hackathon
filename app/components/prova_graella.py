@@ -8,6 +8,7 @@ sys.path.insert(0, str(ARREL / 'app'))
 
 from components.graella import Cella, CSS, CSS_FILTRES, filtres_html, taula_html, script_linies_html
 from components.ajuda_part2 import CSS_GUIA, prova_guia_html
+from pagines.part2 import CSS_PAGINA
 
 
 def setmana_inventada():
@@ -34,11 +35,16 @@ def setmana_inventada():
 
 def genera():
     celles = setmana_inventada()
+    resum = '''<section class="p2-resum amb-canvis"><div>
+<span class="estat ambre">Canvis en aquest grup</span><p>Resum de la setmana inventada.</p></div>
+<div class="p2-xifres"><div><b>1</b><span>canvis d’hora</span></div>
+<div><b>0</b><span>canvis d’aula</span></div><div><b>7</b><span>aules a la setmana</span></div></div></section>'''
     casos = ''.join(
         f'<section class="prova" style="width:{ample}px"><h2>Contenidor de {ample} px</h2>'
+        + resum
         + filtres_html(celles)
         + taula_html(celles, 'Setmana inventada', estils=False)
-        + '</section>' for ample in (887, 390))
+        + '</section>' for ample in (1160, 887, 390))
     return '''<!doctype html>
 <html lang="ca"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -50,8 +56,8 @@ main{margin-left:240px;padding-top:24px;container:contingut / inline-size;min-wi
 .menu-plegat .prova-menu{display:none}.menu-plegat main{margin-left:0;padding-top:64px}
 .prova-panell{position:fixed;left:18px;bottom:84px;top:auto;right:auto;margin:0;max-width:calc(100vw - 36px);z-index:2147483647;padding:16px;background:#fff;border:1px solid #d4d3cd;border-radius:12px}
 @media(max-width:700px){main{margin-left:0;padding-top:64px}.prova-menu{width:240px}}
-h1{font-size:24px}h2{font-size:18px}.prova{max-width:100%;margin-bottom:40px}.p2-filtres{margin-bottom:12px}
-''' + CSS + CSS_FILTRES + CSS_GUIA + '</style></head><body class="st-key-p2-pagina"><main id="prova-contingut"><h1>Horari proposat · prova visual</h1><p>Totes les classes, grups i aules són inventats.</p>' + casos + prova_guia_html() + '</main>' + script_linies_html() + '''
+h1{font-size:24px}h2{font-size:18px}.prova{max-width:100%;margin-bottom:40px;container:contingut / inline-size;--linia:#e6e5e0;--tinta-2:#52514e;}.p2-filtres{margin:12px 0}
+''' + CSS + CSS_FILTRES + CSS_PAGINA + '</style></head><body class="st-key-p2-pagina"><main id="prova-contingut"><h1>Horari proposat · prova visual</h1><p>Totes les classes, grups i aules són inventats.</p>' + casos + prova_guia_html() + '</main>' + script_linies_html() + '''
 <script>
 document.querySelectorAll('.prova').forEach(prova=>{
   prova.querySelectorAll('[data-filtre]').forEach(boto=>boto.onclick=()=>{

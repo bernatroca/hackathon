@@ -25,7 +25,7 @@ from components.graella import (celles_grup, celles_aula, exporta_aula_html,
 
 
 def primera_taula(html):
-    """Les variants CSS tenen les mateixes sessions; valida la setmana completa."""
+    """Separa la graella setmanal dels estils i del peu de l’exportació."""
     return html.split('</table>', 1)[0] + '</table>'
 
 
@@ -158,7 +158,7 @@ assert.equal(cos.style.backgroundPosition,fons);
         assert 'Com funciona? Guia pas a pas' in prova_guia_html()
         assert 'prova-obre-menu' in html and 'data-testid="stSidebar"' in html
 
-    def test_columnes_i_rowspans_de_totes_les_variants(self):
+    def test_columnes_i_rowspans_de_la_setmana(self):
         from dataclasses import replace
         from html.parser import HTMLParser
         from components.graella import Cella
@@ -192,11 +192,11 @@ assert.equal(cos.style.backgroundPosition,fons);
         parcials = [a, replace(a, id_sessio='INVENTADA-B', ini=540, fi=600),
                     replace(a, id_sessio='INVENTADA-C', ini=600, fi=660)]
         # La mateixa setmana que la prova visual, i límits parcials amb rowspans
-        # tant a les classes com a les hores. Validem totes les taules ocultes.
+        # tant a les classes com a les hores. Validem la setmana sencera.
         for classes in (setmana_inventada(), parcials):
             parser = Taules()
             parser.feed(taula_html(classes))
-            assert len(parser.taules) > 8  # Setmana, dos blocs, dies i carrils.
+            assert len(parser.taules) == 1  # Una sola setmana, sense taules duplicades.
             for taula in parser.taules:
                 columnes = taula['columnes']
                 assert columnes >= 2
@@ -223,28 +223,43 @@ assert.equal(cos.style.backgroundPosition,fons);
                     pendents = seguent
                 assert not any(pendents)
 
-    def test_particio_per_carrils_i_contenidor(self):
-        from components.graella import MIN_CARRIL, CSS
+    def test_setmana_seguida_fins_divendres_sense_duplicar_classes(self):
+        from html.parser import HTMLParser
+        from components.graella import Cella
         from components.prova_graella import setmana_inventada
-        html = taula_html(setmana_inventada(), estils=False)
-        assert MIN_CARRIL == 150
-        # Dos carrils dilluns i dimecres: 7 carrils en total, 5 al primer bloc.
-        assert '@container p2-graella (min-width:1122px)' in html
-        assert '@container p2-graella (min-width:822px)' in html
-        assert 'container:p2-graella / inline-size' in CSS
-        setmana, resta = html.split('class="p2-layout p2-dos-blocs"')
-        blocs, dies = resta.split('class="p2-layout p2-dies"')
-        assert setmana.count('<table ') == 1
-        assert blocs.count('<table ') == 2
-        assert '<caption>Horari setmanal · Dilluns – Dimecres</caption>' in blocs
-        assert '<caption>Horari setmanal · Dijous – Divendres</caption>' in blocs
-        for nom in ('Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres'):
-            assert f'<caption>Horari setmanal · {nom}</caption>' in dies
-        # La variant d'un dia necessita 372 px amb dos subgrups, 222 amb un.
-        assert '@container p2-graella (min-width:372px)' in html
-        assert '@container p2-graella (min-width:222px)' in html
-        assert '.p2-carrils' in html  # També hi cap si el mòbil té marges.
-        assert 'overflow:auto' not in CSS and 'overflow-x:scroll' not in CSS
+
+        class Setmana(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.columnes = []
+                self.noms = []
+                self.columna = self.nom = False
+            def handle_starttag(self, tag, attrs):
+                if tag == 'th':
+                    self.columna = dict(attrs).get('scope') == 'col'
+                if tag == 'b':
+                    self.nom = True
+            def handle_endtag(self, tag):
+                if tag == 'th':
+                    self.columna = False
+                if tag == 'b':
+                    self.nom = False
+            def handle_data(self, data):
+                if self.columna:
+                    self.columnes.append(data)
+                if self.nom:
+                    self.noms.append(data)
+
+        # Els dies buits també conserven la seva columna fins a divendres.
+        divendres = Cella('INVENTADA-DIVENDRES', 'V', 570, 630, '',
+                         'Classe de divendres', 'Teoria', 'TE/99', False, False)
+        for classes in (setmana_inventada(), [divendres]):
+            html = taula_html(classes)
+            parser = Setmana()
+            parser.feed(html)
+            assert html.count('<table ') == 1
+            assert parser.columnes == ['Hora', 'Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres']
+            assert sorted(parser.noms) == sorted(c.assignatura for c in classes)
 
     def test_noms_sencers_i_colors_amb_contrast(self):
         from components.graella import CSS, ESTATS
@@ -301,8 +316,8 @@ assert.equal(cos.style.backgroundPosition,fons);
         html = genera()
         assert CSS in html and CSS_FILTRES in html
         assert script_linies_html() in html
-        assert 'style="width:887px"' in html and 'style="width:390px"' in html
-        assert html.count(taula_html(setmana_inventada(), 'Setmana inventada', estils=False)) == 2
+        assert all(f'style="width:{ample}px"' in html for ample in (1160, 887, 390))
+        assert html.count(taula_html(setmana_inventada(), 'Setmana inventada', estils=False)) == 3
 
 
 def sessio(sid, tipus='TE', grup='TE/81', data=date(2027, 3, 8), **kwargs):
@@ -414,7 +429,7 @@ class TestGraella(unittest.TestCase):
             at.get('button_group')[0].set_value('Només avui').run(timeout=30)
             assert not at.exception and not at.error
             html = '\n'.join(m.value for m in at.markdown)
-            assert html.count('class="p2-layout p2-setmana"') == 2
+            assert html.count('<table class="horari"') == 2  # Grup i aula, sense duplicats.
             assert 'Amb la proposta ·' not in html
             assert 'Aula no indicada a les dades' in html
             at.selectbox(key='p2-curs').select('3r').run(timeout=30)

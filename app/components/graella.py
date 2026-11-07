@@ -214,9 +214,8 @@ def filtres_html(celles, actiu='totes'):
 # El prefix evita que l'HTML exportat alteri altres components de l'app.
 CSS = """
 .p2-horari{container:p2-graella / inline-size;width:100%;max-width:100%;min-width:0;color:#1a1a18;font:13px/1.35 system-ui}
-.p2-horari .p2-layout{display:none;}
-.p2-horari .p2-dies{display:grid;gap:18px;}
-.p2-horari .horari-scroll{width:100%;max-width:100%;min-width:0;border-radius:14px;background:#fff;}
+.p2-horari .horari-scroll{width:100%;max-width:100%;min-width:0;overflow-x:auto;overscroll-behavior-x:contain;border-radius:14px;background:#fff;}
+.p2-horari .horari-scroll:focus-visible{outline:3px solid #2a78d6;outline-offset:2px;}
 .p2-horari .horari{position:relative;isolation:isolate;border-collapse:separate;border-spacing:0;table-layout:fixed;width:100%;background:#fff;}
 .p2-horari .horari th,.p2-horari .horari td{box-sizing:border-box;border:1px solid #e6e5e0;border-width:0 1px 0 0;padding:4px;vertical-align:top;}
 .p2-horari .horari th{background:#f4f3ef;font-weight:600;}
@@ -224,7 +223,7 @@ CSS = """
 .p2-horari .horari tbody tr{height:32px;}
 .p2-horari .horari tbody tr.mitja-hora{background-image:linear-gradient(#e6e5e0,#e6e5e0);background-size:100% 1px;background-repeat:no-repeat;}
 .p2-horari .horari tbody tr.hora-plena{background-image:linear-gradient(#c9c8c2,#c9c8c2);background-size:100% 2px;background-repeat:no-repeat;}
-.p2-horari .horari tbody th{background:transparent;}
+.p2-horari .horari tbody th,.p2-horari .horari thead th:first-child{position:sticky;left:0;z-index:2;background:#f4f3ef;}
 .p2-horari .horari thead th{border-bottom:1px solid #e6e5e0;}
 
 .p2-horari .horari .hora{width:72px;}
@@ -246,7 +245,6 @@ CSS = """
 .p2-horari .classe summary{cursor:pointer;list-style:none;}
 .p2-horari .classe summary::-webkit-details-marker{display:none;}
 .p2-horari .classe .detall{padding-top:6px;border-top:1px solid #e6e5e0;margin-top:6px;}
-.p2-horari .p2-carrils{display:grid;gap:12px;}
 """
 
 # El fons del tbody travessa també les cel·les amb rowspan. Mesurem les files
@@ -428,34 +426,9 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
             html += '</tr>'
         return html + '</tbody></table></div>'
 
-    # Els llindars depenen dels carrils reals de la vista, no del viewport.
-    clau = 'p2-c' + ''.join(str(carrils[d][0]) + '-' for d in DIES).rstrip('-')
-    dos_blocs = (DIES[:3], DIES[3:])
-    ample_setmana = amplada_bloc(carrils, DIES)
-    ample_dos = max(amplada_bloc(carrils, dies) for dies in dos_blocs)
-    selector = f'.p2-horari.{clau}'
-    responsive = ''
-    for dia in DIES:
-        ample_dia = amplada_bloc(carrils, (dia,))
-        responsive += (f'{selector} .p2-dia-{dia}>.horari-scroll' + '{display:none;}'
-            + f'@container p2-graella (min-width:{ample_dia}px)' + '{'
-            + f'{selector} .p2-dia-{dia}>.horari-scroll' + '{display:block;}'
-            + f'{selector} .p2-dia-{dia}>.p2-carrils' + '{display:none;}}')
-    responsive += (f'@container p2-graella (min-width:{ample_dos}px)' + '{'
-        + f'{selector} .p2-dies' + '{display:none;}'
-        + f'{selector} .p2-dos-blocs' + '{display:grid;gap:18px;}}'
-        + f'@container p2-graella (min-width:{ample_setmana}px)' + '{'
-        + f'{selector} .p2-dos-blocs' + '{display:none;}'
-        + f'{selector} .p2-setmana' + '{display:block;}}')
-    html = f'<style>{CSS if estils else ""}{responsive}</style><div class="p2-horari {clau}">'
-    html += '<div class="p2-layout p2-setmana">' + bloc(DIES) + '</div>'
-    html += '<div class="p2-layout p2-dos-blocs">' + ''.join(bloc(dies) for dies in dos_blocs) + '</div>'
-    html += '<div class="p2-layout p2-dies">'
-    for dia in DIES:
-        html += f'<div class="p2-dia-{dia}">' + bloc((dia,))
-        html += '<div class="p2-carrils">' + ''.join(
-            bloc((dia,), carril_unic=i) for i in range(carrils[dia][0])) + '</div></div>'
-    return html + '</div></div>'
+    # Una sola setmana seguida, també quan falta amplada a la pantalla.
+    return (f'<style>{CSS if estils else ""}</style><div class="p2-horari">'
+            '<div class="p2-setmana">' + bloc(DIES) + '</div></div>')
 
 
 def exporta_aula_html(base, proposta, setmana, aula, **kwargs):
