@@ -2,6 +2,7 @@
 WITH resum AS (
     SELECT count(*) AS sessions_totals,
            count(*) FILTER (WHERE aula_partida IS NULL) AS sense_aula,
+           count(*) FILTER (WHERE aula_partida IS NULL AND demanda_aulari) AS per_assignar,
            count(*) FILTER (WHERE aula_partida IS NULL AND sense_espai) AS dobles,
            count(*) FILTER (WHERE aula_partida IS NULL AND tipus = 'PLAB') AS plab,
            list_sort(list(id_sessio) FILTER (WHERE aula_partida IS NULL)) AS exemples
