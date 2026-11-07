@@ -5,3 +5,10 @@ node_modules/
 .env
 .claude/settings.local.json
 .venv/
+
+# Dades del repte: pseudonimitzades, només per a la hackató. No es pugen enlloc.
+repte/
+repte-horaris-escola/
+*.zip
+*.csv
+*.xlsx
