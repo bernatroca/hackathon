@@ -62,7 +62,7 @@
 1. [cap @ /] Mira la pàgina sencera → fons clar, menú blanc a l'esquerra i cap barra fosca de Streamlit; colors i tipografia com a la maqueta B1.
 2. [cap @ /] Mira sota el títol «Com estem avui» → hi ha una franja visible amb el semestre i la setmana que es mostren (p. ex. «2n semestre · setmana típica 2027-W05»).
 3. [cap @ /] Mira l'etiqueta d'estat del bloc gran → és un cercle amb icona (✓, ! o ✕) i text al costat, igual que a la maqueta B1, no un caràcter solt.
-4. [cap @ /] Llegeix el bloc gran → diu «Hi ha marge d'hores» amb el matí i la tarda en % enters, i «el més ajustat: el matí en conjunt» (no «aules de més de 0 places»).
+4. [cap @ /] Llegeix el bloc gran → diu «Sí, hi cap» amb l'etiqueta verda «Hi cap», el matí i la tarda en % enters i que l'horari proposat de la part 2 ho confirma amb el verificador oficial. (reprova)
 5. [cap @ /] Mira els quadrets → 15 ocupats, 4 lliures i 2 de reserva amb vora discontínua, i la llegenda no parteix cap paraula.
 6. [cap @ /] Fes la finestra de 1024 px d'ample amb el menú obert → el bloc gran no desborda ni talla els quadrets per la dreta.
 7. [cap @ /] Mira les 4 targetes → les de cada fila fan la mateixa alçada i «Proposem» i «Com ho sabem →» queden a la mateixa línia.
@@ -95,6 +95,8 @@
 34. [cap @ /] Mira els «Com ho sabem →» del bloc gran i de les caixes → són enllaços blaus iguals, amb el text sencer (no es talla ni per dalt ni per baix).
 35. [cap @ /] Mira el bloc «Si 1r i 2n fan classe al matí, hi cabem?» → els quadrets de les aules són al costat de la resposta, centrats i ben visibles, no arraconats a la dreta.
 36. [cap @ /] Mira el mateix bloc → poc marge a dalt i a baix; la línia petita del final queda just sota el text.
+37. [cap @ /] Mira la vora esquerra del bloc gran → és verda, com l'etiqueta «Hi cap».
+38. [cap @ /] Llegeix la línia petita del final del bloc gran → acaba amb «Validat amb l'horari proposat de la part 2 (verificador oficial)».
 
 ## Part 2 · Proposta d'horari
 

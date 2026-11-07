@@ -55,7 +55,8 @@ class TestApp(unittest.TestCase):
         self.comprova(app)
         self.assertEqual(len(app.title),1)
         self.assertTrue(any(t.value == 'Com estem avui' for t in app.title))
-        self.assertTrue(any(t.value == 'Hi ha marge d’hores' for t in app.subheader))
+        # Amb el 5.2 vàlid de la part 2 la resposta passa a «Sí, hi cap».
+        self.assertTrue(any(t.value in ('Hi ha marge d’hores', 'Sí, hi cap') for t in app.subheader))
         self.assertFalse(any('Sí, però just' in m.value for m in list(app.markdown)+list(app.subheader)))
         self.assertEqual(len([m for m in app.markdown if 'class="xifra-targeta"' in m.value]),len(PORTADA)-1)
         self.assertEqual(len([b for b in app.button if b.label == 'Com ho sabem →']),len(PORTADA))

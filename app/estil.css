@@ -236,3 +236,6 @@ h1 {font-size:28px!important;margin-bottom:0!important;}
 .st-key-heroi [data-testid="stCaptionContainer"] {margin-top:4px;}
 .st-key-heroi .aules {grid-template-columns:repeat(7,28px);gap:6px;margin:0 0 6px;}
 .st-key-heroi .aules-peu {font-size:14px;max-width:24rem;margin:0;}
+/* La vora del bloc gran segueix l'estat de la resposta. */
+.st-key-heroi:has(.estat.verd) {border-left-color:var(--verd)!important;}
+.st-key-heroi:has(.estat.vermell) {border-left-color:var(--vermell)!important;}
