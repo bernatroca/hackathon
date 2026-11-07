@@ -11,6 +11,7 @@ from __future__ import annotations
 import copy
 import csv
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -18,8 +19,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 ARREL = Path(__file__).resolve().parents[1]
-# Les dades són fora del repositori (no van a git). Ruta absoluta, perquè els worktrees no les tenen.
-REPTE = Path('/Users/bernatroca/Bernat/Hackathon/repte/repte-horaris-escola')
+# Les dades són fora del repositori (no van a git). Ruta absoluta per defecte, perquè els worktrees no les tenen;
+# es pot canviar amb la variable d'entorn REPTE_DIR (la carpeta que conté paquet/ i horaris/).
+REPTE = Path(os.environ.get('REPTE_DIR', '/Users/bernatroca/Bernat/Hackathon/repte/repte-horaris-escola'))
 PAQUET = REPTE / 'paquet'
 ESCENARIS = PAQUET / 'escenaris'
 CONTINGENCIES = ESCENARIS / 'contingencies'
