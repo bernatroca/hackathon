@@ -1,0 +1,41 @@
+<!DOCTYPE html><html lang="ca"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Junta A · Dos semàfors grans</title><style>
+:root{--fons:#f4f3ef;--targeta:#fff;--tinta:#1a1a18;--tinta-2:#52514e;--suau:#8a8984;--linia:#e6e5e0;
+--blau:#2a78d6;--blau-clar:#cde2fb;
+--verd:#3f9a52;--verd-fons:#edf6ee;--verd-text:#2b6b38;
+--taronja:#e8820c;--taronja-fons:#fff1e0;--taronja-text:#9a5200;
+--vermell:#d03b3b;--vermell-fons:#fbe9e9;--vermell-text:#a12c2c;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--fons);color:var(--tinta);font:16px/1.5 -apple-system,"Segoe UI",system-ui,sans-serif;display:grid;grid-template-columns:248px 1fr;min-height:100vh}
+aside.menu{background:var(--targeta);border-right:1px solid var(--linia);padding:28px 18px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
+aside.menu .marca{font-weight:700;font-size:18px;padding:0 10px 22px}
+aside.menu .grup{font-size:13px;color:var(--suau);padding:14px 10px 6px}
+aside.menu a{display:flex;justify-content:space-between;padding:9px 10px;border-radius:8px;color:var(--tinta-2);text-decoration:none;font-size:15px}
+aside.menu a.actiu{background:var(--fons);color:var(--tinta);font-weight:600}
+aside.menu .aviat{font-size:12px;color:var(--suau)}
+aside.menu .peu{margin-top:auto;font-size:13px;color:var(--suau);padding:0 10px}
+main{padding:40px 40px 100px;max-width:1080px;width:100%;margin:0 auto}
+h1{font-size:34px;margin:0 0 6px;letter-spacing:-.01em}
+.intro{color:var(--tinta-2);margin:0 0 24px;font-size:17px;max-width:68ch}
+h2{font-size:21px;margin:32px 0 12px}
+.estat{display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:600;padding:4px 12px;border-radius:999px;white-space:nowrap}
+.estat svg{width:16px;height:16px}
+.estat.verd{background:var(--verd-fons);color:var(--verd-text)}
+.estat.taronja{background:var(--taronja-fons);color:var(--taronja-text)}
+.estat.vermell{background:var(--vermell-fons);color:var(--vermell-text)}
+.targeta{background:var(--targeta);border:1px solid var(--linia);border-radius:16px;padding:22px 24px}
+.seleccio{display:flex;gap:12px;align-items:center;margin-bottom:24px;font-size:15px;color:var(--tinta-2)}
+.seleccio select{font:inherit;padding:7px 10px;border:1px solid var(--linia);border-radius:8px;background:#fff}
+details{margin-top:28px;font-size:14px;color:var(--tinta-2)} summary{cursor:pointer;color:var(--blau);font-size:15px}
+.etiqueta-opcio{position:absolute;left:272px;top:10px;background:var(--tinta);color:#fff;font-size:13px;padding:6px 12px;border-radius:999px}
+@media(max-width:900px){body{grid-template-columns:1fr}aside.menu{position:static;height:auto}main{padding:24px 16px 80px}}
+.torns{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.torn{border-left:8px solid var(--verd)} .torn.taronja{border-left-color:var(--taronja)} .torn.vermell{border-left-color:var(--vermell)}
+.torn h3{margin:12px 0 2px;font-size:20px;color:var(--tinta-2);font-weight:500}.torn .gran{font-size:44px;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+.torn .gran small{font-size:18px;font-weight:500;color:var(--tinta-2)}
+.quadrets{display:grid;grid-template-columns:repeat(19,1fr);gap:4px;margin-top:14px}.quadrets i{height:14px;border-radius:3px;background:#e9e8e3}
+.verd .quadrets i.o{background:var(--verd)}.taronja .quadrets i.o{background:var(--taronja)}.vermell .quadrets i.o{background:var(--vermell)}
+.files{display:grid;gap:10px}.fila{display:grid;grid-template-columns:220px 1fr 56px;gap:12px;align-items:center;font-size:15px}
+.barra{height:10px;background:#eceae4;border-radius:999px;overflow:hidden}.barra i{display:block;height:100%;background:var(--blau);border-radius:999px}
+.fila b{text-align:right}.nota{color:var(--tinta-2);font-size:15px;margin:10px 0 0}
+@media(max-width:900px){.torns{grid-template-columns:1fr}.fila{grid-template-columns:1fr 50px}.fila .barra{grid-column:1/-1}}</style></head><body><svg width="0" height="0" style="position:absolute"><symbol id="ok" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M4.5 8.5l2.5 2.5 4.5-5" stroke="#fff" stroke-width="2" fill="none"/></symbol><symbol id="alerta" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor"/><rect x="7" y="4" width="2" height="5" fill="#fff"/><rect x="7" y="10.5" width="2" height="2" fill="#fff"/></symbol><symbol id="creu" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M5 5l6 6M11 5l-6 6" stroke="#fff" stroke-width="2"/></symbol></svg><aside class="menu"><div class="marca">Espais de l'Escola</div><div class="grup">Com està l'horari</div><a href="#">Com estem avui</a><a href="#">Totes les respostes</a><div class="grup">La proposta</div><a href="#">Horari proposat</a><a class="actiu" href="#">Resum per a la Junta</a><a href="#">Imprevistos <span class="aviat">aviat</span></a><div class="grup">Ajuda</div><a href="#">Pregunta-ho <span class="aviat">aviat</span></a><div class="peu">2n semestre. Les dades no surten d'aquest ordinador.</div></aside><main><h1>Resum per a la Junta</h1><p class="intro">El que la Junta ha de saber per decidir si aprova els torns nous: 1r i 2n al matí, i la resta a la tarda.</p>
+<div class="seleccio">Proposta <select><option>Torns nous (5.2)</option><option>Aules assignades (5.1)</option></select></div><h2>Hi cabem?</h2><div class="torns"><section class="targeta torn taronja"><span class="estat taronja"><svg><use href="#alerta"/></svg>Hi cap, just</span><h3>Matí: classes alhora a l'hora més plena</h3><div class="gran">19 <small>de 19 aules</small></div><div class="quadrets" aria-hidden="true"><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i></div></section><section class="targeta torn verd"><span class="estat verd"><svg><use href="#ok"/></svg>Hi cap amb marge</span><h3>Tarda: classes alhora a l'hora més plena</h3><div class="gran">13 <small>de 19 aules</small></div><div class="quadrets" aria-hidden="true"><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i></div></section></div><h2>A qui li canvia l'horari?</h2><section class="targeta"><div class="files"><div class="fila"><span>Grau inventat A, 3r</span><div class="barra"><i style="width:62%"></i></div><b>62 %</b></div><div class="fila"><span>Grau inventat B, 4t</span><div class="barra"><i style="width:48%"></i></div><b>48 %</b></div><div class="fila"><span>Grau inventat C, 1r</span><div class="barra"><i style="width:21%"></i></div><b>21 %</b></div><div class="fila"><span>Grau inventat D, 2n</span><div class="barra"><i style="width:9%"></i></div><b>9 %</b></div><div class="fila"><span>Màster inventat</span><div class="barra"><i style="width:0%"></i></div><b>0 %</b></div></div><p class="nota">Percentatge de les classes de cada curs que canvien de dia o d'hora.</p></section><h2>Excepcions als torns</h2><section class="targeta"><span class="estat verd"><svg><use href="#ok"/></svg>Només 1</span><p class="nota">Una classe es queda al torn d'avui la setmana d'avaluació d'abril, perquè no hi cap en cap altra hora.</p></section><details><summary>Detall tècnic</summary><p>Comptem, a cada hora del semestre, quantes aules docents diferents fa servir la proposta. N'hi ha 21 i sempre n'han de quedar 2 lliures, per això el límit és 19. Els laboratoris i les aules d'altres edificis no hi compten.</p></details></main><div class="etiqueta-opcio">Junta A · Dos semàfors grans</div></body></html>
