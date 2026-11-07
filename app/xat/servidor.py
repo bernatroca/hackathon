@@ -20,6 +20,7 @@ Només fa servir la biblioteca estàndard de Python.
 from __future__ import annotations
 
 import json
+import html
 import errno
 import importlib
 import subprocess
@@ -330,10 +331,25 @@ def _executa_prova(nom, args):
     return {"ok": True, "resultat": args, "id_sessio": [], "consulta": nom}
 
 
+def _desescapa_arguments(valor):
+    """Desescapa només valors de text; conserva claus i tipus JSON."""
+    if isinstance(valor, str):
+        return html.unescape(valor)
+    if isinstance(valor, dict):
+        return {clau: _desescapa_arguments(element) for clau, element in valor.items()}
+    if isinstance(valor, list):
+        return [_desescapa_arguments(element) for element in valor]
+    return valor
+
+
+def _arguments_crida(crida):
+    return _desescapa_arguments(json.loads(crida["function"]["arguments"]))
+
+
 def _executa(crida):
     try:
         funcio = crida["function"]
-        args = json.loads(funcio["arguments"])
+        args = _arguments_crida(crida)
         if not isinstance(args, dict):
             raise ValueError()
     except (KeyError, TypeError, ValueError):
@@ -406,7 +422,7 @@ def _trossos(p: dict, missatges: list[dict]):
             yield "eina", crida["function"]["name"]
             resultat = _executa(crida)
             try:
-                args = json.loads(crida["function"]["arguments"])
+                args = _arguments_crida(crida)
             except (ValueError, TypeError):
                 args = {}
             yield "consulta", _resum_consulta(crida["function"]["name"], args, resultat)
