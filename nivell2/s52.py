@@ -1,5 +1,6 @@
 """5.2 complet: franges, aules, verificador oficial i comparació."""
 from __future__ import annotations
+from nivell2.readmes import actualitza
 import argparse
 import csv
 import json
@@ -207,6 +208,7 @@ Si fallen les aules, hi ha com a màxim tres intents amb capacitat horària
 més estricta; aquests límits són una heurística, no una prova d'impossibilitat.
 ''',encoding='utf-8')
     print(report.veredicte,f'{elapsed:.3f} s')
+    actualitza(out, '5.2')
     metrics = {r['xifra']:r['despres'] for r in comparison.files}
     counts = {
         'sessions_mogudes':metrics.get('canvis_franja',0),

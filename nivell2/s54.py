@@ -4,6 +4,7 @@ Les dades només les llegeix aquest solver. La consola només mostra recomptes.
 Un INFEASIBLE amb el 5.2 congelat és resposta 2, mai resposta 4.
 """
 from __future__ import annotations
+from nivell2.readmes import actualitza
 
 import argparse
 import copy
@@ -357,6 +358,7 @@ def main(argv=None):
         '```\n\nProves i comprovació de persones:\n```sh\n'
         f'{PYTHON} -m pytest -q nivell2 app\n'
         f'RESULTATS_DIR=$PWD/resultats/nivell2 {PYTHON} -m nivell2.comprova_persones\n```\n', encoding='utf-8')
+    actualitza(out, '5.4')
     print('Resposta:', summary['resposta'], '; solver:', stats['estat'])
     print('Activitats noves:', stats['activitats_noves'], '; opcions:', sum(stats['opcions_per_activitat']))
     print('Temps de construcció:', round(stats.get('temps_construccio_s', stats['temps_s']), 3),

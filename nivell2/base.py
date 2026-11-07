@@ -145,24 +145,36 @@ class Informe:
         return {k: v['compten'] for k, v in self.json['restriccions'].items() if v.get('compten')}
 
 
+def ordre_verificador(proposta, *, escenari=None, referencia=None, relaxacions=None,
+                      nomes_aules=False, json_path=None, violacions_path=None,
+                      python=PYTHON, absolut=True):
+    """Arguments oficials compartits per execució i documentació."""
+    def ruta(path):
+        return str(Path(path).resolve() if absolut else path)
+    cmd = [str(python), '-m', 'horaris', 'check', ruta(proposta), '--semestre', str(SEMESTRE),
+           '--json', ruta(json_path)]
+    if escenari:
+        cmd += ['--escenari', ruta(escenari)]
+    if referencia:
+        cmd += ['--referencia', ruta(referencia)]
+    if relaxacions:
+        cmd += ['--relaxacions', ruta(relaxacions)]
+    if nomes_aules:
+        cmd.append('--nomes-aules')
+    if violacions_path:
+        cmd += ['--violacions', ruta(violacions_path)]
+    return cmd
+
+
 def verifica(proposta: Path, *, escenari: Path | None = None, referencia: Path | None = None,
              relaxacions: Path | None = None, nomes_aules: bool = False, json_path: Path | None = None,
              violacions_path: Path | None = None) -> Informe:
     """Executa `python -m horaris check` (la mateixa ordre que el jurat) des de la carpeta del repte."""
     with tempfile.TemporaryDirectory() as tmp:
         jp = Path(json_path) if json_path else Path(tmp) / 'informe.json'
-        cmd = [str(PYTHON), '-m', 'horaris', 'check', str(Path(proposta).resolve()), '--semestre', str(SEMESTRE),
-               '--json', str(jp.resolve())]
-        if escenari:
-            cmd += ['--escenari', str(Path(escenari).resolve())]
-        if referencia:
-            cmd += ['--referencia', str(Path(referencia).resolve())]
-        if relaxacions:
-            cmd += ['--relaxacions', str(Path(relaxacions).resolve())]
-        if nomes_aules:
-            cmd.append('--nomes-aules')
-        if violacions_path:
-            cmd += ['--violacions', str(Path(violacions_path).resolve())]
+        cmd = ordre_verificador(proposta, escenari=escenari, referencia=referencia,
+                                relaxacions=relaxacions, nomes_aules=nomes_aules,
+                                json_path=jp, violacions_path=violacions_path)
         r = subprocess.run(cmd, cwd=REPTE, capture_output=True, text=True)
         if r.returncode == 2 or not jp.exists():
             raise RuntimeError(f'El verificador no ha pogut llegir la proposta:\n{r.stderr or r.stdout}')
