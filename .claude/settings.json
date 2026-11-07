@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./repte/**)",
+      "Read(./resultats/**)",
+      "Read(./dades/**)",
+      "Read(/repte/**)",
+      "Read(/resultats/**)",
+      "Read(/dades/**)",
+      "Bash(cat repte/*)",
+      "Bash(head repte/*)",
+      "Bash(tail repte/*)",
+      "Bash(cat resultats/*)",
+      "Bash(head resultats/*)",
+      "Bash(tail resultats/*)",
+      "Bash(cat dades/*)",
+      "Bash(head dades/*)",
+      "Bash(tail dades/*)"
+    ]
+  }
+}

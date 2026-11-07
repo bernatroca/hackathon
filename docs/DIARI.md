@@ -80,9 +80,9 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - Espec: .plans/nivell2-horari-spec.md (substitueix .plans/nivell2-prompt.md).
 
 ### [ds 15:51] DECISIÓ · Desdoblament de PAUL i SEM i punts pendents de la part 2
-- Tot PAUL o SEM movible de més de 34 alumnes es parteix en dues meitats (aula petita = seminari o Q9/5014). Amb parella, rotació: la 1a hora A fa X i B fa Y, i la 2a es canvien. Sense parella, es parteix igualment; si no hi ha hora seguida, la 2a meitat la fa un altre dia.
+- Tot PAUL o SEM movible de més de 34 alumnes es parteix en dues meitats (aula petita = seminari o una aula de fins a 34 places). Amb parella, rotació: la 1a hora A fa X i B fa Y, i la 2a es canvien. Sense parella, es parteix igualment; si no hi ha hora seguida, la 2a meitat la fa un altre dia.
 - DADA: 101 grups de problemes tenen de 35 a 50 alumnes i només hi ha 4 aules d'aquesta mida; avui ocupen aules de 63-90 que necessita la teoria.
-- TE/908 (5.3): aula més gran a la mateixa hora. Les excepcions a la regla 1 es demostren amb recompte o INFEASIBLE. La vista de l'estudiant posa avui i proposta costat per costat.
+- Grup de teoria que creix (5.3): aula més gran a la mateixa hora. Les excepcions a la regla 1 es demostren amb recompte o INFEASIBLE. La vista de l'estudiant posa avui i proposta costat per costat.
 - Queda per confirmar el format del resum de la Junta. Espec: .plans/nivell2-horari-spec.md
 
 ### [ds 15:52] DECISIÓ · Horari oficial de diumenge: entrega a les 12:00
@@ -126,10 +126,10 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - 25/25 comprovacions; tests de l'app OK. VALIDATION.md amb 17 passos marcats per reprovar.
 
 ### [ds 17:40] DADA · Alumnes reals dels 14 grups sense dada (2n semestre, 276 sessions)
-- El paquet hi posa 0. El portal públic SIQ de la UAB dona els matriculats per assignatura i any: Assignatura Inventada A (GEQ 4t) 16–24 (16 el 2025), Assignatura Inventada B (GED 4t) 14–18 (18 el 2025). Font: [enllaç retirat] i …/900003/
-- Les places previstes de Sigma (30 i 40) gairebé doblaven els alumnes reals.
-- Les dues de GIA 3r (900005, 900006) són obligatòries i noves el 2026-27: sense històric. Estimació: 45, la promoció de GIA 3r al paquet (42–49).
-- Assignatura Inventada C (4 PAUL) ja té alumnes: és la mateixa classe que Assignatura Inventada D (43, 44, 39, 44).
+- El paquet hi posa 0. Per a dues optatives de 4t hem fet servir els matriculats que publica el portal públic SIQ de la UAB. (Noms, codis i enllaços retirats d'aquest diari el ds 7-11 al vespre.)
+- Les places previstes de Sigma gairebé doblaven els alumnes reals.
+- Dues obligatòries de 3r, noves el 2026-27, no tenen històric: estimació amb la promoció del mateix curs al paquet.
+- Una assignatura amb quatre grups de problemes ja té alumnes: és la mateixa classe que una altra (classe compartida).
 
 ### [ds 17:40] DECISIÓ · El model de la part 2 fa servir aquestes xifres
 - Fitxer `dades/alumnes_sense_dada.json` (xifra, font i nota per grup). Especificació i tasca 0.3 actualitzades.
@@ -169,3 +169,97 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 ### [ds 18:05] PROBLEMA · El model de franges del 5.2 no troba solució a temps
 - n2-backend-2: el model sencer (totes les sessions, tots dos torns) acaba en UNKNOWN després de 300 s. UNKNOWN no vol dir impossible.
 - Com ho resolem: torna a Codex amb effort high i una estratègia de reparació local. Primer es mouen només les activitats fora de torn o de finestra; matí i tarda per separat; setmana tipus amb conflictes només entre activitats que comparteixen setmana; i primer complir, després optimitzar.
+
+### [ds 18:12] SOLUCIÓ · El model de franges del 5.2 ja troba solució
+- Amb la reparació local (moure només les activitats fora de torn, matí i tarda per separat i setmana tipus), n2-backend-2 troba solució en uns 12 s, sense sessions fora de torn ni solapaments nous de docent o alumnat. Comprovat per la integració.
+- Mou només les sessions que la regla 1 obliga a moure. Les sessions que cauen en festiu es mouen a un altre dia de la mateixa setmana i surten com a excepcions.
+- Fase 2 llançada: n2-backend-2 (5.2 sencer, amb aules) i n2-dades-2 (resum de la Junta). n2-frontend-2 espera que la sessió Part 1 acabi la passada de disseny d'app/.
+
+### [ds 18:13] SOLUCIÓ · Passada de disseny de la part 1 amb les skills de disseny
+- Revisió de només lectura (Codex) amb les Web Interface Guidelines de Vercel, better-ui, dataviz i la B1: 18 troballes i la paleta amb el contrast WCAG (docs/revisio-disseny-1.md).
+- L'equip aprova els 10 retocs petits i els 4 canvis grans:
+  - bloc gran en vermell si no hi cap;
+  - semestre i setmana visibles;
+  - «Veure les dades» i barres primes;
+  - icones SVG, un sol h1, ?resposta=<id> i errors planers.
+- Abans de canviar res: etiqueta part1-v1 per poder tornar enrere.
+- Coordinació: la sessió Part 2 havia esborrat els worktrees de la part 1. S'ha refet ../hack-frontend i s'ha acordat qui toca què a app/. La part 2 continua els seus fitxers ara que la passada és a main.
+- Skills noves trobades, per instal·lar a mà: jakubkrehel better-colors, better-layout i better-interface, i pbakaus impeccable.
+
+### [ds 18:19] IA · n2-frontend-2 unit: la graella es llegeix millor
+- Cada classe és un sol bloc, surt per defecte la proposta més avançada, hi ha una línia de resum per grup (canvis de franja, d'aula i de torn, i aules diferents a la setmana) i es marquen les excepcions de calendari. Té 27 proves verdes i l'he comprovat al navegador.
+- Es veu a ull nu que el 5.1 fa servir massa aules diferents per grup: la millora de l'aula base passa per davant.
+- Pendent de la graella: quan coincideixen subgrups, les columnes queden massa estretes.
+- La pàgina de la Junta espera el format de n2-dades-2, que ha preguntat dues coses i l'equip ha respost (excepcions agrupades a la pàgina; «No s'ha explicat per què» si no hi ha motiu).
+
+### [ds 18:23] PROBLEMA · La setmana d'avaluació d'abril no hi cap amb els torns nous
+- El 5.2 complet no troba aules ni franges per a la setmana del 5 al 9 d'abril. Del dilluns al dijous és setmana d'avaluació: el verificador no hi deixa portar classes d'un altre dia, i les que han de canviar de torn s'amunteguen el divendres 9 a la tarda, on xoquen docents i grups.
+- Decisió, d'acord amb l'especificació: només en aquella setmana, i només si es demostra que és impossible, es demana l'excepció a la regla 1. El mínim de sessions es queda al torn d'avui, declarades com a relaxació R1-TORN amb la prova.
+
+### [ds 18:24] IA · n2-dades-2 unit: resum per a la Junta
+- `python -m nivell2.junta <proposta>` escriu junta.json, junta.md i junta.html (una pàgina A4 per imprimir) en uns 2 s. Té 8 proves verdes, inclosa la xifra de l'enunciat del pic del matí. Els resums es queden a resultats/, fora de git.
+- Llançat n2-frontend-3: la pàgina «Resum per a la Junta» a l'app. Hem avisat la sessió Part 1 que toca la navegació d'app/app.py.
+
+### [ds 18:30] PROBLEMA · Dues xifres de la Junta confonien
+- n2-frontend-3 ja ha posat la pàgina «Resum per a la Junta» a l'app (33 proves verdes, comprovada al navegador).
+- En provar-la amb el 5.1 hem vist dos errors. Comptava com a canvi posar aula a una classe que no en tenia (i sortien titulacions amb el 100 % «mogudes»). I el pic comptava totes les classes, no només les aules ordinàries (deia «falten aules» amb una proposta vàlida).
+- Com ho resolem: n2-dades-3 les corregeix amb el criteri del verificador (canvi d'aula només si ja en tenia, i pic d'aules ordinàries per franja d'una hora).
+
+### Usabilitat del nivell 2 · revisió demanada per Bernat
+- La consulta ha de ser entenedora per a Gestió Acadèmica: «Horari actual» són els fitxers originals i «Amb la proposta» és la millora escollida. Consultar només l'actual no dibuixa una comparació duplicada.
+- S'amaguen els selectors amb un sol valor. El grup de teoria passa a dir-se «Grup d'estudiants», amb l'explicació dels subgrups; es fa explícit que es poden consultar tots els cursos i les hores de tarda.
+- Les aules que falten són mancances dels fitxers originals, no classes cancel·lades. Blau sense canvis, verd aula afegida, groc classe modificada i vora discontínua cas especial: llegenda visible i text a cada classe.
+- Ajuda opcional de sis passos que porta als apartats de la pàgina, amb anterior, següent i tancar. Controls compactes en mòbil. Les classes soles aprofiten l'amplada del dia; les graelles s'apilen quan no hi caben totes dues i tenen desplaçament lateral en pantalles estretes.
+- Verificació funcional: 39 proves passen i 1 queda omesa en els tests de part 2, app i Junta. Comprovació al Chrome dels filtres, la consulta única i el recorregut de l'ajuda; revisada també la disposició a 390 px.
+
+### [ds 19:09] DECISIÓ · Norma nova de la direcció: els agents ja no llegeixen dades
+- Fins ara, amb el permís que segons l'equip havia donat l'organització (no l'hem verificat pel nostre compte), Claude i Codex treballaven amb el paquet de dades i en llegien fitxers i sortides. Des d'ara, per precaució i per indicació de la direcció, cap agent llegeix dades reals: només recomptes, errors o el veredicte.
+- Barreres: .claude/settings.json (Claude Code no pot llegir repte/, resultats/ ni dades/), AGENTS.md (la norma per a Codex, repetida a cada encàrrec) i .gitignore.
+- L'app només s'obre des d'aquest ordinador: server.address = localhost, i el servidor de disseny lligat a 127.0.0.1.
+- No separem l'app de les dades: les parts 2 i 3 en necessiten (graella i assistent). Sí que traiem de les taules que es mostren les columnes que no calen (identificadors de docent i codis).
+- Pendent: treure de l'historial local el fitxer de dades i els detalls del diari abans de pujar res a GitHub (a GitHub no n'hi ha cap).
+
+### [ds 19:18] DECISIÓ · Validació de la part 2 i tres propostes de disseny
+- Validació d'en Bernat: el 5.1, la graella i la Junta funcionen; quedava una incoherència a la Junta, entre el pic (19/19 i 13/19) i la taula de mides (−3 i −6). Ja està corregida (n2-dades-4): els dos fan servir el mateix recompte d'aules ordinàries per franja.
+- Millora de l'aula base unida (n2-backend-1): un grup de mostra passa de 9 aules a la setmana a 3.
+- Disseny: tres propostes per a la pàgina de la part 2, amb l'estil de la part 1 i dades inventades (docs/disseny/part2-opcio-a, b i c): A, franja i pastilla; B, com era i com queda; C, colors que ressalten. Totes porten el menú agrupat i la guia a baix a l'esquerra. L'equip tria.
+- La part 1 rep la petició de fer més petites les caixes de «Totes les respostes», ordenades per urgència i amb filtres.
+- Pendent: la pregunta de les 458 sessions fixades sense aula del 5.2.
+
+### [ds 19:20] DECISIÓ · Norma de dades a la part 2 i resultats de la validació
+- Norma de la direcció: cap agent llegeix repte/, resultats/ ni dades/; només recomptes, errors o el veredicte. Cada encàrrec a Codex de la part 2 porta la frase de la norma. El servidor de la part 2 (8503) ja només escolta a 127.0.0.1.
+- nivell2/base.py llegeix la carpeta de les dades de REPTE_DIR. Pendent per a la branca del 5.2: que franges.py imprimeixi només el nombre d'excepcions i desi el detall en un fitxer.
+- Validació de l'equip, coses a arreglar de la part 2: graelles una sota l'altra en pantalla ampla (7.4), subgrups massa estrets (7.7), classe compartida que surt com dos blocs a una aula (7.9), codis de grup sense explicar (7.12) i sigles al resum de la Junta (8.7). La 8.7 ja és en marxa (n2-dades-5); la resta entra amb el disseny que triï l'equip.
+- PROBLEMA: uns canvis de la pàgina de la part 2 sense commit a la carpeta principal van entrar al commit c1a5ebb d'una altra sessió, i app/components/ajuda_part2.py havia quedat fora de git. Solució: s'ha fet el commit del fitxer, i a la carpeta principal només es fan commits amb camins explícits.
+
+### [ds 19:30] DECISIÓ · Disseny de la part 2: opció A, i tres versions de la Junta
+- L'equip tria l'opció A per a l'horari proposat: franja de color i pastilla. Sense canvis en blau (no en gris), aula assignada en verd suau, canvi en taronja i cas especial en vermell, amb filtres pels mateixos colors. L'horari ha de ser el protagonista: controls compactes en una targeta i el resum en tres xifres. La guia pas a pas enfoca l'apartat i el panell surt al costat. Ho fa n2-frontend-4.
+- Junta: tres versions per triar (docs/disseny/junta-opcio-a, b i c), amb colors orientatius (verd suau amb marge, taronja si va just, vermell si falten aules) i textos curts.
+- A la part 1 (sessió Part 1): totes les pàgines amb l'estil de la primera, centrades; caixes més petites a la primera pàgina; filtres de «Totes les respostes» amb el color i la icona de cada estat; la capçalera que talla en fer scroll.
+- Neteja de dades unida: proves amb valors inventats i el 5.1 només imprimeix recomptes (n2-neteja-1). Textos de la Junta sense sigles (n2-dades-5).
+
+### [ds 20:15] DECISIÓ · Neteja de dades reals del repositori i de l'historial
+- Context: l'equip explica que hi va haver un malentès entre l'organització i la Junta. Primer es va comunicar que es podien fer servir les dades amb IA, i després va arribar la restricció. No esborrem que s'hi havia treballat: ho expliquem al README.
+- Documents, proves, maquetes i app: els identificadors i exemples reals (sessions, docents, codis i noms d'assignatura, grups, aules i enllaços a la SIQ) s'han canviat per inventats o genèrics. L'app ja no mostra identificadors de sessió.
+- Historial local reescrit amb git filter-branch (main, n2-backend-2 i n2-frontend-4): fora `dades/` i els identificadors reals de totes les versions antigues. També s'han esborrat el tag part1-v1, les branques ja unides i els punts de control de Codex (refs/codex/…), i s'han fet reflog expire i gc. Els hashes han canviat des de 09b2c23.
+- Es mantenen dos noms d'aula que el codi de la part 2 i una consulta necessiten com a constant: són espais, no persones.
+- GitHub no havia tingut mai dades; main s'hi ha pujat sense forçar.
+- Límit: la neteja és local i del repositori. No desfà el que es va enviar a Anthropic i a OpenAI abans de la restricció.
+
+### [ds 19:59] IA · Redisseny de l'horari proposat (opció A) unit a main
+- n2-frontend-4: l'horari és el protagonista, amb controls en una sola targeta, resum en tres xifres, una sola graella amb franja i pastilla de color (sense canvis en blau, aula assignada en verd, canvi en taronja, cas especial en vermell), filtres per estat, classe compartida en un sol bloc, grups en paraules i menú agrupat. Comprovat al navegador: la graella es veu sense fer scroll.
+- PROBLEMA: dues vegades s'ha unit a main una branca amb una prova vermella, perquè l'ordre de les proves anava amb un pipe que n'amagava la fallada. Solució: proves primer, i el merge en una ordre a part. La prova fallava pels números inventats de la reescriptura de l'historial.
+- Pendent de corregir (n2-frontend-6): la guia pas a pas no s'obre (st.html no executa el JavaScript), el camp «Grup» es trepitja, un títol numerat sobrant i dies partits en carrils sense que calgui.
+- Junta: l'equip tria la versió C (tauler compacte). Ho fa n2-frontend-5.
+
+### [ds 20:17] SOLUCIÓ · Guia pas a pas, graella i Junta C acabades
+- n2-frontend-6 (Codex gpt-6.1-sol high): la guia ja funciona (ressalta l'apartat, enfosqueix la resta, el panell va al costat, Esc la tanca, també al mòbil); el camp «Grup» ja no es trepitja; carrils només on hi ha classes alhora.
+- n2-frontend-7 (Codex gpt-6.1-sol medium): a la Junta, l'estat per mida és exacte, selector Matí/Tarda, «Cap» quan cap curs canvia, percentatges en català, i les excepcions noves als torns se separen de les classes que avui ja són fora del seu torn i no es toquen.
+- Integració (Claude): la setmana sencera no hi cabia a 1280 px i el botó de la guia quedava sota la barra lateral; corregit. El resum antic de la Junta es torna a generar sol.
+
+### [ds 20:58] SOLUCIÓ · Horari proposat llegible i comprovació de persones
+- Feedback de l'equip: la graella era massa estreta i lletja. n2-frontend-8 (Codex gpt-6.1-sol high): classes de 150 px mínim amb el nom sencer, la setmana es parteix en blocs si no hi cap, colors amb contrast, filtres com la maqueta A, només les hores amb classe, línies contínues, apòstrofs i «Sense curs a les dades».
+- Error trobat en verificar amb dades inventades: el cos de la taula anava desplaçat una columna; corregit i amb prova automàtica.
+- Norma: el disseny es verifica amb una pàgina de dades inventades (docs/disseny/part2-prova-app.html); de l'app real només mirem l'estructura.
+- Nova eina: nivell2/comprova_persones.py diu, només amb recomptes, si alguna persona té dues classes alhora o si les classes dels dobles graus se separen o es dupliquen. L'executa l'equip.
+- Codex passa al mode ràpid (service_tier priority, 1,5x de velocitat i més consum).

@@ -6,9 +6,9 @@ Aquest fitxer descriu els CSV per a qui escrigui codi sense veure les dades real
 
 | Columna | Tipus | Exemple / valors |
 |---|---|---|
-| id_sessio | text | `S95000` (clau de la proposta) |
+| id_sessio | text | `S90001` (clau de la proposta) |
 | activitat_id | text | `A9500` (mateix grup, dia i hora cada setmana) |
-| id_compartida | text, pot ser buit | `C95000` si és la mateixa classe física que una altra |
+| id_compartida | text, pot ser buit | `C90001` si és la mateixa classe física que una altra |
 | codi | text (6 dígits) | `100000` |
 | assignatura | text | nom de l'assignatura |
 | tipus | `TE` · `PAUL` · `PLAB` · `SEM` | teoria, problemes, laboratori, seminari |
@@ -21,7 +21,7 @@ Aquest fitxer descriu els CSV per a qui escrigui codi sense veure les dades real
 | durada_min | enter | 60, 120 o 180 |
 | alumnes | enter | 0 si no hi ha dada |
 | capacitat_grup | enter, pot ser buit | places previstes |
-| aula_partida | text, pot ser buit | `Q9/5015`; buit = sense aula |
+| aula_partida | text, pot ser buit | `Q9/1003`; buit = sense aula |
 | aules_addicionals_partida | text, pot ser buit | altres aules separades per `|` |
 | plans | text | codis de pla separats per `|` |
 | titulacions_curs | text | `GXX:1r` o `GXX:2n|GYY:2n` (titulació:curs) |
@@ -34,7 +34,7 @@ Aquest fitxer descriu els CSV per a qui escrigui codi sense veure les dades real
 
 ```csv
 id_sessio,activitat_id,id_compartida,codi,assignatura,tipus,grup,semestre,data,setmana,dia,h_ini,h_fi,durada_min,alumnes,capacitat_grup,aula_partida,aules_addicionals_partida,plans,titulacions_curs,dc,torn_requerit,fixada,docents,alumnes_origen,sense_espai
-S90001,A9001,,100000,Assignatura Inventada I,TE,TE/81,C/2,2027-02-15,2027-W07,L,08:30,10:30,120,85,90,Q9/5016,,9999,GXX:1r,,mati,,D900,sigma,0
+S90001,A9001,,100000,Assignatura Inventada I,TE,TE/81,C/2,2027-02-15,2027-W07,L,08:30,10:30,120,85,90,Q9/1003,,9999,GXX:1r,,mati,,D900,sigma,0
 S90002,A9002,C90001,100001,Assignatura Inventada II,PAUL,PAUL/811,C/2,2027-02-16,2027-W07,M,15:00,17:00,120,42,,,,9999|9998,GXX:3r|GYY:3r,P,tarda,,D901|D902,estimat,0
 ```
 
@@ -42,7 +42,7 @@ S90002,A9002,C90001,100001,Assignatura Inventada II,PAUL,PAUL/811,C/2,2027-02-16
 
 | Columna | Tipus | Exemple / valors |
 |---|---|---|
-| aula | text | `Q9/5021` (espina Q4, planta 0) |
+| aula | text | `Q9/0011` (espina Q9, planta 0; inventada) |
 | edifici | text | `Q4` |
 | tipus | text | `Aules docents` (21), `Laboratoris docents` (25), `Seminaris` (8), `Aules informàtiques` (2) |
 | descripcio | text | descripció de l'inventari |
@@ -61,7 +61,7 @@ Columnes: activitat_id, codi, grup, semestre, dia, h_ini, h_fi, assignatura, tip
 
 ```csv
 activitat_id,codi,grup,semestre,dia,h_ini,h_fi,assignatura,tipus,n_sessions,setmana_primera,setmana_ultima,alumnes,aules_partida,sessions_sense_aula,titulacions_curs,torn_requerit,fixada,docents,sense_espai
-A9001,100000,TE/81,C/2,L,08:30,10:30,Assignatura Inventada I,TE,14,2027-W06,2027-W22,85,Q9/5016,0,GXX:1r,mati,,D900,0
+A9001,100000,TE/81,C/2,L,08:30,10:30,Assignatura Inventada I,TE,14,2027-W06,2027-W22,85,Q9/1003,0,GXX:1r,mati,,D900,0
 ```
 
 ## calendari.csv (32 files: dies sense classe o amb aturades)
@@ -79,7 +79,7 @@ Columnes: id_sessio, dia (`L`…`V`), h_ini (`HH:MM`), aula (text, pot ser buit)
 
 ```csv
 id_sessio,dia,h_ini,aula
-S90001,L,08:30,Q9/5016
+S90001,L,08:30,Q9/1003
 ```
 
 ## Altres

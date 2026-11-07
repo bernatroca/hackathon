@@ -11,6 +11,7 @@ from __future__ import annotations
 import copy
 import csv
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -18,15 +19,30 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 ARREL = Path(__file__).resolve().parents[1]
-# Les dades són fora del repositori (no van a git). Ruta absoluta, perquè els worktrees no les tenen.
-REPTE = Path('/Users/bernatroca/Bernat/Hackathon/repte/repte-horaris-escola')
+
+
+def _arrel_principal() -> Path:
+    """La carpeta principal del repositori, també des d'un worktree (on hi ha repte/, dades/ i resultats/)."""
+    try:
+        comu = subprocess.run(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'], cwd=ARREL,
+                              capture_output=True, text=True, check=True).stdout.strip()
+        return Path(comu).parent
+    except (OSError, subprocess.CalledProcessError):
+        return ARREL
+
+
+PRINCIPAL = _arrel_principal()
+# Les dades són fora de git. Per defecte, a la carpeta principal; es poden canviar amb variables d'entorn.
+REPTE = Path(os.environ.get('REPTE_DIR') or PRINCIPAL / 'repte' / 'repte-horaris-escola')
 PAQUET = REPTE / 'paquet'
 ESCENARIS = PAQUET / 'escenaris'
 CONTINGENCIES = ESCENARIS / 'contingencies'
 GRAU_NOU = ESCENARIS / 'grau-nou-40'
-ALUMNES_SENSE_DADA = Path('/Users/bernatroca/Bernat/Hackathon/dades/alumnes_sense_dada.json')
+ALUMNES_SENSE_DADA = Path(os.environ.get('ALUMNES_SENSE_DADA') or PRINCIPAL / 'dades' / 'alumnes_sense_dada.json')
 RESULTATS = ARREL / 'resultats' / 'nivell2'
-PYTHON = Path('/Users/bernatroca/Bernat/Hackathon/.venv/bin/python')
+# Les propostes desades (fora de git) que llegeix l'app, sigui quin sigui el worktree.
+RESULTATS_PRINCIPAL = Path(os.environ.get('RESULTATS_DIR') or PRINCIPAL / 'resultats' / 'nivell2')
+PYTHON = Path(os.environ.get('PYTHON_PROJECTE') or sys.executable)
 SEMESTRE = 2
 
 if str(REPTE) not in sys.path:

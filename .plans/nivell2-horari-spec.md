@@ -46,10 +46,10 @@ Decisions de l'equip del ds 7-11 a la tarda. Són el que un subagent necessita p
 
 - **Sessió:** una classe en una data (`id_sessio`). És la fila de la proposta.
 - **Activitat** (`activitat_id`): les sessions d'un mateix grup, dia i hora al llarg del semestre. És la unitat que planifiquem.
-- **Grup d'estudiants:** cohort (titulació i curs, `GED:1r`) i línia (els primers dígits del grup: TE/81, PAUL/811 i PAUL/812 són la línia 8). És el mateix que fa servir el verificador per a l'aula base i les hores mortes.
+- **Grup d'estudiants:** cohort (titulació i curs, `GED:1r`) i línia (els primers dígits del grup: TE/81, PAUL/811 i PAUL/812 (inventats) són la línia 8). És el mateix que fa servir el verificador per a l'aula base i les hores mortes.
 - **TE** teoria · **PAUL** problemes d'aula (subgrups de la teoria) · **SEM** seminari · **PLAB** laboratori (no es toca).
 - **Franja:** una hora d'inici possible (vegeu «Hores d'inici»). La reserva de dues aules (R8) es compta per franges d'**una hora** (8.30, 9.30 … 20.30), com fa el verificador.
-- **Passadís:** mateixa espina i planta (Q9/5017 i Q9/5018 són al mateix passadís).
+- **Passadís:** mateixa espina i planta (Q9/0101 i Q9/0102 (inventades) són al mateix passadís).
 - **CP-SAT:** el solver de restriccions d'OR-Tools. Acaba amb un d'aquests estats: OPTIMAL (el millor possible), FEASIBLE (n'ha trobat una de bona), INFEASIBLE (ha demostrat que no n'hi ha cap) o UNKNOWN (no ha acabat a temps; no vol dir que sigui impossible).
 
 ### Pesos del solver
@@ -92,8 +92,9 @@ Ja resolt (commit `e956847`): el model llegeix `dades/alumnes_sense_dada.json` (
 
 ### Vista de l'estudiant
 
-- Tres selectors: titulació → curs → grup de teoria (GED → 1r → 81).
+- Titulació → curs → grup d'estudiants (GED → 1r → 81). Si un camp només té una opció, s'explica com a dada i no es mostra com a selector. «Grup d'estudiants» són els alumnes que comparteixen la teoria i els subgrups de problemes i seminaris; s'explica també què vol dir que coincideixin subgrups.
 - La graella ensenya la setmana de l'estudiant: la teoria del grup i els seus problemes i seminaris (81, 811, 812…).
+- Es poden consultar tots els cursos i tot el dia (8.30–21.00). Primer és la selecció inicial, no un filtre del conjunt de dades.
 
 ### Propostes i dades fora de git
 
@@ -118,7 +119,7 @@ Ja resolt (commit `e956847`): el model llegeix `dades/alumnes_sense_dada.json` (
 
 > **Decisió (ds 16:20).** El desdoblament **no va a les propostes lliurades** (5.1-5.4). Obligaria a declarar R3-AFORAMENT a unes 1.197 sessions (153 activitats), i qualsevol proposta VALIDA sense relaxacions passaria per davant. El verificador del jurat tampoc no veu la meitat B. A més, no cal: al nivell 1 cap mida d'aula falla al matí. Es fa com a alternativa per a la Junta, i només quan els quatre lliuraments estiguin fets i validats.
 
-**Com seria:** tot grup de problemes (PAUL) o de seminari (SEM) movible de **més de 34 alumnes** es parteix en dues meitats. L'aula petita és un seminari o Q9/5014, totes de fins a 34 places. Un grup que hi cap sencer (34 alumnes o menys) no es parteix. **Sempre en dues meitats, mai en més parts:** un grup de 100 es parteix en dues meitats de 50, no en quatre de 25. Cada meitat va a l'aula més petita on hi càpiga (una meitat de 50 va a una aula de 48-50 o de 63). La teoria (TE) no es parteix.
+**Com seria:** tot grup de problemes (PAUL) o de seminari (SEM) movible de **més de 34 alumnes** es parteix en dues meitats. L'aula petita és un seminari o una aula de fins a 34 places, totes de fins a 34 places. Un grup que hi cap sencer (34 alumnes o menys) no es parteix. **Sempre en dues meitats, mai en més parts:** un grup de 100 es parteix en dues meitats de 50, no en quatre de 25. Cada meitat va a l'aula més petita on hi càpiga (una meitat de 50 va a una aula de 48-50 o de 63). La teoria (TE) no es parteix.
 
 **Amb parella (preferit): rotació.** Fan parella dues sessions X i Y del mateix grup d'alumnes (mateixa cohort i subgrup), movibles i de la mateixa durada.
 
@@ -138,17 +139,17 @@ Ja resolt (commit `e956847`): el model llegeix `dades/alumnes_sense_dada.json` (
 
 | Places | Aules | Grups TE | Grups PAUL | Grups SEM |
 |---|---|---:|---:|---:|
-| 1–34 | 9: 8 seminaris (10–34) i Q9/5014 (24) | 23 | 82 | 0 |
-| 35–50 | 4: Q9/5013, Q9/5015, Q9/5022 (48) i Q9/5023 (50) | 16 | 101 | 6 |
-| 51–63 | 2: Q9/5008 i Q9/5009 | 20 | 25 | 4 |
-| 64–90 | 7: Q9/5024, Q9/5025 (88) i cinc de 90 | 51 | 4 | 0 |
-| 91–160 | 7: dues de 100, dues de 117, dues de 130 i Q9/5006 (160) | 14 | 1 | 0 |
+| 1–34 | 9: 8 seminaris (10–34) i una aula de 24 | 23 | 82 | 0 |
+| 35–50 | 4 aules de 35 a 50 places | 16 | 101 | 6 |
+| 51–63 | 2 aules | 20 | 25 | 4 |
+| 64–90 | 7 aules de 64 a 90 places | 51 | 4 | 0 |
+| 91–160 | 7: dues de 100, dues de 117, dues de 130 i una de 160 | 14 | 1 | 0 |
 
 (Hi ha 14 grups sense dada d'alumnes al paquet; ara tenen xifra, vegeu «Grups sense dada d'alumnes». Comptem els grups del 2n semestre un cop cadascun, sense PLAB ni dobles.)
 
 **Per què ho fem:** hi ha 101 grups de problemes de 35 a 50 alumnes, i només 4 aules d'aquesta mida. Avui ocupen aules de 63 o de 90 places, que són les que necessita la teoria. Partits en meitats, caben en un seminari i alliberen les aules mitjanes. Cada desdoblament compta com a canvi a la taula de xifres, i la Junta veu quants n'hem fet i quantes hores d'aula mitjana alliberen.
 
-> Per comprovar en programar: 8 seminaris i Q9/5014 potser no basten per a totes les meitats a l'hora punta. Si no hi caben, la meitat va a la següent aula més petita lliure, i ho comptem.
+> Per comprovar en programar: 8 seminaris i l’aula de 24 potser no basten per a totes les meitats a l'hora punta. Si no hi caben, la meitat va a la següent aula més petita lliure, i ho comptem.
 
 ## Fusió de classes amb el mateix docent (proposta per a la Junta)
 
@@ -159,18 +160,18 @@ Dades de les teories al 2n semestre:
 - 964 grups ja són una sola classe compartida entre titulacions (`id_compartida`).
 - Només 14 assignatures tenen més d'un grup de teoria amb aula. La majoria són de GEI o GEET+GEST de 1r i 2n, que no es toquen, o no caben juntes (l'aula més gran és de 160 places).
 - Hi ha dos casos reals:
-  - *Assignatura Inventada A*: el docent D951 la fa tres cops (GEI 3r TE/910 i TE/911, que sumen 148 alumnes, i GEQ 4t TE/908).
-  - *900000* (GEET+GEST 3r): TE/909 i TE/913, amb 108 alumnes.
+  - Una assignatura de 3r i 4t que el mateix docent fa tres cops: dos grups de teoria d’una titulació (148 alumnes en total) i un d’una altra.
+  - Una assignatura compartida per dues titulacions de 3r: dos grups de teoria amb 108 alumnes.
 - Els PAUL i els SEM amb el mateix docent estan per calcular.
 
 ## 5.3 Imprevistos: canviar el mínim
 
-Partim del CSV final del 5.2, que no es toca, i només toquem les sessions afectades. Les afectades es calculen sobre aquest 5.2, no sobre l'horari d'avui (les 12 de Q9/5015 són d'avui i poden canviar). Si amb les afectades no n'hi ha prou, se n'amplien de mica en mica les que es poden moure. Per a cada una, l'ordre de preferència és: la mateixa franja en una aula del mateix passadís; després, la mateixa franja en una altra aula; i un altre dia només per a la sessió cancel·lada. Cap sessió no canvia de torn.
+Partim del CSV final del 5.2, que no es toca, i només toquem les sessions afectades. Les afectades es calculen sobre aquest 5.2, no sobre l'horari d'avui (les 12 de l’aula reservada són d'avui i poden canviar). Si amb les afectades no n'hi ha prou, se n'amplien de mica en mica les que es poden moure. Per a cada una, l'ordre de preferència és: la mateixa franja en una aula del mateix passadís; després, la mateixa franja en una altra aula; i un altre dia només per a la sessió cancel·lada. Cap sessió no canvia de torn.
 
-- **Q9/5015 reservada del 15 al 19 de març.** Hi ha 12 sessions a recol·locar, només aquella setmana.
-- **TE/908 de GEQ passa de 91 a 130 alumnes.** Com que és tot el semestre, la canviem a una aula de 130 o més a la mateixa franja, totes les setmanes. Si no n'hi ha cap de lliure, la desdoblem i declarem R3-AFORAMENT.
-- **Q9/5004 avariada el 10 de març.** Recol·loquem les sessions d'aquell dia.
-- **S95001, cancel·lada el 8 de març.** Es recupera fins al 19 de març, al torn del seu grup, en una franja amb l'alumnat, el docent i una aula lliures.
+- **Una aula reservada del 15 al 19 de març.** Hi ha 12 sessions a recol·locar, només aquella setmana.
+- **Un grup de teoria de GEQ passa de 91 a 130 alumnes.** Com que és tot el semestre, la canviem a una aula de 130 o més a la mateixa franja, totes les setmanes. Si no n'hi ha cap de lliure, la desdoblem i declarem R3-AFORAMENT.
+- **Una aula avariada el 10 de març.** Recol·loquem les sessions d'aquell dia.
+- **Una sessió cancel·lada el 8 de març.** Es recupera fins al 19 de març, al torn del seu grup, en una franja amb l'alumnat, el docent i una aula lliures.
 
 Es mesura amb `canvis_franja_vs_referencia` i `canvis_aula_vs_referencia`. Com menys canvis, millor.
 
@@ -228,9 +229,12 @@ Format: una pàgina a l'app i el mateix exportat a PDF.
 
 Fa servir el disseny B1 del nivell 1, amb textos planers per al tècnic de Gestió Acadèmica. El frontend pot començar amb dades de mostra, sense esperar el solver.
 
-- **Primer, la vista per grup** (la de l'estudiant): l'horari de la setmana d'un grup, avui i proposta costat per costat, amb els canvis marcats.
+- **Primer, la vista per grup** (la de l'estudiant): «Horari actual · dades originals» i «Amb la proposta» costat per costat si hi ha prou espai, o apilats en pantalles petites. «Només l'horari actual» mostra una única graella; no compara les dades originals amb elles mateixes.
 - **Després, la vista per aula** (la que demana l'enunciat): una setmana tipus, dies en columnes i franges de 30 minuts en files, amb selector d'aula. Si hi ha l'alternativa amb desdoblaments, n'ensenya també la 2a hora.
-- Selector de proposta (avui, 5.1, 5.2, 5.3, 5.4 i, si n'hi ha, les alternatives amb desdoblaments o fusions) i de setmana (per a les setmanes de l'imprevist).
+- Les propostes disponibles s'anomenen amb la millora que fan, a més del número (5.1 assignar aules sense moure dies ni hores, 5.2 reorganitzar torns, etc.). Si només n'hi ha una, no cal un selector. La setmana seleccionada afecta les dues vistes i la vista per aula.
+- «Aula no indicada a les dades» explica una mancança dels fitxers originals, no que una classe no es faci. Es compten i s'expliquen aquestes mancances per al grup seleccionat.
+- Llegenda visible amb text: blau sense canvis, verd aula afegida, groc dia/hora/aula existent modificats, vora discontínua cas especial amb motiu. Els canvis també s'escriuen dins de la classe. TE/PAUL/SEM es tradueixen i els grups es mostren en paraules.
+- Ajuda opcional «Com funciona? Guia pas a pas»: sis passos que expliquen la comparació, els estudiants, les mancances d'aula, els colors, les graelles i la vista per aula. Cada pas porta al seu apartat; es pot retrocedir, acabar o tancar la guia.
 - Es marquen les sessions amb relaxació i el seu motiu.
 - La graella per aula també es lliura en un fitxer (HTML o PDF) per al jurat.
 
@@ -249,7 +253,7 @@ El veredicte es llegeix del JSON del verificador, no del codi de sortida: el cod
 - **Calendari:** els candidats de dia i hora es generen per **data real**: festius, no lectius, aturades, setmanes d'avaluació i dies sense classes a la partida. Totes les sessions d'una activitat es comproven, no només la primera.
 - **Reserva R8:** el verificador compta les **aules diferents ocupades dins de cada franja d'una hora** (8.30, 9.30… 20.30). No n'hi ha prou de limitar a 19 classes simultànies cada mitja hora. Cal reproduir aquest recompte exacte.
 - **Sessions compartides** (`id_compartida`): són una sola classe física. Es mouen juntes, a la mateixa aula, amb els alumnes **sumats** i tots els docents i cohorts.
-- **Grups sense dada d'alumnes** (decisió ds 7-11): al 2n semestre, 14 grups (276 sessions, sense PLAB ni dobles) tenen `alumnes = 0`. El model llegeix `dades/alumnes_sense_dada.json` i posa aquella xifra a totes les sessions del grup (codi + grup): matriculats reals del portal públic SIQ de la UAB (Assignatura Inventada A GEQ 20, Assignatura Inventada B 18) o estimació amb el mateix paquet (GIA 3r: 45 a la teoria; Assignatura Inventada D PAUL/901: 43). Els 4 PAUL de 900001 es queden a 0: són la mateixa classe que els de 900004, que ja porten els alumnes, i les compartides sumen. El verificador oficial continua veient-hi 0, i per tant no hi comprova l'aforament: la xifra només serveix perquè el nostre model triï una aula on hi càpiguen.
+- **Grups sense dada d'alumnes** (decisió ds 7-11): al 2n semestre, 14 grups (276 sessions, sense PLAB ni dobles) tenen `alumnes = 0`. El model llegeix un fitxer local de `dades/` (fora de git) i posa aquella xifra a totes les sessions del grup (codi + grup): matriculats del portal públic SIQ de la UAB per a dues optatives, o una estimació amb el mateix paquet per a la resta. Els grups que són la mateixa classe que uns altres (compartides) es queden a 0, perquè les compartides sumen els alumnes. El verificador oficial continua veient-hi 0, i per tant no hi comprova l'aforament: la xifra només serveix perquè el nostre model triï una aula on hi càpiguen.
 - **Sense espai** (dobles, `sense_espai = 1`): no necessiten aula, però sí que compten per al torn, el docent i l'alumnat.
 - **R4-PLAB:** els PLAB són obstacles fixos. Una TE o un PAUL de la mateixa assignatura no hi pot coincidir.
 - **Heretats:** els conflictes que ja hi són avui i que el verificador marca com a heretats no s'han de prohibir al model, perquè llavors no hi hauria solució. Cal distingir-los dels nous.

@@ -1,7 +1,7 @@
 :root {
   --fons: #f4f3ef; --targeta: #ffffff; --tinta: #0b0b0b; --tinta-2: #52514e; --suau: #8a8984; --linia: #e6e5e0;
   --blau: #2a78d6; --blau-clar: #cde2fb;
-  --verd: #0ca30c; --verd-fons: #e7f6e7; --verd-text: #086b08;
+  --verd: #2f8f46; --verd-fons: #e9f4ec; --verd-text: #1f6b33;
   --ambre: #fab219; --ambre-fons: #fff5dc; --ambre-text: #8a5c00;
   --vermell: #d03b3b; --vermell-fons: #fbe9e9; --vermell-text: #a12c2c;
 }
@@ -28,7 +28,7 @@ h1 { font-size: 36px; margin: 0 0 4px; letter-spacing: -0.01em; }
 .targeta p { margin: 0; color: var(--tinta-2); }
 .proposem { padding-top: 12px; border-top: 1px solid var(--linia); font-size: 15px; color: var(--tinta-2); }
 .proposem b { color: var(--tinta); }
-a.mes { color: var(--blau); text-decoration: none; font-size: 15px; white-space: nowrap; }
+a.mes { color: #256abf; text-decoration: none; font-size: 15px; white-space: nowrap; }
 .versio { position: fixed; right: 16px; bottom: 16px; background: var(--tinta); color: #fff; font-size: 13px; padding: 6px 12px; border-radius: 999px; }
 /* Adaptació del disseny B1 als contenidors de Streamlit. */
 .stApp {background:var(--fons);color:var(--tinta);font:17px/1.5 -apple-system,"Segoe UI",system-ui,sans-serif;}
@@ -45,7 +45,7 @@ h2,h3 {letter-spacing:-.02em;}
 .st-key-targetes [data-testid="stHorizontalBlock"] {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;}
 .st-key-targetes [data-testid="stColumn"] {width:100%!important;min-width:0!important;}
 .st-key-targetes [data-testid="stVerticalBlockBorderWrapper"] {background:white;border-radius:16px;}
-.st-key-targetes button {color:var(--blau);border:0;background:transparent;padding-left:0;}
+.st-key-targetes button {color:#256abf;border:0;background:transparent;padding-left:0;}
 .estat {margin:0 0 8px;}
 .aules {display:grid;grid-template-columns:repeat(7,28px);gap:6px;margin:12px 0;}
 .aules i {width:28px;height:28px;border-radius:6px;background:var(--blau);}
@@ -58,7 +58,8 @@ h2,h3 {letter-spacing:-.02em;}
 .rajoles {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}
 .rajola {border-radius:8px;padding:8px;font-size:13px;position:relative;}
 .rajola b {display:block;}
-.rajola:hover,.rajola:focus {outline:2px solid var(--blau);}
+.rajola:focus-visible {outline:2px solid #256abf;outline-offset:2px;}
+@media (hover:hover) {.rajola:hover {outline:2px solid #256abf;}}
 .escala {font-size:14px;color:var(--tinta-2);}
 .escala i {display:inline-block;width:100px;height:12px;background:linear-gradient(to right,#cde2fb,#184f95);border-radius:3px;margin:0 8px;}
 @media(max-width:1000px) {.espines {grid-template-columns:repeat(2,minmax(0,1fr));}.block-container {padding:24px 20px 60px;}}
@@ -72,14 +73,11 @@ main {padding:0;max-width:none;}
 }
 /* El contingut útil, amb el menú obert, determina quan s'apila l'heroi. */
 .block-container {container-type:inline-size;container-name:contingut;}
-@container contingut (max-width:1100px) {
+@container contingut (max-width:760px) {
  .st-key-heroi [data-testid="stHorizontalBlock"] {flex-direction:column;}
  .st-key-heroi [data-testid="stColumn"] {width:100%!important;flex:1 1 100%!important;min-width:0!important;}
 }
-@media(max-width:1100px) {
- .st-key-heroi [data-testid="stHorizontalBlock"] {flex-direction:column;}
- .st-key-heroi [data-testid="stColumn"] {width:100%!important;flex:1 1 100%!important;min-width:0!important;}
-}
+
 .aules {grid-template-columns:repeat(7,minmax(0,28px));max-width:100%;}
 .aules i {width:100%;height:auto;aspect-ratio:1;}
 .aules-peu {word-break:normal;overflow-wrap:normal;hyphens:none;white-space:normal;max-width:38rem;}
@@ -121,7 +119,7 @@ main {padding:0;max-width:none;}
  flex-direction: column;
 }
 .targeta-cor {display:flex;flex-direction:column;gap:12px;}
-.targeta-cor h3,.targeta-cor p {margin:0;}
+.targeta-cor h2,.targeta-cor p {margin:0;}
 .targeta-cor .estat {align-self:flex-start;}
 .st-key-targetes .proposem {
  margin-top: auto;
@@ -132,5 +130,109 @@ main {padding:0;max-width:none;}
  flex: 0 0 auto;
 }
 .desglos:empty {display:none;}
-/* Streamlit conserva els elements antics durant una recàrrega: els amaguem. */
-[data-testid="stMain"] [data-stale="true"] {visibility:hidden;}
+/* Manté el context visible mentre es recalculen les dades. */
+[data-testid="stMain"] [data-stale="true"] {opacity:.6;}
+
+.targeta-cor p {font-size:17px;line-height:1.5;color:#52514e;}
+.franja-context {font-size:16px;color:#52514e;margin:0 0 20px;}
+.franja-context strong {font-weight:600;}
+.marca-escola {font-size:20px;font-weight:700;margin-bottom:24px;}
+.st-key-heroi button {color:#256abf;}
+@media (max-width:650px) {.st-key-targetes .proposem {min-height:0;}}
+
+.st-key-heroi h2.pregunta {font-size:18px!important;font-weight:400;line-height:1.5;}
+.st-key-heroi:has(h2.pregunta) h3 {font-size:clamp(32px,4vw,48px)!important;line-height:1.05;}
+
+.st-key-torna button {color:#256abf;}
+
+.targeta-cor h2 {font-size:20px!important;line-height:1.3;}
+
+.resum-grau p {margin:8px 0;}
+.resum-grau .xifra-targeta {display:inline-block;}
+.marge-semestral {border-top:1px solid var(--linia);padding-top:12px;}
+
+/* ds vespre: totes les pàgines centrades com la portada, amb la mateixa amplada màxima. */
+.block-container {margin-left:auto!important;margin-right:auto!important;}
+/* Portada: caixes més petites. */
+.st-key-targetes [data-testid="stHorizontalBlock"] {gap:16px;}
+.st-key-targetes .targeta-cor {gap:8px;}
+.st-key-targetes .targeta-cor h2 {font-size:18px!important;}
+.st-key-targetes .xifra-targeta {font-size:clamp(26px,2.4vw,34px);margin:4px 0;}
+.st-key-targetes .targeta-cor p {font-size:16px;}
+.st-key-targetes .metre {height:8px;}
+.st-key-targetes .proposem {min-height:0;padding-top:8px;font-size:14px;}
+/* ds vespre: sense barra fantasma a dalt en fer scroll. La capçalera de Streamlit no ocupa lloc
+   ni té fons; els seus botons (obrir el menú) continuen visibles i clicables. */
+header[data-testid="stHeader"] {background:transparent!important;height:0!important;min-height:0!important;box-shadow:none!important;border:0!important;}
+[data-testid="stDecoration"] {display:none!important;}
+[data-testid="stSidebarHeader"] {height:auto!important;min-height:0!important;padding:12px 16px 0!important;margin-bottom:0!important;}
+
+/* ds 21:30 · Botó per obrir el menú: sempre visible, a dalt a l'esquerra, quan el menú està plegat. */
+[data-testid="stExpandSidebarButton"] {
+ position:fixed!important;top:12px!important;left:12px!important;z-index:1000001;
+ width:40px!important;height:40px!important;border-radius:10px!important;
+ background:#fff!important;border:1px solid var(--linia)!important;box-shadow:0 1px 3px rgba(0,0,0,.12)!important;
+ display:flex!important;align-items:center;justify-content:center;
+}
+[data-testid="stExpandSidebarButton"] span {color:var(--tinta)!important;}
+[data-testid="stExpandSidebarButton"]:hover {border-color:#256abf!important;}
+[data-testid="stExpandSidebarButton"]:focus-visible {outline:2px solid #256abf;outline-offset:2px;}
+
+/* Menú: els noms de les seccions es distingeixen de les pàgines. */
+[data-testid="stNavSectionHeader"] {
+ font-size:13px!important;font-weight:700!important;color:var(--tinta)!important;
+ text-transform:uppercase;letter-spacing:.06em;margin:18px 0 6px!important;padding-left:8px;
+}
+[data-testid="stNavSectionHeader"] * {font-weight:700!important;color:var(--tinta)!important;}
+[data-testid="stSidebarNavItems"] > :first-child [data-testid="stNavSectionHeader"],
+[data-testid="stSidebarNavItems"] [data-testid="stNavSectionHeader"]:first-child {margin-top:4px!important;}
+[data-testid="stSidebarNavLink"] {padding-left:14px!important;}
+[data-testid="stSidebarNavLink"] span {font-size:15px;}
+
+/* Portada: tot a la primera pantalla d'un portàtil (1.440 × 900). */
+.block-container {padding-top:24px!important;}
+h1 {font-size:28px!important;margin-bottom:0!important;}
+.franja-context {margin:0 0 8px;}
+.st-key-heroi {padding:18px 24px;margin:8px 0 16px;}
+.st-key-heroi h2,.st-key-heroi:has(h2.pregunta) h3 {font-size:clamp(26px,2.6vw,34px)!important;margin:2px 0 4px;}
+.st-key-heroi h2.pregunta {font-size:16px!important;margin:0!important;}
+.st-key-heroi p {margin:0 0 4px;font-size:15px;}
+.st-key-heroi [data-testid="stCaptionContainer"] p {font-size:13px;margin:0;}
+.st-key-heroi [data-testid="stVerticalBlock"] {gap:6px;}
+.aules {grid-template-columns:repeat(7,minmax(0,22px));gap:5px;margin:4px 0;}
+@container contingut (min-width:1000px) {
+ .st-key-targetes [data-testid="stHorizontalBlock"] {grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;}
+}
+.st-key-targetes .targeta-cor {gap:6px;}
+.st-key-targetes .targeta-cor h2 {font-size:16px!important;}
+.st-key-targetes .xifra-targeta {font-size:clamp(22px,2vw,28px);margin:0;}
+.st-key-targetes .targeta-cor p {font-size:14px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+.st-key-targetes .desglos:not(:empty) {font-size:13px!important;}
+.st-key-targetes .proposem {font-size:13px;line-height:1.4;padding-top:6px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+.st-key-targetes [data-testid="stVerticalBlock"] {gap:6px;}
+/* Portada: menys aire entre els elements de dalt perquè també hi càpiga amb el menú obert. */
+.block-container:has(.st-key-heroi) {padding-top:16px!important;}
+.block-container:has(.st-key-heroi) [data-testid="stVerticalBlock"] {gap:10px;}
+.block-container:has(.st-key-heroi) h1 {padding:0!important;}
+.block-container:has(.st-key-heroi) .st-key-heroi {margin:4px 0 8px;}
+/* Amb el menú plegat, el botó per obrir-lo no tapa el títol. */
+.stApp:has([data-testid="stExpandSidebarButton"]) .block-container {padding-top:64px!important;}
+
+/* ds 21:50 · «Com ho sabem →»: enllaç net, mateix aspecte a tot arreu, sense text tallat. */
+.st-key-heroi button,.st-key-targetes button,.st-key-respostes button[kind="secondary"] {
+ border:0!important;background:transparent!important;box-shadow:none!important;color:#256abf!important;
+ min-height:32px!important;height:auto!important;padding:4px 0!important;line-height:1.4!important;overflow:visible!important;
+}
+.st-key-heroi button p,.st-key-targetes button p,.st-key-respostes button[kind="secondary"] p {
+ font-size:15px!important;font-weight:600;line-height:1.4!important;margin:0!important;overflow:visible!important;
+}
+.st-key-heroi button:hover p,.st-key-targetes button:hover p,.st-key-respostes button[kind="secondary"]:hover p {text-decoration:underline;}
+.st-key-heroi button:focus-visible,.st-key-targetes button:focus-visible {outline:2px solid #256abf!important;outline-offset:2px;border-radius:4px;}
+/* Bloc gran: menys marge a dalt i a baix; els quadrets d'aules al costat de la resposta i més grans. */
+.block-container:has(.st-key-heroi) .st-key-heroi {padding:14px 24px 10px;}
+.st-key-heroi [data-testid="stVerticalBlock"] {gap:4px!important;}
+.st-key-heroi .estat {margin:0 0 2px;}
+.st-key-heroi h2.pregunta {margin:2px 0 0!important;}
+.st-key-heroi [data-testid="stCaptionContainer"] {margin-top:4px;}
+.st-key-heroi .aules {grid-template-columns:repeat(7,28px);gap:6px;margin:0 0 6px;}
+.st-key-heroi .aules-peu {font-size:14px;max-width:24rem;margin:0;}
