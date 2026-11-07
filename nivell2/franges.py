@@ -144,10 +144,11 @@ def _colls_capacitat(base, units, weeks, selected, candidates):
 
 
 def _resol_torn(base, units, weeks, edges, groups, movibles, current, referencia,
-                fixes, shift, deadline, llavor, *, reparacio=False):
+                fixes, shift, deadline, llavor, *, reparacio=False, limits_capacitat=None, setmana_completa=False, torn_tou=False):
     """Un model compacte: només les activitats movibles tenen variables."""
     import time
     lo, hi = shift
+    limits_capacitat = limits_capacitat or {}
     m = cp_model.CpModel()
     candidates = defaultdict(set)
     selected = {}
@@ -157,13 +158,18 @@ def _resol_torn(base, units, weeks, edges, groups, movibles, current, referencia
         mobile = groups[u] in movibles and not any(r.fixada for r in rows)
         if reparacio:
             mobile = u in movibles and not any(r.fixada for r in rows)
-        if mobile and required != shift:
+        if mobile and required != shift and not setmana_completa:
             continue
         key = ('u', u) if reparacio else ('a', groups[u])
         if mobile:
             selected[u] = key
             domain = set.intersection(*(set(_candidats(base, r, referencia, fixes)) for r in rows)) if reparacio else {
                 d*1440+t for d in range(5) for t in range(lo, hi-max(r.durada for r in rows)+1,30)}
+            if torn_tou:
+                original = s.data.weekday()*1440+s.ini
+                from horaris.check import _dins_finestra
+                if _dins_finestra(s.ini,s.fi) and all(r.id not in fixes or fixes[r.id] == (r.data,r.ini) for r in rows):
+                    domain.add(original)
             if not reparacio:
                 for r in rows:
                     original = r.data.weekday()*1440+r.ini
@@ -262,14 +268,58 @@ def _resol_torn(base, units, weeks, edges, groups, movibles, current, referencia
         for threshold in [-1]+sorted({a.capacitat for a in rooms}):
             relevant = [intervals[k] for k in entries if k[2]>threshold]
             available = max(0,len(rooms)-RESERVA) if threshold == -1 else sum(a.capacitat>threshold for a in rooms)
+            available = min(available, limits_capacitat.get(threshold, available))
             if relevant:
                 m.add_cumulative(relevant,[1]*len(relevant),available)
-    m.minimize(COST_CANVI*(len(dayscost)+1)*sum(cost)+sum(dayscost))
+    # Hall constraints for restricted equipment (e.g. only two computer rooms).
+    # Size-only cuts cannot see these bottlenecks. Include fixed sessions too.
+    from horaris.check import _espai_ok
+    eligible = {}
+    for u in selected:
+        rows = [r for r in units[u] if not r.sense_espai]
+        if not rows:
+            continue
+        allowed = set(base.aules)
+        for r in rows:
+            allowed &= {a for a in base.aules if _espai_ok(base,r,a)}
+        n = sum(r.alumnes for r in rows)
+        allowed = {a for a in allowed if base.aules[a].capacitat >= n}
+        fixed = {r.aula for r in rows if r.tipus == 'PLAB' or (r.fixada and r.aula)}
+        if fixed:
+            allowed = fixed
+        if allowed and '' not in allowed:
+            eligible[u] = frozenset(allowed)
+    resources = sorted(set(eligible.values()),key=lambda r:tuple(sorted(r)))
+    patterns = set()
+    for us in weeks.values():
+        for resource in resources:
+            relevant = [u for u in us if u in eligible and eligible[u] <= resource]
+            if len(relevant) <= len(resource):
+                continue
+            pattern = (resource,tuple(sorted((selected[u],durations[u]) for u in relevant)))
+            if pattern in patterns:
+                continue
+            patterns.add(pattern)
+            tasks = [m.new_fixed_size_interval_var(variables[selected[u]],durations[u],'equipament') for u in relevant]
+            m.add_cumulative(tasks,[1]*len(tasks),len(resource))
+    penalties = []
+    if torn_tou:
+        from horaris.check import _torn_ok
+        for u,key in selected.items():
+            rows = units[u]
+            if key[0] != 'f' and any(_torn_ok(r.torn,r.ini,r.fi) is False for r in rows):
+                original = rows[0].data.weekday()*1440+rows[0].ini
+                exc = m.new_bool_var('excepcio_R1')
+                m.add(variables[key] == original).only_enforce_if(exc)
+                m.add(variables[key] != original).only_enforce_if(exc.Not())
+                penalties.append(len(rows)*exc)
+    secondary_bound = COST_CANVI*(len(dayscost)+1)*len(cost)+len(dayscost)+1
+    m.minimize(secondary_bound*sum(penalties)+COST_CANVI*(len(dayscost)+1)*sum(cost)+sum(dayscost))
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = max(.001, deadline-time.monotonic())
     solver.parameters.num_workers = 2
     solver.parameters.random_seed = llavor
-    solver.parameters.stop_after_first_solution = True
+    solver.parameters.stop_after_first_solution = not torn_tou
     status = solver.solve(m)
     if status not in (cp_model.OPTIMAL,cp_model.FEASIBLE):
         return None, solver.status_name(status)
@@ -281,9 +331,13 @@ def _resol_torn(base, units, weeks, edges, groups, movibles, current, referencia
     return out, solver.status_name(status)
 
 
-def assigna_franges(base, *, referencia, fixes=None, temps_s=300, llavor=0):
+def assigna_franges(base, *, referencia, fixes=None, temps_s=300, llavor=0, limits_capacitat=None, permet_excepcions_torn=False):
     """Primera passada per activitat/torn; reparació local de calendari després.
 
+    `permet_excepcions_torn` autoritza exclusivament W14/2027, després d'un
+    INFEASIBLE conjunt de tota la setmana: l'única alternativa fora de torn
+    és la franja original. `limits_capacitat` és llindar d'alumnes -> màxim
+    per cubell horari (-1: total). Les proves i el mínim trobat es registren.
     Contracte del mòdul. `assigna_franges.estadistiques` registra els temps i
     recomptes de l'última crida (ús seqüencial). La passada opcional d'hores
     mortes s'omet per prioritzar el lliurament de la primera solució vàlida.
@@ -313,7 +367,7 @@ def assigna_franges(base, *, referencia, fixes=None, temps_s=300, llavor=0):
         opened = set(mobile)
         for level in range(3):
             solution,state = _resol_torn(base,units,weeks,edges,groups,opened,current,referencia,
-                                         fixes,shift,deadline,llavor)
+                                         fixes,shift,deadline,llavor,limits_capacitat=limits_capacitat)
             if solution is not None:
                 current = solution
                 break
@@ -338,12 +392,66 @@ def assigna_franges(base, *, referencia, fixes=None, temps_s=300, llavor=0):
     for shift in (MATI,TARDA):
         if invalid:
             solution,state = _resol_torn(base,units,weeks,edges,groups,invalid,current,referencia,
-                                         fixes,shift,deadline,llavor,reparacio=True)
+                                         fixes,shift,deadline,llavor,reparacio=True,limits_capacitat=limits_capacitat)
+            if solution is None and state == 'INFEASIBLE':
+                affected_weeks = {_setmana(units[u][0]) for u in invalid}
+                expanded = set(invalid)
+                for u,v in edges:
+                    if u in invalid or v in invalid:
+                        expanded.update((u,v))
+                types = {base.aules[s.aula].tipus for u in invalid for s in units[u]
+                         if s.aula in base.aules and base.aules[s.aula].tipus == 'Aules informàtiques'}
+                expanded.update(u for u,rows in units.items() if _setmana(rows[0]) in affected_weeks
+                                and any(s.aula in base.aules and base.aules[s.aula].tipus in types for s in rows))
+                solution,state = _resol_torn(base,units,weeks,edges,groups,expanded,current,referencia,
+                    fixes,shift,deadline,llavor,reparacio=True,limits_capacitat=limits_capacitat)
+            if solution is None and state == 'INFEASIBLE':
+                # Last local circle: solve affected real weeks independently.
+                # Avoid reopening the whole semester in one large model.
+                import copy
+                solution = dict(current)
+                for week in sorted({_setmana(units[u][0]) for u in invalid
+                                    if (MATI if units[u][0].torn == 'mati' else TARDA) == shift}):
+                    us = set(weeks[week])
+                    sub = copy.copy(base)
+                    sub.sessions = {s.id:s for u in us for s in units[u]}
+                    sub.ordre = list(sub.sessions)
+                    repaired,state = _resol_torn(sub,{u:units[u] for u in us}, {week:weeks[week]},
+                        [(u,v) for u,v in edges if u in us and v in us], groups, us,
+                        solution,referencia,fixes,shift,deadline,llavor,reparacio=True,
+                        limits_capacitat=limits_capacitat)
+                    if repaired is None and state == 'INFEASIBLE' and permet_excepcions_torn and week == dt.date(2027,4,5):
+                        hard_begin = time.monotonic()
+                        repaired,hard_state = _resol_torn(sub,{u:units[u] for u in us}, {week:weeks[week]},
+                            [(u,v) for u,v in edges if u in us and v in us], groups, us,
+                            solution,referencia,fixes,(MATI[0],TARDA[1]),deadline,llavor,
+                            reparacio=True,limits_capacitat=limits_capacitat,setmana_completa=True)
+                        proof = {'setmana':week.isoformat(),'dur':hard_state,'dur_s':time.monotonic()-hard_begin}
+                        if repaired is None and hard_state == 'INFEASIBLE':
+                            soft_begin = time.monotonic()
+                            repaired,state = _resol_torn(sub,{u:units[u] for u in us}, {week:weeks[week]},
+                                [(u,v) for u,v in edges if u in us and v in us], groups, us,
+                                solution,referencia,fixes,(MATI[0],TARDA[1]),min(deadline,soft_begin+90),llavor,
+                                reparacio=True,limits_capacitat=limits_capacitat,setmana_completa=True,torn_tou=True)
+                            proof.update(tou=state,tou_s=time.monotonic()-soft_begin)
+                            if repaired is not None:
+                                from horaris.check import _torn_ok
+                                proof['sessions'] = [s.id for s in sub.sessions.values() if not s.fixada and
+                                    _torn_ok(s.torn,repaired[s.id][1],repaired[s.id][1]+s.durada) is False]
+                                proof['nombre'] = len(proof['sessions'])
+                                invalid.difference_update(us)
+                        stats.setdefault('proves_torn',[]).append(proof)
+                    if repaired is None:
+                        stats['setmana_reparacio_fallida'] = week.isoformat()
+                        stats['torn_reparacio_fallit'] = shift
+                        solution = None
+                        break
+                    solution = repaired
             if solution is None:
                 return {},state,[]
             current = solution
     notes = [{'id_sessio':s.id,'data':current[s.id][0].isoformat(),'minut_inici':current[s.id][1],
-              'motiu':'calendari: festiu, no lectiu o aturada'}
+              'motiu':('calendari: festiu, no lectiu o aturada' if s.unitat in invalid else 'reparació local de la setmana per fer lloc a una excepció de calendari')}
              for s in base.sessions.values() if current[s.id] != routine[s.id]]
     stats['reparacio_s'] = time.monotonic()-repair_begin
     stats['total_s'] = time.monotonic()-begin
