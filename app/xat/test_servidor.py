@@ -94,7 +94,7 @@ def test_limit(monkeypatch):
     monkeypatch.setattr(s, '_trossos_api', api)
     resultat = events()
     assert api.call_count == 6
-    assert 'No he pogut acabar' in resultat[-2]['tros']
+    assert 'No he pogut acabar' in resultat[-3]['tros']
     assert resultat[-1]['fi']
 
 
@@ -429,3 +429,85 @@ def test_reserva_hereta_configuracio(monkeypatch, url, clau):
     assert reserva['model'] == 'arrow-2'
     assert reserva['url'] == (url or 'http://ia.invalid/v1')
     assert reserva['clau'] == (clau or 'secret-de-prova')
+
+
+@pytest.mark.parametrize('api', ['chat', 'responses'])
+def test_consultes_ordre_i_separacio(monkeypatch, api):
+    monkeypatch.setenv('IA_API', api)
+    historials = []
+    def ia(p, missatges):
+        historials.append(list(missatges))
+        if len(historials) == 1:
+            yield 'tools', [crida('horari_grup', '{"grup":"inventat"}'), crida('consulta', '{}', 'c2')]
+        else:
+            yield 'tros', 'Text de la IA sense cites'
+        yield 'fi', {'tallada': False, 'model': 'fals'}
+    monkeypatch.setattr(s, '_trossos_api', ia)
+    monkeypatch.setattr(s, '_eines', lambda: SimpleNamespace(executa=lambda n, a: {
+        'ok': True, 'consulta': 'consulta inventada', 'id_sessio': ['S1', 'S1', 'S2'],
+        'resultat': [{'id_sessio': 'ignorat-perque-hi-ha-ids-principals'}]}))
+    resultat = events()
+    assert list(resultat[-2]) == ['consultes']
+    assert resultat[-1]['fi']
+    assert sum('consultes' in e for e in resultat) == 1
+    assert resultat[-2]['consultes'] == [
+        {'eina': 'horari_grup', 'args': {'grup': 'inventat'}, 'ok': True,
+         'consulta': 'consulta inventada', 'id_sessio': ['S1', 'S2'], 'total_id': 2},
+        {'eina': 'consulta', 'args': {}, 'ok': True,
+         'consulta': 'consulta inventada', 'id_sessio': ['S1', 'S2'], 'total_id': 2}]
+    assert all(m.get('role') in ('system', 'user', 'assistant', 'tool') for m in historials[-1])
+    assert 'consultes' not in json.dumps(historials)
+
+
+def test_consultes_ids_niats_i_limit():
+    resultat = {'ok': True, 'id_sessio': [], 'resultat': {'horaris': [
+        {'files': [{'id_sessio': 'S1'}, {'id_sessio': ['S2', 'S1']}]},
+        {'files': [{'mes': {'id_sessio': f'S{i}'}} for i in range(3, 15)]}]}}
+    resum = s._resum_consulta('horari_grup', {}, resultat)
+    assert resum['id_sessio'] == [f'S{i}' for i in range(1, 11)]
+    assert resum['total_id'] == 14
+    assert resum['consulta'] == ''
+    assert 'error' not in resum
+
+
+def test_consultes_sense_eines(monkeypatch):
+    monkeypatch.setattr(s, '_trossos_api', lambda *a: iter([
+        ('tros', 'Sense eina'), ('fi', {'tallada': False, 'model': 'fals'})]))
+    resultat = events()
+    assert resultat[-1]['fi']
+    assert not any('consultes' in e for e in resultat)
+
+
+def test_consultes_error_i_secrets(monkeypatch):
+    torn = 0
+    def ia(*args):
+        nonlocal torn
+        torn += 1
+        if torn == 1:
+            yield 'tools', [crida('consulta', '{"text":"secret-de-prova"}')]
+        else:
+            yield 'tros', 'No es pot comprovar'
+        yield 'fi', {'tallada': False, 'model': 'fals'}
+    monkeypatch.setattr(s, '_trossos_api', ia)
+    monkeypatch.setattr(s, '_eines', lambda: SimpleNamespace(executa=lambda *a: {
+        'ok': False, 'consulta': 'secret-de-prova', 'id_sessio': ['secret-de-prova'],
+        'error': 'secret-de-prova' + 'x' * 250}))
+    resultat = events()
+    resum = resultat[-2]['consultes'][0]
+    assert resum['ok'] is False
+    assert len(resum['error']) == 200
+    assert resum['error'].startswith('[clau oculta]')
+    assert resum['args'] == {'text': '[clau oculta]'}
+    assert resum['consulta'] == '[clau oculta]'
+    assert resum['id_sessio'] == ['[clau oculta]']
+    assert 'secret-de-prova' not in json.dumps(resultat)
+
+
+def test_consultes_prova(monkeypatch):
+    monkeypatch.setenv('IA_PROVA', '1')
+    monkeypatch.setattr(s.time, 'sleep', lambda _: None)
+    resultat = events()
+    assert resultat[-2] == {'consultes': [
+        {'eina': 'eco_prova', 'args': {'missatges': 1}, 'ok': True,
+         'consulta': 'eco_prova', 'id_sessio': [], 'total_id': 0}]}
+    assert resultat[-1]['fi']
