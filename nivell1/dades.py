@@ -89,3 +89,20 @@ def consulta(nom: str, **params) -> tuple[pd.DataFrame, str]:
     text = sql(nom)
     df = connexio().execute(text, params or None).df()
     return df, text
+
+
+def setmana_tipica(semestre: int) -> str:
+    """Setmana ISO amb el nombre de sessions més proper a la mediana del semestre (la primera si n'hi ha més d'una)."""
+    return connexio().execute("""
+        WITH n AS (SELECT setmana, count(*) AS c FROM sessions WHERE sem = $s GROUP BY setmana)
+        SELECT setmana FROM n ORDER BY abs(c - (SELECT median(c) FROM n)), setmana LIMIT 1""",
+                              {'s': semestre}).fetchone()[0]
+
+
+def setmana_pitjor(semestre: int) -> str:
+    """Setmana ISO amb el pic més alt de classes simultànies que demanen aulari (compartides un cop, per bloc)."""
+    return connexio().execute("""
+        SELECT s.setmana FROM sessions s JOIN sessio_blocs sb USING (id_sessio)
+        WHERE s.sem = $s AND s.demanda_aulari
+        GROUP BY s.setmana, s.data, sb.bloc
+        ORDER BY count(DISTINCT s.unitat) DESC, s.setmana LIMIT 1""", {'s': semestre}).fetchone()[0]
