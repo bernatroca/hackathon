@@ -2,7 +2,7 @@ from html import escape
 import streamlit as st
 from components.grafics import grafics
 from mostra import exemples
-from presentacio import text, text_portada, abast, desglos, valor
+from presentacio import text, text_portada, abast, desglos, valor, numero
 from servei import una, AULES_DISPONIBLES, AULES_RESERVA
 from textos import PROBLEMES
 from errors import mostra_error
@@ -63,6 +63,7 @@ def heroi(t):
         esquerra,dreta = st.columns([1.7,1],gap='medium',vertical_alignment='center')
         with esquerra:
             st.markdown(f'<h2 class="pregunta" data-estat="{info["estat"]}">{escape(info["titol"])}</h2>',unsafe_allow_html=True)
+            st.markdown(estat(info), unsafe_allow_html=True)
             st.subheader(info['c']['resposta'])
             st.markdown(f'<p class="frase-heroi">{escape(info["frase"])}</p>',unsafe_allow_html=True)
             obre(t)
@@ -85,14 +86,31 @@ def resum_grau(info):
         f'<p class="marge-semestral"><strong>{escape(c["marge_semestre"])} h</strong> de marge en tot el semestre</p></div>')
 
 
+def frase_grau(t, info):
+    """Una frase amb els recomptes validats, sense perdre el detall si en falta cap."""
+    v = (t.extra or {}).get('validat_part2')
+    if info['c'].get('validat') and isinstance(v, dict):
+        n = v.get('sessions_grau_nou_collocades', v.get('sessions_grau_nou'))
+        fora = v.get('sessions_grau_nou_fora_franja')
+        mogudes = v.get('sessions_52_mogudes')
+        if all(x is not None for x in (n, fora, mogudes)):
+            return (f"{numero(n)} sessions noves: {numero(fora)} canvien d’hora i "
+                    f"{numero(mogudes)} classes de l’horari proposat es mouen.")
+    return info['frase']
+
+
 def targeta(t, posicio=0):
-    info = text_portada(t, contingut(t))
+    complet = contingut(t)
+    info = text_portada(t, complet)
+    if t.id == 'marge-grau-nou' and complet['c'].get('validat'):
+        info['frase'] = frase_grau(t, complet)
     with st.container(border=True, key='targeta-'+t.id):
         mostra_avis(t)
         st.markdown(f'<article class="targeta-cor"><h2>{escape(info["titol"])}</h2>'
             f'<div class="xifra-targeta">{escape(info["c"]["xifra"])}</div>'
             f'<p class="frase-targeta">{escape(info["frase"])}</p>{estat(info)}</article>',unsafe_allow_html=True)
         with st.container(key='peu-targeta-'+t.id):
+            st.markdown(f'<p class="proposem"><b>Proposem</b><br>{escape(info["proposem"])}</p>', unsafe_allow_html=True)
             obre(t)
 
 
@@ -187,6 +205,9 @@ def estil_respostes():
 .st-key-respostes .frase-compacta {
  margin:0;font-size:16px;line-height:1.5;color:#52514e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
+.st-key-respostes .resposta-compacta[data-resposta="marge-grau-nou"] .frase-compacta {
+ white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;
+}
 .st-key-respostes [data-testid="stLayoutWrapper"]:has(> [class*="st-key-enllac-resposta-"]),
 .st-key-respostes [class*="st-key-enllac-resposta-"] {margin-top:auto;flex:0 0 auto;}
 .st-key-respostes button[kind="secondary"] {color:#256abf;border:0;background:transparent;padding-left:0;}
@@ -217,6 +238,10 @@ def estil_respostes():
 
 def targeta_compacta(t, info=None):
     info = contingut(t) if info is None else info
+    if t.id == 'marge-grau-nou':
+        info = dict(info, frase=(f"{info['c']['hores_noves']} h a la setmana; "
+            f"{info['c']['hores_lliures']} h lliures {info['c']['etiqueta_setmana']}; "
+            f"{info['c']['marge_semestre']} h de marge en tot el semestre."))
     with st.container(border=True,height='stretch',key='resposta-compacta-'+t.id):
         mostra_avis(t)
         st.markdown(f'<article class="resposta-compacta" data-resposta="{escape(t.id)}">'

@@ -90,12 +90,12 @@ class TestPortadaInventada(unittest.TestCase):
                     self.assertEqual(caixa.button[0].label,'Com ho sabem →')
                     self.assertEqual(caixa.button[0].key,'obre-'+id_)
                 html = '\n'.join(m.value for m in app.markdown)
-                self.assertNotIn('Proposem:',html)
+                self.assertIn('Proposem</b>',html)
                 self.assertNotIn('class="metre"',html)
                 frases = re.findall(r'<p class="frase-(heroi|targeta)">(.*?)</p>',html)
                 self.assertEqual(len(frases),len(PORTADA))
                 for tipus, frase in frases:
-                    self.assertLessEqual(len(frase.split()),15 if tipus == 'heroi' else 12)
+                    self.assertLessEqual(len(frase.split()),15 if tipus == 'heroi' else 35)
 
     def test_css_text_sense_retalls_ni_alcada_fixa(self):
         css = (ARREL/'estil.css').read_text()
@@ -305,6 +305,38 @@ preguntes.mostra()
         t.extra['torns'] = pd.DataFrame({'torn':['mati','tarda'],'ocupacio_pct':[69.7,42.1]})
         self.assertIn('Matí 70 % · Tarda 42 %',text(t)['frase'])
 
+    def test_regressions_portada_ronda6_inventades(self):
+        mapa = dades_inventades('Validat')
+        t = grau_inventat()
+        t.extra.update(estat_provisional=False, validat_part2=dict(
+            valida=True, resposta=1, sessions_grau_nou_collocades=317,
+            sessions_grau_nou_fora_franja=29, sessions_52_mogudes=0))
+        mapa['marge-grau-nou'] = t
+        with patch('prova_portada.dades_inventades', return_value=mapa):
+            app = portada_inventada()
+        self.comprova(app)
+        hero = next(b for b in app.get('flex_container') if b.proto.id.endswith('-heroi'))
+        self.assertTrue(any('estat verd' in m.value and 'Hi cap' in m.value for m in hero.markdown))
+        caixa = next(b for b in app.get('flex_container') if b.proto.id.endswith('targeta-marge-grau-nou'))
+        html = '\n'.join(m.value for m in caixa.markdown)
+        self.assertIn('317 sessions noves: 29 canvien d’hora', html)
+        self.assertIn('0 classes de l’horari proposat es mouen', html)
+        self.assertIn('Incorporar-lo a l’horari proposat: ja hi cap.', html)
+        self.assertNotIn('sense moure cap classe', html)
+        from components.vistes import targeta_compacta
+        app = AppTest.from_string("""
+from test_app import grau_inventat
+from components.vistes import targeta_compacta, estil_respostes
+estil_respostes()
+targeta_compacta(grau_inventat())
+""").run(timeout=90)
+        self.comprova(app)
+        html = '\n'.join(m.value for m in app.markdown)
+        self.assertIn('26 h a la setmana', html)
+        self.assertIn('181 h lliures', html)
+        self.assertIn('4.679 h de marge en tot el semestre', html)
+        self.assertIn('white-space:normal;overflow:visible;text-overflow:clip', html)
+
     def test_grau_nou_segons_el_5_4(self):
         from presentacio import text
         t = grau_inventat()
@@ -347,13 +379,14 @@ preguntes.mostra()
         self.assertIn('margin-top: auto',css)
         self.assertIn('stLayoutWrapper',css)
         self.assertIn('flex-direction: column',css)
-        # Cada peu conserva l'enllaç; les propostes són al detall.
+        # Cada peu conserva la proposta visible i l'enllaç.
         peus = [b for b in app.get('flex_container') if any('peu-targeta-' in str(v) for v in [b.proto.id])]
         self.assertEqual(len(peus),len(PORTADA)-1)
         for peu in peus:
             self.assertEqual(len(peu.button),1)
             self.assertEqual(peu.button[0].label,'Com ho sabem →')
-            self.assertEqual(len(peu.markdown),0)
+            self.assertEqual(len(peu.markdown),1)
+            self.assertIn('Proposem',peu.markdown[0].value)
 
     def test_bloc_gran_vermell_quan_falta_mida(self):
         mapa = dades_inventades()
