@@ -91,6 +91,9 @@ def proveidors() -> list[dict]:
         url = os.environ.get(f"{prefix}_URL", "").strip()
         clau = os.environ.get(f"{prefix}_CLAU", "").strip()
         model = os.environ.get(f"{prefix}_MODEL", "").strip()
+        if prefix == "IA_RESERVA" and model:
+            url = url or os.environ.get("IA_URL", "").strip()
+            clau = clau or os.environ.get("IA_CLAU", "").strip()
         if url and clau and model:
             llista.append({"nom": prefix.lower(), "url": url.rstrip("/"), "clau": clau, "model": model})
     return llista
@@ -159,25 +162,55 @@ def valida(entrada: object) -> list[dict]:
 
 
 # ---------- la IA ----------
-# Format «OpenAI-compatible» (/chat/completions amb stream): el parlen OpenAI, OpenRouter,
-# Groq, Mistral, Ollama, LM Studio i molts altres. Si la IA que feu servir en parla un altre,
-# només cal canviar _trossos_api().
+# Responses per defecte; IA_API=chat conserva Chat Completions.
 
 class ErrorIA(Exception):
     pass
 
 
+def _input_responses(missatges):
+    """Tradueix la conversa interna al contracte de Responses, sense camps de Chat."""
+    items = []
+    for m in missatges:
+        if m["role"] == "system":
+            continue
+        if m["role"] == "tool":
+            items.append({"type": "function_call_output", "call_id": m["tool_call_id"],
+                          "output": m["content"]})
+            continue
+        contingut = m.get("content")
+        if isinstance(contingut, list):
+            contingut = [({"type": "input_text", "text": part["text"]}
+                          if part["type"] == "text" else
+                          {"type": "input_image", "image_url": part["image_url"]["url"]})
+                         for part in contingut]
+        if contingut is not None:
+            items.append({"role": m["role"], "content": contingut})
+        for crida in m.get("tool_calls", []):
+            items.append(crida["_responses_item"])
+    return items
+
+
 def _trossos_api(p: dict, missatges: list[dict]) -> Iterator[tuple[str, object]]:
     """Dona ("tros", text) mentre escriu i ("fi", {tallada, model}) al final."""
-    cos = {"model": p["model"], "messages": missatges, "stream": True}
+    responses = os.environ.get("IA_API", "responses").strip().lower() == "responses"
+    cos = {"model": p["model"], "stream": True}
+    if responses:
+        cos.update(instructions="\n\n".join(m["content"] for m in missatges if m["role"] == "system"),
+                   input=_input_responses(missatges), max_output_tokens=4000)
+    else:
+        cos["messages"] = missatges
     disponibles = _eines()
     if disponibles is not None and disponibles.EINES:
-        cos.update(tools=disponibles.EINES, tool_choice="auto")
+        tools = disponibles.EINES
+        if responses:
+            tools = [{"type": "function", **e["function"]} for e in tools]
+        cos.update(tools=tools, tool_choice="auto")
     cos = json.dumps(cos).encode()
     peticio = urllib.request.Request(
-        f"{p['url']}/chat/completions",
+        f"{p['url']}/{'responses' if responses else 'chat/completions'}",
         data=cos,
-        headers={"Authorization": f"Bearer {p['clau']}", "Content-Type": "application/json", "Accept": "text/event-stream"},
+        headers={"Authorization": f"Bearer {p['clau']}", "Content-Type": "application/json", "Accept": "text/event-stream", "User-Agent": "espais-escola/1.0"},
         method="POST",
     )
     try:
@@ -215,8 +248,29 @@ def _trossos_api(p: dict, missatges: list[dict]) -> Iterator[tuple[str, object]]
                 e = json.loads(dada)
             except ValueError:
                 continue
-            if e.get("error"):
-                raise ErrorIA("La IA ha retornat un error durant la resposta.")
+            if e.get("error") or e.get("type") in ("error", "response.failed"):
+                error = e.get("error") or (e.get("response") or {}).get("error") or e
+                detall = error.get("message", "") if isinstance(error, dict) else str(error)
+                raise ErrorIA("La IA ha retornat un error durant la resposta" +
+                              (": " + _sense_claus(detall)[:300] if detall else "."))
+            if responses:
+                tipus = e.get("type")
+                if tipus == "response.output_text.delta" and e.get("delta"):
+                    yield "tros", e["delta"]
+                elif tipus == "response.output_item.done":
+                    item = e.get("item") or {}
+                    if item.get("type") == "function_call":
+                        crides[e["output_index"]] = {
+                            "id": item["call_id"], "type": "function",
+                            "function": {"name": item["name"], "arguments": item["arguments"]},
+                            "_responses_item": item,
+                        }
+                elif tipus in ("response.completed", "response.incomplete"):
+                    resultat = e.get("response") or {}
+                    model = resultat.get("model") or model
+                    tallada = (resultat.get("status") == "incomplete" and
+                               (resultat.get("incomplete_details") or {}).get("reason") == "max_output_tokens")
+                continue
             model = e.get("model") or model
             eleccio = (e.get("choices") or [{}])[0]
             delta = eleccio.get("delta") or {}
