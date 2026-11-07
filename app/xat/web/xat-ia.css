@@ -212,16 +212,62 @@
 .xatia-consulta-codi button:focus-visible { outline: 2px solid var(--xatia-accent); outline-offset: 2px; }
 .xatia-consulta-error { color: var(--xatia-error); }
 
-/* Plafó acoblat: el main és un element flex i cedeix 420 px sense moure
-   el menú lateral. La classe només és activa en mida normal d'ordinador. */
+/* Reservem l'espai a l'arrel, abans que Streamlit reparteixi l'amplada entre
+   menú i main. Un marge al main pot quedar sota l'overflow del layout wide.
+   El transform neutre també acobla els fixed de l'app a aquesta amplada;
+   el widget viu a body, fora de .stApp. El menú conserva amplada i origen. */
 @media (min-width: 700px) {
-  [data-testid="stMain"] {
+  .stApp {
+    width: 100%;
+    transition: width 0.22s ease;
+  }
+  html.xatia-obert .stApp {
+    width: calc(100% - var(--xatia-amplada)) !important;
+    max-width: calc(100% - var(--xatia-amplada));
+    transform: translateZ(0);
+    overflow-x: clip;
+  }
+  html.xatia-obert [data-testid="stAppViewContainer"] {
+    width: 100%;
+    max-width: 100%;
     min-width: 0;
-    transition: margin-right 0.22s ease;
   }
   html.xatia-obert [data-testid="stMain"] {
-    margin-right: var(--xatia-amplada);
+    flex: 1 1 0%;
+    width: 100%;
+    max-width: 100%;
     min-width: 0;
+    margin-right: 0;
+    overflow-x: clip;
+  }
+  html.xatia-obert [data-testid="stMainBlockContainer"] {
+    box-sizing: border-box;
+    width: 100% !important;
+    max-width: min(1240px, 100%) !important;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  /* El header fixed ara es referencia a .stApp, no a tota la finestra. */
+  html.xatia-obert [data-testid="stHeader"] {
+    width: 100% !important;
+    max-width: 100%;
+    right: 0;
+  }
+  /* La guia calcula left amb innerWidth: ancorem el seu plafó al límit
+     del containing block ja reduït, encara que el JS li assigni left/width.
+     El llançador és un popover: escapa del containing block a la capa superior. */
+  html.xatia-obert .st-key-p2-pagina .st-key-p2-guia {
+    left: auto !important;
+    right: 12px !important;
+    width: min(350px, calc(100% - 24px)) !important;
+    max-width: calc(100% - 24px) !important;
+  }
+  html.xatia-obert .st-key-p2-pagina .st-key-p2-obre-guia {
+    max-width: calc(100vw - var(--xatia-amplada) - 36px) !important;
+    white-space: normal;
+  }
+  html.xatia-obert .st-key-p2-obre-guia button {
+    white-space: normal;
   }
   /* Deixem accessible la barra de controls superior de Streamlit. */
   .xatia:not(.xatia--gran) .xatia-plafo { top: 48px; }
@@ -245,5 +291,5 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  [data-testid="stMain"] { transition: none; }
+  .stApp { transition: none; }
 }

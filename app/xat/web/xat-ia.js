@@ -398,10 +398,35 @@
   // A l'ordinador, en mida normal, es pot treballar a la pàgina alhora.
   const esAcoblat = () => !esMobil() && !estat.gran;
 
+  let midaPlafó;
+  let resizePendent;
+  function avisaAmplada() {
+    // El navegador aplica primer l'amplada nova. Plotly i la graella tornen
+    // a mesurar el seu contenidor; no cal canviar la mida real de la finestra.
+    window.dispatchEvent(new Event('resize'));
+  }
+
   function sincronitzaPlafó() {
     const acoblat = estat.obert && esAcoblat();
     document.documentElement.classList.toggle('xatia-obert', acoblat);
     el.fons.hidden = !estat.obert || acoblat;
+    const mida = `${estat.obert}:${estat.gran}:${esMobil()}`;
+    if (mida !== midaPlafó) {
+      midaPlafó = mida;
+      window.clearTimeout(resizePendent);
+      avisaAmplada();
+      // Respatller per a transicions interrompudes i moviment reduït (sense
+      // transitionend). No es programa en cada tros de resposta ni pantalla.
+      resizePendent = window.setTimeout(avisaAmplada, 260);
+    }
+  }
+
+  function acabaTransicio(e) {
+    if ((e.target === el.plafo && ['width', 'transform'].includes(e.propertyName)) ||
+        (e.target.matches?.('.stApp') && e.propertyName === 'width')) {
+      window.clearTimeout(resizePendent);
+      avisaAmplada();
+    }
   }
 
   function clicFons() {
@@ -486,6 +511,7 @@
       afegeixCaptures(e.dataTransfer.files);
     });
     el.lupa.addEventListener('click', () => (el.lupa.hidden = true));
+    document.addEventListener('transitionend', acabaTransicio);
     window.addEventListener('keydown', teclaPlafó);
     /* Al mòbil, el teclat tapa la caixa: el plafó s'acaba on comença el teclat. */
     if (window.visualViewport) {
