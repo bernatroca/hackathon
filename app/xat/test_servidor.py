@@ -511,3 +511,34 @@ def test_consultes_prova(monkeypatch):
         {'eina': 'eco_prova', 'args': {'missatges': 1}, 'ok': True,
          'consulta': 'eco_prova', 'id_sessio': [], 'total_id': 0}]}
     assert resultat[-1]['fi']
+
+
+@pytest.mark.parametrize('api', ['chat', 'responses'])
+def test_arguments_html_desescapats(monkeypatch, api):
+    monkeypatch.setenv('IA_API', api)
+    originals = {
+        'sql': 'SELECT * FROM sessions WHERE ini_min &gt; 900 AND ini_min &lt; 1000',
+        'niats': [{'text': '&amp; &quot; &#39;', 'doble': '&amp;gt;',
+                   'tipus': [42, True, None], 'clau&amp;': '&lt;a&gt;'}],
+    }
+    esperats = {
+        'sql': 'SELECT * FROM sessions WHERE ini_min > 900 AND ini_min < 1000',
+        'niats': [{'text': '& " \'', 'doble': '&gt;',
+                   'tipus': [42, True, None], 'clau&amp;': '<a>'}],
+    }
+    executa = Mock(return_value={'ok': True, 'id_sessio': []})
+    monkeypatch.setattr(s, '_eines', lambda: SimpleNamespace(executa=executa))
+    torn = 0
+    def ia(*args):
+        nonlocal torn
+        torn += 1
+        if torn == 1:
+            yield 'tools', [crida('consulta_sql', json.dumps(originals))]
+        else:
+            yield 'tros', 'Text &gt; &amp; &quot; &#39; sense transformar'
+        yield 'fi', {'tallada': False, 'model': 'fals'}
+    monkeypatch.setattr(s, '_trossos_api', ia)
+    resultat = events()
+    executa.assert_called_once_with('consulta_sql', esperats)
+    assert resultat[-2]['consultes'][0]['args'] == esperats
+    assert ''.join(e.get('tros', '') for e in resultat) == 'Text &gt; &amp; &quot; &#39; sense transformar'
