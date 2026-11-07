@@ -6,6 +6,7 @@ import dataclasses
 import datetime as dt
 import json
 import importlib
+import inspect
 import math
 import re
 import threading
@@ -56,13 +57,13 @@ def _retorn(resultat, consulta, ids=None):
 
 def _apartat(apartat):
     if apartat not in APARTATS:
-        raise EntradaError('Apartat invàlid: tria 5.1, 5.2, 5.3 o 5.4.')
+        raise EntradaError(f'apartat {apartat!r} no vàlid: fes servir 5.1, 5.2, 5.3 o 5.4.')
     return apartat
 
 
 def _carrega(proposta='avui'):
-    if proposta != 'avui':
-        _apartat(proposta)
+    if proposta not in ('avui', *APARTATS):
+        raise EntradaError(f'proposta {proposta!r} no vàlida: fes servir avui, 5.1, 5.2, 5.3 o 5.4.')
     escenari = nb.CONTINGENCIES if proposta == '5.3' else nb.GRAU_NOU if proposta == '5.4' else None
     b = nb.carrega_oficial(escenari)
     p = nb.Proposta.de_base(b) if proposta == 'avui' else nb.Proposta.llegeix(nb.RESULTATS_PRINCIPAL / proposta / 'proposta.csv')
@@ -81,14 +82,14 @@ def _dia(dia):
         ('j', 'dijous', 'jueves', 'thursday'),
         ('v', 'divendres', 'viernes', 'friday'))) for nom in variants}
     if nom not in noms:
-        raise EntradaError('Dia invàlid: L, M, X, J o V (també el nom del dia).')
+        raise EntradaError(f'dia {dia!r} no vàlid: fes servir L, M, X, J o V, o el nom en català, castellà o anglès.')
     return noms[nom]
 
 
 def _hora(h):
     match = re.fullmatch(r'([01]?\d|2[0-3])(?:(?:[:.])([0-5]\d)|h)?', str(h).strip().lower())
     if not match:
-        raise EntradaError('Hora invàlida: indica 16, 16:00, 16.00 o 16h.')
+        raise EntradaError(f'hora_ini {h!r} no vàlida: indica una hora de 00:00 a 23:59, com 16, 16:00, 16.00 o 16h.')
     return int(match[1])*60 + int(match[2] or 0)
 
 
@@ -96,13 +97,37 @@ def _modul(nom):
     return importlib.import_module(('app.' if __package__.startswith('app.') else '') + nom)
 
 
+def _data(valor, parametre='data'):
+    try:
+        if not isinstance(valor, str):
+            raise ValueError
+        return dt.date.fromisoformat(valor)
+    except ValueError:
+        raise EntradaError(f'{parametre} {valor!r} no vàlida: fes servir una data AAAA-MM-DD, com 2027-02-15.') from None
+
+
 def _setmana(b, setmana):
-    dilluns, setmana_tipica = _modul('components.graella').dilluns, _modul('components.graella').setmana_tipica
-    if setmana is None:
-        return setmana_tipica(b)
-    if re.fullmatch(r'\d{4}-W\d{2}', str(setmana)):
-        return dt.date.fromisocalendar(int(setmana[:4]), int(setmana[-2:]), 1)
-    return dilluns(dt.date.fromisoformat(setmana))
+    graella = _modul('components.graella')
+    text = str(setmana).strip().lower() if setmana is not None else ''
+    normal = ''.join(c for c in unicodedata.normalize('NFD', text) if not unicodedata.combining(c))
+    if normal in ('', 'tipica', 'tipica del semestre', 'typical', 'normal'):
+        return graella.setmana_tipica(b)
+    try:
+        match = re.fullmatch(r'(\d{4})-w(\d{2})', text)
+        if match:
+            return dt.date.fromisocalendar(int(match[1]), int(match[2]), 1)
+        numero = re.fullmatch(r'(?:w|setmana\s+)?(\d{1,2})', text)
+        if numero and not isinstance(setmana, bool):
+            return dt.date.fromisocalendar(2027, int(numero[1]), 1)
+        return graella.dilluns(dt.date.fromisoformat(text))
+    except (ValueError, TypeError):
+        raise EntradaError(f"setmana {setmana!r} no vàlida: deixa-la buida o fes servir 'típica', 2027-W07, 7, W07, 'setmana 7' o una data AAAA-MM-DD.") from None
+
+
+def _aula(b, aula):
+    if not isinstance(aula, str) or aula not in b.aules:
+        raise EntradaError(f'aula {aula!r} no vàlida: fes servir un codi exacte d’aula de l’inventari.')
+    return aula
 
 
 def _files(b, p):
@@ -119,6 +144,14 @@ def _files(b, p):
 def horari_grup(grup, titulacio=None, curs=None, dia=None, setmana=None, proposta='avui'):
     graella = _modul('components.graella')
     b, p = _carrega(proposta)
+    if not isinstance(grup, (str, int)) or isinstance(grup, bool) or not re.fullmatch(r'(?:(?:TE|PAUL|SEM|PLAB)/)?\d+', str(grup).strip(), re.I):
+        raise EntradaError(f'grup {grup!r} no vàlid: fes servir un grup existent com 81, TE/81 o 811.')
+    cohorts = {cohort.rsplit(':', 1)[0] for sessio in b.sessions.values() for cohort in sessio.cohorts}
+    if titulacio is not None and (not isinstance(titulacio, str) or titulacio not in cohorts):
+        raise EntradaError(f'titulacio {titulacio!r} no vàlida: fes servir un codi de titulació existent o omet el paràmetre.')
+    cursos = {cohort.rsplit(':', 1)[1] for sessio in b.sessions.values() for cohort in sessio.cohorts}
+    if curs is not None and (not isinstance(curs, str) or curs not in cursos):
+        raise EntradaError(f'curs {curs!r} no vàlid: fes servir un curs existent (1r, 2n, 3r…) o omet el paràmetre.')
     numero = str(grup).strip().rsplit('/', 1)[-1]
     tipus = str(grup).split('/', 1)[0].upper() if '/' in str(grup) else None
     seleccions = set()
@@ -129,6 +162,8 @@ def horari_grup(grup, titulacio=None, curs=None, dia=None, setmana=None, propost
             tit, c = cohort.rsplit(':', 1)
             if (titulacio is None or tit == str(titulacio)) and (curs is None or c == str(curs)):
                 seleccions.add((tit, c, s.linia))
+    if not seleccions:
+        raise EntradaError(f'grup {grup!r} no trobat: fes servir un grup existent per a aquesta titulacio i curs, o omet aquests filtres.')
     w = _setmana(b, setmana)
     d = _dia(dia) if dia is not None else None
     rows = []
@@ -146,10 +181,10 @@ def horari_grup(grup, titulacio=None, curs=None, dia=None, setmana=None, propost
 
 def ocupacio_aula(aula, dia=None, setmana=None, proposta='avui'):
     b, p = _carrega(proposta)
-    if aula not in b.aules:
-        raise EntradaError('Aula desconeguda.')
+    _aula(b, aula)
+    d = _dia(dia) if dia is not None else None
     w = _setmana(b, setmana)
-    rows = [r for r in _files(b, p) if r['aula'] == aula and w <= r['data'] < w+dt.timedelta(days=7) and (dia is None or r['dia'] == _dia(dia))]
+    rows = [r for r in _files(b, p) if r['aula'] == aula and w <= r['data'] < w+dt.timedelta(days=7) and (d is None or r['dia'] == d)]
     return _retorn(sorted(rows, key=lambda r: (r['data'], r['ini_min'], r['id_sessio'])), f'ocupacio_aula(aula={aula}, dia={dia}, setmana={w}, proposta={proposta})')
 
 
@@ -157,10 +192,15 @@ def aules_lliures(hora_ini, durada_min, places_min, dia=None, data=None, tipus=N
     if (dia is None) == (data is None):
         raise EntradaError('Indica exactament un dia o una data.')
     ini = _hora(hora_ini)
-    if type(durada_min) is not int or durada_min <= 0 or ini+durada_min > 1440 or type(places_min) is not int or places_min < 0:
-        raise EntradaError('Durada o places invàlides.')
+    if type(durada_min) is not int or durada_min <= 0 or ini+durada_min > 1440:
+        raise EntradaError(f'durada_min {durada_min!r} no vàlida: fes servir un enter positiu i una franja que acabi abans de mitjanit.')
+    if type(places_min) is not int or places_min < 0:
+        raise EntradaError(f'places_min {places_min!r} no vàlid: fes servir un enter igual o superior a 0.')
     b, p = _carrega(proposta)
-    date = dt.date.fromisoformat(data) if data else _setmana(b, setmana)+dt.timedelta(days=DIES.index(_dia(dia)))
+    if tipus is not None and (not isinstance(tipus, str) or tipus not in {a.tipus for a in b.aules.values()}):
+        raise EntradaError(f'tipus {tipus!r} no vàlid: fes servir el tipus exacte de l’inventari o omet el paràmetre per cercar aules ordinàries.')
+    w = _setmana(b, setmana)
+    date = _data(data) if data is not None else w+dt.timedelta(days=DIES.index(_dia(dia)))
     ocupades = {r['aula'] for r in _files(b, p) if r['data'] == date and r['ini_min'] < ini+durada_min and r['fi_min'] > ini}
     # Les aules addicionals de partida també ocupen espai.
     if proposta == 'avui':
@@ -176,7 +216,7 @@ def xifra(id):
     from nivell1 import troballes
     ids = [m.ID for m in troballes.moduls()]
     if id not in ids:
-        raise EntradaError('Xifra desconeguda. IDs disponibles: '+', '.join(ids))
+        raise EntradaError(f'id {id!r} no vàlid. IDs disponibles: '+', '.join(ids))
     t = troballes.una(id, 2, None)
     rows = _json(t.taula)
     return _retorn({'id': t.id, 'xifra': t.xifra, 'frase': t.frase, 'metode': t.metode, 'total': len(rows), 'files': rows[:LIMIT]}, t.sql,
@@ -293,6 +333,17 @@ def prova_canvi(apartat, canvi):
     _apartat(apartat)
     if not isinstance(canvi, dict):
         raise EntradaError('canvi ha de ser un objecte amb tipus imprevist o moure.')
+    if canvi.get('tipus') == 'imprevist':
+        camps = {'aules_tancades': ('aula', 'data_ini', 'data_fi'),
+                 'grups_creixen': ('codi', 'grup', 'alumnes'),
+                 'sessions_cancel_lades': ('id_sessio', 'recuperar_fins')}
+        for camp, obligatoris in camps.items():
+            valors = canvi.get(camp, [])
+            if not isinstance(valors, list):
+                raise EntradaError(f'canvi.{camp} no vàlid: fes servir una llista d’objectes amb {", ".join(obligatoris)}.')
+            for valor in valors:
+                if not isinstance(valor, dict) or any(k not in valor for k in obligatoris):
+                    raise EntradaError(f'canvi.{camp} no vàlid: cada objecte ha de contenir {", ".join(obligatoris)}.')
     b, p = _carrega(apartat)
     before = nb.avalua_rapid(b, p, nomes_aules=apartat == '5.1')
     nova = copy.deepcopy(p)
@@ -301,8 +352,11 @@ def prova_canvi(apartat, canvi):
         if bool(canvi.get('id_sessio')) == bool(canvi.get('activitat_id')):
             raise EntradaError('Indica id_sessio o activitat_id, exactament un.')
         ids = [sid for sid, s in b.sessions.items() if sid == canvi.get('id_sessio') or s.activitat == canvi.get('activitat_id')]
-        if not ids or not any(k in canvi for k in ('dia', 'hora_ini', 'aula')):
-            raise EntradaError('Sessió/activitat desconeguda o moviment sense destí.')
+        if not ids:
+            camp = 'id_sessio' if canvi.get('id_sessio') else 'activitat_id'
+            raise EntradaError(f'{camp} {canvi.get(camp)!r} no vàlid: fes servir un identificador existent a la proposta.')
+        if not any(k in canvi for k in ('dia', 'hora_ini', 'aula')):
+            raise EntradaError('canvi moure sense destí: indica almenys dia, hora_ini o aula.')
         for sid in ids:
             a = nova.files[sid]
             if 'dia' in canvi:
@@ -314,8 +368,7 @@ def prova_canvi(apartat, canvi):
                 _hora(canvi['hora_ini'])
                 a.h_ini = nb.fmt(_hora(canvi['hora_ini']))
             if 'aula' in canvi:
-                if canvi['aula'] not in b.aules:
-                    raise EntradaError('Aula desconeguda.')
+                _aula(b, canvi['aula'])
                 a.aula = canvi['aula']
     elif canvi.get('tipus') == 'imprevist':
         from nivell2.reparacio import Canvi, repara
@@ -324,24 +377,25 @@ def prova_canvi(apartat, canvi):
         if not any(canvi.get(k) for k in ('aules_tancades', 'grups_creixen', 'sessions_cancel_lades')):
             raise EntradaError('Indica almenys un tancament, creixement o cancel·lació.')
         for t in canvi.get('aules_tancades', []):
-            if t['aula'] not in b.aules:
-                raise EntradaError('Aula desconeguda.')
-            d1, d2 = dt.date.fromisoformat(t['data_ini']), dt.date.fromisoformat(t['data_fi'])
+            _aula(b, t['aula'])
+            d1, d2 = _data(t['data_ini'], 'data_ini'), _data(t['data_fi'], 'data_fi')
             if d2 < d1:
-                raise EntradaError('Dates de tancament invertides.')
+                raise EntradaError('data_fi no vàlida: ha de ser igual o posterior a data_ini.')
             after.tancaments.append(Tancament(t['aula'], d1, d2))
         for g in canvi.get('grups_creixen', []):
             rows = [s for s in after.sessions.values() if s.codi == g['codi'] and s.grup == g['grup']]
-            if not rows or type(g['alumnes']) is not int or any(g['alumnes'] < s.alumnes for s in rows):
-                raise EntradaError('Grup desconegut o creixement invàlid.')
+            if not rows:
+                raise EntradaError('codi/grup no vàlids: indica un codi d’assignatura i un grup existents (p. ex. TE/81).')
+            if type(g['alumnes']) is not int or any(g['alumnes'] < s.alumnes for s in rows):
+                raise EntradaError('alumnes no vàlid: fes servir un enter igual o superior a l’alumnat actual del grup.')
             for s in rows:
                 s.alumnes = g['alumnes']
         for c in canvi.get('sessions_cancel_lades', []):
-            if c['id_sessio'] not in b.sessions:
-                raise EntradaError('Sessió desconeguda.')
-            limit = dt.date.fromisoformat(c['recuperar_fins'])
+            if not isinstance(c['id_sessio'], str) or c['id_sessio'] not in b.sessions:
+                raise EntradaError('id_sessio no vàlid: fes servir un identificador de sessió existent a la proposta.')
+            limit = _data(c['recuperar_fins'], 'recuperar_fins')
             if limit <= b.sessions[c['id_sessio']].data:
-                raise EntradaError('La recuperació ha de ser posterior a la sessió.')
+                raise EntradaError('recuperar_fins no vàlid: ha de ser una data AAAA-MM-DD posterior a la sessió.')
             after.cancellades[c['id_sessio']] = limit
         res = repara(p, Canvi(after, b, temps_s=10))
         estat = res.estat
@@ -383,13 +437,15 @@ def executa(nom: str, args: dict) -> dict:
             raise EntradaError('Eina desconeguda.')
         if not isinstance(args, dict):
             raise EntradaError('Els arguments han de ser un objecte JSON.')
+        try:
+            inspect.signature(_HANDLERS[nom]).bind(**args)
+        except TypeError as exc:
+            raise EntradaError(f'Paràmetres de {nom} no vàlids: {exc}. Consulta els paràmetres acceptats a la definició de l’eina.') from None
         result = _HANDLERS[nom](**args)
         json.dumps(result, allow_nan=False)
         return result
     except EntradaError as e:
         return {'ok': False, 'error': str(e)}
-    except (TypeError, KeyError):
-        return {'ok': False, 'error': 'Falten arguments, tenen un format incorrecte o la selecció no existeix. Consulta els paràmetres de l’eina.'}
     except FileNotFoundError:
         return {'ok': False, 'error': 'Les dades o la proposta demanada encara no estan disponibles.'}
     except Exception:
@@ -407,7 +463,7 @@ def _str(description):
 
 _PROPOSTA = {'type': 'string', 'enum': ['avui', *APARTATS], 'default': 'avui'}
 _APARTAT = {'type': 'string', 'enum': list(APARTATS)}
-_COMMON = {'dia': _str('L, M, X, J o V (també el nom del dia)'), 'setmana': _str('ISO 2027-W07 o data; per defecte setmana típica del segon semestre'), 'proposta': _PROPOSTA}
+_COMMON = {'dia': _str('L, M, X, J o V (també el nom del dia)'), 'setmana': {'type': ['string', 'integer', 'null'], 'description': "buit o 'típica' = setmana típica; o 2027-W07; o una data"}, 'proposta': _PROPOSTA}
 _CANVI = {'oneOf': [
     _obj({'tipus': {'const': 'moure', 'type': 'string'}, 'id_sessio': _str('Una sola sessió'), 'activitat_id': _str('Totes les sessions de l’activitat; tria això o id_sessio'), 'dia': _COMMON['dia'], 'hora_ini': _str('Hora: 16, 16:00, 16.00 o 16h'), 'aula': _str('Codi exacte d’aula')}, ['tipus']),
     _obj({'tipus': {'const': 'imprevist', 'type': 'string'},
