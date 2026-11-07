@@ -218,3 +218,10 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - L'app només s'obre des d'aquest ordinador: server.address = localhost, i el servidor de disseny lligat a 127.0.0.1.
 - No separem l'app de les dades: les parts 2 i 3 en necessiten (graella i assistent). Sí que traiem de les taules que es mostren les columnes que no calen (identificadors de docent i codis).
 - Pendent: treure de l'historial local el fitxer de dades i els detalls del diari abans de pujar res a GitHub (a GitHub no n'hi ha cap).
+
+### [ds 19:18] DECISIÓ · Validació de la part 2 i tres propostes de disseny
+- Validació d'en Bernat: el 5.1, la graella i la Junta funcionen; quedava una incoherència a la Junta, entre el pic (19/19 i 13/19) i la taula de mides (−3 i −6). Ja està corregida (n2-dades-4): els dos fan servir el mateix recompte d'aules ordinàries per franja.
+- Millora de l'aula base unida (n2-backend-1): un grup de mostra passa de 9 aules a la setmana a 3.
+- Disseny: tres propostes per a la pàgina de la part 2, amb l'estil de la part 1 i dades inventades (docs/disseny/part2-opcio-a, b i c): A, franja i pastilla; B, com era i com queda; C, colors que ressalten. Totes porten el menú agrupat i la guia a baix a l'esquerra. L'equip tria.
+- La part 1 rep la petició de fer més petites les caixes de «Totes les respostes», ordenades per urgència i amb filtres.
+- Pendent: la pregunta de les 458 sessions fixades sense aula del 5.2.

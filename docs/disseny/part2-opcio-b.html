@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ca"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Opció B · Com era i com queda</title><link rel="stylesheet" href="part2-base.css"><style>
+.classe { background: #f7f6f2; border: 1px solid transparent; color: var(--tinta-2); }
+.classe b { color: var(--tinta-2); font-weight: 600; }
+.classe.afegida, .classe.canviada, .classe.especial { background: var(--targeta); border-color: var(--tinta); color: var(--tinta); box-shadow: 0 1px 3px rgba(20,20,10,.10); }
+.classe.afegida b, .classe.canviada b, .classe.especial b { color: var(--tinta); }
+.classe .abans { display: block; margin-top: 4px; font-size: 12px; color: var(--tinta-2); text-decoration: line-through; text-decoration-color: var(--vermell); }
+.classe .ara { display: block; font-size: 12px; font-weight: 600; }
+.classe.especial { border-style: dashed; }
+.nota-lleg { color: var(--tinta-2); font-size: 15px; margin: 0 0 12px; display: flex; gap: 18px; flex-wrap: wrap; align-items: center; }
+.nota-lleg .m { display: inline-block; width: 22px; height: 14px; border-radius: 4px; vertical-align: -2px; margin-right: 6px; }
+.toggle { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; }
+</style></head>
+<body><aside class="menu">
+  <div class="marca">Espais de l'Escola</div>
+  <div class="grup">Com està l'horari</div>
+  <a href="#">Com estem avui</a><a href="#">Totes les respostes</a>
+  <div class="grup">La proposta</div>
+  <a class="actiu" href="#">Horari proposat</a><a href="#">Resum per a la Junta</a><a href="#">Imprevistos <span class="aviat">aviat</span></a>
+  <div class="grup">Ajuda</div>
+  <a href="#">Pregunta-ho <span class="aviat">aviat</span></a>
+  <div class="peu">2n semestre. Les dades no surten d'aquest ordinador.</div>
+</aside><main><h1>Horari proposat</h1>
+<p class="intro">Una sola graella amb la proposta. Les classes que no canvien es queden en gris; les que canvien diuen com eren i com queden.</p>
+<div class="controls" id="controls">
+  <div class="camp">Què vols veure<div class="segment" role="group"><button aria-pressed="true">Proposta i avui</button><button aria-pressed="false">Només avui</button></div></div>
+  <label class="camp">Proposta<select><option>Aules assignades (5.1)</option><option>Torns nous (5.2)</option></select></label>
+  <label class="camp">Setmana<select><option>Setmana típica, de l'1 al 5 de febrer</option></select></label>
+  <label class="camp">Estudis<select><option>Grau inventat</option></select></label>
+  <label class="camp">Curs<select><option>1r</option></select></label>
+  <label class="camp">Grup<select><option>Grup 11</option></select></label>
+</div>
+<section class="resum" id="resum">
+  <div><span class="estat verd">Cap classe canvia d'hora</span>
+  <h3>El grup 11 farà classe a 3 aules, totes al mateix passadís</h3>
+  <p>La proposta assigna aula a 4 classes que no en tenien i en canvia 1 d'aula. Ningú canvia de torn.</p></div>
+  <div class="xifres"><div><b>0</b><span>canvis d'hora</span></div><div><b>1</b><span>canvi d'aula</span></div><div><b>3</b><span>aules a la setmana</span></div></div>
+</section>
+<h2>La setmana del grup</h2>
+<div id="llegenda"><p class="nota-lleg"><span><span class="m" style="background:#f7f6f2;border:1px solid var(--linia)"></span>Grisa: no canvia</span><span><span class="m" style="background:#fff;border:1px solid var(--tinta)"></span>Blanca amb vora: canvia (ratllat, com era; a sota, com queda)</span><span><span class="m" style="background:#fff;border:1px dashed var(--tinta)"></span>Vora discontínua: cas especial</span>
+<label class="toggle"><input type="checkbox" id="nomes"> Mostra només les que canvien</label></p></div>
+<div class="setmana" id="graella" style="grid-template-rows:auto"><div class="dia" style="grid-column:2">Dilluns</div><div class="dia" style="grid-column:3">Dimarts</div><div class="dia" style="grid-column:4">Dimecres</div><div class="dia" style="grid-column:5">Dijous</div><div class="dia" style="grid-column:6">Divendres</div><div class="hora" style="grid-row:2">8.30</div><div class="hora" style="grid-row:3"></div><div class="hora" style="grid-row:4">9.30</div><div class="hora" style="grid-row:5"></div><div class="hora" style="grid-row:6">10.30</div><div class="hora" style="grid-row:7"></div><div class="hora" style="grid-row:8">11.30</div><div class="hora" style="grid-row:9"></div><div class="hora" style="grid-row:10">12.30</div><div class="hora" style="grid-row:11"></div><div class="hora" style="grid-row:12">13.30</div><div class="hora" style="grid-row:13"></div><div style="grid-column:2;grid-row:2/span 4;display:grid;width:100%;margin-left:0%"><div class="classe afegida" data-estat="afegida"><b>Càlcul</b>Teoria<span class="abans">Sense aula</span><span class="ara">Ara: Q9/5011</span></div></div><div style="grid-column:2;grid-row:7/span 2;display:grid;width:100%;margin-left:0%"><div class="classe canviada" data-estat="canviada"><b>Empresa</b>Seminari<span class="abans">Abans a Q9/5004</span><span class="ara">Ara: 11.00, Q9/5009</span></div></div><div style="grid-column:3;grid-row:2/span 4;display:grid;width:100%;margin-left:0%"><div class="classe igual" data-estat="igual"><b>Física</b>Teoria<br>8.30 a 10.30, Q9/5011</div></div><div style="grid-column:4;grid-row:6/span 4;display:grid;width:50%;margin-left:0%"><div class="classe igual" data-estat="igual"><b>Programació</b>Problemes, subgrup 1<br>10.30 a 12.30, Q9/5010</div></div><div style="grid-column:4;grid-row:6/span 4;display:grid;width:50%;margin-left:50%"><div class="classe igual" data-estat="igual"><b>Estadística</b>Problemes, subgrup 2<br>10.30 a 12.30, Q9/5009</div></div><div style="grid-column:5;grid-row:2/span 4;display:grid;width:100%;margin-left:0%"><div class="classe canviada" data-estat="canviada"><b>Àlgebra</b>Teoria<span class="abans">Abans dijous 15.30, a la tarda</span><span class="ara">Ara: 8.30, Q9/5011</span></div></div><div style="grid-column:6;grid-row:7/span 4;display:grid;width:100%;margin-left:0%"><div class="classe especial" data-estat="especial"><b>Química</b>Teoria<span class="abans">Divendres sí, dijous no</span><span class="ara">Setmana d'avaluació: aquesta setmana es fa divendres</span></div></div></div>
+</main><div class="guia" id="guia">
+  <div class="panell" id="panell" hidden>
+    <b>Pas <span id="n">1</span> de 4</b>
+    <p id="t"></p>
+    <div class="nav"><button class="ant" id="ant">Enrere</button><button class="seg" id="seg">Següent</button></div>
+  </div>
+  <button class="obre" id="obre" aria-expanded="false">Guia pas a pas<span>4 passos, 1 minut</span></button>
+</div>
+<script>
+const P=[["controls","Tria la proposta, la setmana i el grup d'estudiants que vols mirar."],["resum","Aquí tens el resum del grup: quantes classes canvien i quantes aules fa servir."],["llegenda","Els colors diuen què ha passat amb cada classe."],["graella","La setmana del grup. Passa el ratolí per una classe per veure'n el detall."]];
+let i=0;const pn=document.getElementById('panell'),ob=document.getElementById('obre');
+function mostra(){document.querySelectorAll('.ressalt').forEach(e=>e.classList.remove('ressalt'));const [id,t]=P[i];const e=document.getElementById(id);if(e){e.classList.add('ressalt');e.scrollIntoView({block:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'})}document.getElementById('n').textContent=i+1;document.getElementById('t').textContent=t;document.getElementById('seg').textContent=i==P.length-1?'Tanca':'Següent'}
+ob.onclick=()=>{pn.hidden=!pn.hidden;ob.setAttribute('aria-expanded',!pn.hidden);if(!pn.hidden){i=0;mostra()}else document.querySelectorAll('.ressalt').forEach(e=>e.classList.remove('ressalt'))};
+document.getElementById('seg').onclick=()=>{if(i==P.length-1){ob.click()}else{i++;mostra()}};
+document.getElementById('ant').onclick=()=>{if(i>0){i--;mostra()}};
+</script><div class="etiqueta-opcio">Opció B · Com era i com queda</div><script>document.getElementById('nomes').onchange=e=>document.querySelectorAll('.classe.igual').forEach(c=>c.style.visibility=e.target.checked?'hidden':'visible');</script></body></html>

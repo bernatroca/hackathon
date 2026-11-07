@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ca"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Opció C · Colors que ressalten</title><link rel="stylesheet" href="part2-base.css"><style>
+.classe { background: var(--blau-fons); border: 1px solid #d6e6f8; }
+.classe.afegida { background: var(--verd-fons); border-color: #bfe5bf; }
+.classe.canviada { background: var(--ambre-fons); border-color: #f5dc9c; }
+.classe.especial { background: repeating-linear-gradient(135deg, var(--vermell-fons) 0 8px, #fff 8px 14px); border-color: #efc1c1; }
+.classe .icona { float: right; width: 18px; height: 18px; }
+.llegenda { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; margin-bottom: 12px; }
+.llegenda button { text-align: left; border: 1px solid var(--linia); background: var(--targeta); border-radius: 12px; padding: 10px 12px; cursor: pointer; font-size: 14px; color: var(--tinta-2); }
+.llegenda button b { display: flex; gap: 8px; align-items: center; color: var(--tinta); font-size: 15px; }
+.llegenda button i { width: 16px; height: 16px; border-radius: 4px; border: 1px solid rgba(0,0,0,.08); }
+.llegenda button[aria-pressed="true"] { border: 2px solid var(--tinta); padding: 9px 11px; }
+.apagada { opacity: .2; }
+@media (max-width: 900px) { .llegenda { grid-template-columns: 1fr 1fr; } }
+</style></head>
+<body><aside class="menu">
+  <div class="marca">Espais de l'Escola</div>
+  <div class="grup">Com està l'horari</div>
+  <a href="#">Com estem avui</a><a href="#">Totes les respostes</a>
+  <div class="grup">La proposta</div>
+  <a class="actiu" href="#">Horari proposat</a><a href="#">Resum per a la Junta</a><a href="#">Imprevistos <span class="aviat">aviat</span></a>
+  <div class="grup">Ajuda</div>
+  <a href="#">Pregunta-ho <span class="aviat">aviat</span></a>
+  <div class="peu">2n semestre. Les dades no surten d'aquest ordinador.</div>
+</aside><main><h1>Horari proposat</h1>
+<p class="intro">Cada color diu què ha passat amb la classe. Clica un color de la llegenda per ressaltar només aquelles classes.</p>
+<div class="controls" id="controls">
+  <div class="camp">Què vols veure<div class="segment" role="group"><button aria-pressed="true">Proposta i avui</button><button aria-pressed="false">Només avui</button></div></div>
+  <label class="camp">Proposta<select><option>Aules assignades (5.1)</option><option>Torns nous (5.2)</option></select></label>
+  <label class="camp">Setmana<select><option>Setmana típica, de l'1 al 5 de febrer</option></select></label>
+  <label class="camp">Estudis<select><option>Grau inventat</option></select></label>
+  <label class="camp">Curs<select><option>1r</option></select></label>
+  <label class="camp">Grup<select><option>Grup 11</option></select></label>
+</div>
+<section class="resum" id="resum">
+  <div><span class="estat verd">Cap classe canvia d'hora</span>
+  <h3>El grup 11 farà classe a 3 aules, totes al mateix passadís</h3>
+  <p>La proposta assigna aula a 4 classes que no en tenien i en canvia 1 d'aula. Ningú canvia de torn.</p></div>
+  <div class="xifres"><div><b>0</b><span>canvis d'hora</span></div><div><b>1</b><span>canvi d'aula</span></div><div><b>3</b><span>aules a la setmana</span></div></div>
+</section>
+<h2>La setmana del grup</h2>
+<div id="llegenda"><div class="llegenda" role="group" aria-label="Clica un color per ressaltar aquestes classes">
+<button aria-pressed="false" data-r="igual"><b><i style="background:var(--blau-fons)"></i>Sense canvis</b>Com a l'horari d'avui</button>
+<button aria-pressed="false" data-r="afegida"><b><i style="background:var(--verd-fons)"></i>Aula assignada</b>Avui no en tenia</button>
+<button aria-pressed="false" data-r="canviada"><b><i style="background:var(--ambre-fons)"></i>Canvia</b>De dia, d'hora o d'aula</button>
+<button aria-pressed="false" data-r="especial"><b><i style="background:repeating-linear-gradient(135deg,var(--vermell-fons) 0 4px,#fff 4px 7px)"></i>Cas especial</b>Només una setmana</button></div></div>
+<div class="setmana" id="graella" style="grid-template-rows:auto"><div class="dia" style="grid-column:2">Dilluns</div><div class="dia" style="grid-column:3">Dimarts</div><div class="dia" style="grid-column:4">Dimecres</div><div class="dia" style="grid-column:5">Dijous</div><div class="dia" style="grid-column:6">Divendres</div><div class="hora" style="grid-row:2">8.30</div><div class="hora" style="grid-row:3"></div><div class="hora" style="grid-row:4">9.30</div><div class="hora" style="grid-row:5"></div><div class="hora" style="grid-row:6">10.30</div><div class="hora" style="grid-row:7"></div><div class="hora" style="grid-row:8">11.30</div><div class="hora" style="grid-row:9"></div><div class="hora" style="grid-row:10">12.30</div><div class="hora" style="grid-row:11"></div><div class="hora" style="grid-row:12">13.30</div><div class="hora" style="grid-row:13"></div><div style="grid-column:2;grid-row:2/span 4;display:grid;width:100%;margin-left:0%"><div class="classe afegida" data-estat="afegida" title="Avui no tenia aula indicada"><svg class="icona" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="#0ca30c"/><path d="M8 4.5v7M4.5 8h7" stroke="#fff" stroke-width="2"/></svg><b>Càlcul</b><span class="meta">Teoria<br>8.30 a 10.30, Q9/5011</span></div></div><div style="grid-column:2;grid-row:7/span 2;display:grid;width:100%;margin-left:0%"><div class="classe canviada" data-estat="canviada" title="Abans a Q9/5004"><svg class="icona" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="#c98a00"/><path d="M4.5 6.5h6l-2-2M11.5 9.5h-6l2 2" stroke="#fff" stroke-width="1.6" fill="none"/></svg><b>Empresa</b><span class="meta">Seminari<br>11.00 a 12.00, Q9/5009</span></div></div><div style="grid-column:3;grid-row:2/span 4;display:grid;width:100%;margin-left:0%"><div class="classe igual" data-estat="igual" title=""><b>Física</b><span class="meta">Teoria<br>8.30 a 10.30, Q9/5011</span></div></div><div style="grid-column:4;grid-row:6/span 4;display:grid;width:50%;margin-left:0%"><div class="classe igual" data-estat="igual" title=""><b>Programació</b><span class="meta">Problemes, subgrup 1<br>10.30 a 12.30, Q9/5010</span></div></div><div style="grid-column:4;grid-row:6/span 4;display:grid;width:50%;margin-left:50%"><div class="classe igual" data-estat="igual" title=""><b>Estadística</b><span class="meta">Problemes, subgrup 2<br>10.30 a 12.30, Q9/5009</span></div></div><div style="grid-column:5;grid-row:2/span 4;display:grid;width:100%;margin-left:0%"><div class="classe canviada" data-estat="canviada" title="Abans dijous 15.30, a la tarda"><svg class="icona" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="#c98a00"/><path d="M4.5 6.5h6l-2-2M11.5 9.5h-6l2 2" stroke="#fff" stroke-width="1.6" fill="none"/></svg><b>Àlgebra</b><span class="meta">Teoria<br>8.30 a 10.30, Q9/5011</span></div></div><div style="grid-column:6;grid-row:7/span 4;display:grid;width:100%;margin-left:0%"><div class="classe especial" data-estat="especial" title="Setmana d'avaluació: aquesta setmana es fa divendres"><svg class="icona" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="#d03b3b"/><rect x="7" y="4" width="2" height="5" fill="#fff"/><rect x="7" y="10.5" width="2" height="2" fill="#fff"/></svg><b>Química</b><span class="meta">Teoria<br>11.00 a 13.00, Q9/5011</span></div></div></div>
+</main><div class="guia" id="guia">
+  <div class="panell" id="panell" hidden>
+    <b>Pas <span id="n">1</span> de 4</b>
+    <p id="t"></p>
+    <div class="nav"><button class="ant" id="ant">Enrere</button><button class="seg" id="seg">Següent</button></div>
+  </div>
+  <button class="obre" id="obre" aria-expanded="false">Guia pas a pas<span>4 passos, 1 minut</span></button>
+</div>
+<script>
+const P=[["controls","Tria la proposta, la setmana i el grup d'estudiants que vols mirar."],["resum","Aquí tens el resum del grup: quantes classes canvien i quantes aules fa servir."],["llegenda","Els colors diuen què ha passat amb cada classe."],["graella","La setmana del grup. Passa el ratolí per una classe per veure'n el detall."]];
+let i=0;const pn=document.getElementById('panell'),ob=document.getElementById('obre');
+function mostra(){document.querySelectorAll('.ressalt').forEach(e=>e.classList.remove('ressalt'));const [id,t]=P[i];const e=document.getElementById(id);if(e){e.classList.add('ressalt');e.scrollIntoView({block:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'})}document.getElementById('n').textContent=i+1;document.getElementById('t').textContent=t;document.getElementById('seg').textContent=i==P.length-1?'Tanca':'Següent'}
+ob.onclick=()=>{pn.hidden=!pn.hidden;ob.setAttribute('aria-expanded',!pn.hidden);if(!pn.hidden){i=0;mostra()}else document.querySelectorAll('.ressalt').forEach(e=>e.classList.remove('ressalt'))};
+document.getElementById('seg').onclick=()=>{if(i==P.length-1){ob.click()}else{i++;mostra()}};
+document.getElementById('ant').onclick=()=>{if(i>0){i--;mostra()}};
+</script><div class="etiqueta-opcio">Opció C · Colors que ressalten</div><script>document.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{const on=b.getAttribute('aria-pressed')!=='true';document.querySelectorAll('[data-r]').forEach(x=>x.setAttribute('aria-pressed',x===b&&on));document.querySelectorAll('.classe').forEach(c=>c.classList.toggle('apagada',on&&c.dataset.estat!==b.dataset.r))});</script></body></html>
