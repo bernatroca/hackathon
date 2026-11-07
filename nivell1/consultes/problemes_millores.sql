@@ -1,7 +1,7 @@
 -- Les categories se solapen: les seves xifres no s'han de sumar.
 WITH base AS (
  SELECT s.*,a.tipus AS tipus_aula FROM sessions s LEFT JOIN aules a ON a.aula=s.aula_partida
- WHERE s.sem=$semestre AND s.setmana=$setmana
+ WHERE s.sem=$semestre AND ($setmana IS NULL OR s.setmana=$setmana)
 ), grups AS (
  SELECT *, split_part(grup,'/',-1) AS num_grup,
  CASE WHEN length(split_part(grup,'/',-1))>=3 AND (tipus<>'TE' OR ends_with(grup,'0'))

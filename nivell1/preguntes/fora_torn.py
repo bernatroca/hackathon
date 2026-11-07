@@ -18,8 +18,7 @@ def calcula(semestre=2, setmana=None):
     return Troballa(
         id=ID, titol='Quantes sessions són fora del torn nou?',
         xifra=f'{int(total.sessions):,}'.replace(',', '.'),
-        frase=f"Al semestre, {_nombre(total.sessions_directes)} sessions són fora de torn; "
-              f"{_nombre(total.heretades)} són fixades heretades i {_nombre(total.sessions)} compten a R1-TORN.",
+        frase=f"{_nombre(total.sessions)} sessions del semestre computen a R1-TORN; {_nombre(total.heretades)} més són fora de torn però fixades heretades.",
         metode="Es compara el torn requerit amb l’hora d’inici (tall a les 14.30): el total del semestre inclou PLAB i dobles, però R1-TORN exclou les fixades sense moure, heretades segons el verificador. "
                "El gràfic és de la setmana triada per cohort (una sessió pot aparèixer en diverses); les hores-aula exclouen PLAB i dobles i compten les compartides un sol cop.",
         sql=sql, taula=taula, exemples=list(total.exemples[:5]), grafic='barres',

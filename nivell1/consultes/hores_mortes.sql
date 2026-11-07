@@ -2,7 +2,7 @@
 WITH base AS (
  SELECT *, unnest(string_split(titulacions_curs, '|')) AS cohort,
  split_part(grup, '/', -1) AS num_grup
- FROM sessions WHERE sem = $semestre AND setmana = $setmana
+ FROM sessions WHERE sem = $semestre AND ($setmana IS NULL OR setmana = $setmana)
 ), linies AS (
  SELECT *, CASE WHEN length(num_grup) >= 3 AND
  (tipus <> 'TE' OR ends_with(num_grup, '0'))
