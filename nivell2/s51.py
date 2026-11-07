@@ -127,7 +127,7 @@ aconseguir una sola aula TE amb les franges fixes (cota inferior global: 2 extra
 
 ''')
     print(report.veredicte, status, f'{elapsed:.3f} s', flush=True)
-    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    print(f"Sessions: {len(best.files)}", flush=True)
     if not report.valida:
         raise SystemExit(1)
 
