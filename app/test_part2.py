@@ -152,3 +152,25 @@ class TestMillores(unittest.TestCase):
         assert 'classe relaxada' in html
         assert 'title="Excepció de calendari' in html
         assert 'Festiu &lt;especial&gt;' in html
+
+
+class TestAssignacions(unittest.TestCase):
+    def test_aula_assignada_neutra(self):
+        from components.graella import resum_grup
+        base = crea_base()
+        base.sessions['T'].aula = ''
+        base.sessions['P'].aula = 'J/001'
+        base.sessions['S'].sense_espai = True
+        avui = Proposta.de_base(base)
+        p = Proposta.de_base(base)
+        for sid in ('T', 'P', 'S'):
+            p.files[sid].aula = 'Q9/5009'
+        args = (date(2027, 3, 8), 'GED', '1r', '81')
+        actuals = celles_grup(base, avui, *args)
+        noves = celles_grup(base, p, *args)
+        assert sum(c.canvi for c in noves) == 0
+        assert sum(c.aula_assignada for c in noves) == 1
+        html = taula_html(noves)
+        assert 'Aula assignada.' in html and 'class="classe canvi' not in html
+        resum = resum_grup(base, p, actuals, noves)
+        assert '0 canvien d’aula' in resum and '1 amb aula assignada' in resum
