@@ -5,8 +5,9 @@ from datetime import date, timedelta
 
 import pytest
 
-from nivell2.base import Base, Proposta, Sessio
-from nivell2.junta import calcula, carrega_proposta, documents, main, pics_i_mides
+from nivell2.base import Base, CONTINGENCIES, GRAU_NOU, Proposta, Sessio
+from nivell2.junta import (RESERVA, aulari, calcula, carrega_proposta, documents,
+                          escenari_proposta, main, pics_i_mides)
 from horaris.check import Informe, _col_loca
 from horaris.model import Aula
 
@@ -17,7 +18,10 @@ def petita():
         s = Sessio(str(i), '1', 'TE', '81', date(2027, 2, 1) + timedelta(weeks=i),
                    'L', 510, 60, 40, 'A', ('GXX:1r',), 'mati', '', frozenset())
         sessions[s.id] = s
-    return Base(sessions, {'A': Aula('A', '', 'Aules docents', 50)}, list(sessions))
+    aules = {'A': Aula('A', '', 'Aules docents', 50)}
+    aules.update({f'Reserva{i}': Aula(f'Reserva{i}', '', 'Aules docents', 30)
+                  for i in range(RESERVA)})
+    return Base(sessions, aules, list(sessions))
 
 
 def colloca(b, p):
@@ -103,8 +107,8 @@ def test_rebutja_duplicades_i_absents(tmp_path):
 
 def test_cli_tres_fitxers(tmp_path, monkeypatch):
     b = petita()
-    monkeypatch.setattr('nivell2.junta.carrega_oficial', lambda: b)
-    monkeypatch.setattr('nivell2.junta.carrega_model', lambda: b)
+    monkeypatch.setattr('nivell2.junta.carrega_oficial', lambda escenari=None: b)
+    monkeypatch.setattr('nivell2.junta.carrega_model', lambda escenari=None: b)
     proposta = Proposta.de_base(b).escriu(tmp_path / 'inventada.csv')
     assert main([str(proposta), '--sortida', str(tmp_path)]) == 0
     d = json.loads((tmp_path / 'junta.json').read_text())
@@ -237,3 +241,63 @@ def test_documents_cap_curs():
     p = Proposta.de_base(b)
     for text in documents(calcula(p, b, b, colloca(b, p))):
         assert "Cap curs canvia de dia ni d" in text
+
+
+@pytest.mark.parametrize('total', [3, 9, 21])
+def test_aulari_i_documents_amb_reserva_calculada(total):
+    b = petita()
+    for i in range(total - len(b.aules)):
+        b.aules[f'Extra{i}'] = Aula(f'Extra{i}', '', 'Aules docents', 30)
+    b.aules['Seminari'] = Aula('Seminari', '', 'Seminaris', 30)
+    assert aulari(b) == {'ordinaries': total, 'reserva': RESERVA,
+                         'disponibles': total - RESERVA}
+    p = Proposta.de_base(b)
+    d = calcula(p, b, b, colloca(b, p))
+    maxim = total - RESERVA
+    for torn in d['pics'].values():
+        assert torn['pitjor']['aules_disponibles'] == maxim
+        assert torn['tipica']['aules_disponibles'] == maxim
+        assert torn['mides'][0]['oferta_acumulada'] == maxim
+    md, html = documents(d)
+    assert f"L'aulari té {total} aules ordinàries; en guardem {RESERVA} de reserva per a imprevistos." in md
+    for text in (md, html):
+        assert f'Per què {maxim} de {maxim} no és prou' in text
+        assert f'fer servir les {RESERVA} aules de reserva o a moure classes' in text
+        assert 'Recomanem mantenir almenys 1–2 aules lliures' in text
+        paragraf = text.split('no és prou')[1].split('Recomanem')[0]
+        assert 'R8' not in paragraf and 'PLAB' not in paragraf
+    assert f'1/{maxim}' in md and f'1/{maxim}' in html
+
+
+@pytest.mark.parametrize('nom,escenari', [('5.1', None), ('5.2', None),
+                                         ('5.3', CONTINGENCIES), ('5.4', GRAU_NOU)])
+def test_cli_escenari_de_cada_proposta(tmp_path, monkeypatch, nom, escenari):
+    b = petita()
+    crides = []
+    def carrega(e):
+        crides.append(e)
+        return b
+    monkeypatch.setattr('nivell2.junta.carrega_oficial', carrega)
+    monkeypatch.setattr('nivell2.junta.carrega_model', carrega)
+    proposta = Proposta.de_base(b).escriu(tmp_path / nom / 'proposta.csv')
+    assert escenari_proposta(nom) == escenari
+    assert main([str(proposta), '--sortida', str(tmp_path / 'resum')]) == 0
+    assert crides == [escenari, escenari]
+
+
+def test_files_daltres_semestres_del_mateix_escenari(tmp_path, monkeypatch):
+    b = petita()
+    completa = deepcopy(b)
+    s = deepcopy(b.sessions['0'])
+    s.id = 'altre-semestre-inventat'
+    completa.sessions[s.id] = s
+    p = Proposta.de_base(completa)
+    path = p.escriu(tmp_path / 'inventada.csv')
+    crides = []
+    def carrega(escenari, semestre):
+        crides.append((escenari, semestre))
+        return completa
+    monkeypatch.setattr('nivell2.junta.carrega_oficial', carrega)
+    _, col = carrega_proposta(path, b, GRAU_NOU)
+    assert set(col) == set(b.sessions)
+    assert crides == [(GRAU_NOU, None)]

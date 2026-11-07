@@ -10,10 +10,12 @@ from components.taules import mostra_taula
 from components.vistes import estat
 from errors import mostra_error
 from nivell2 import junta
-from nivell2.base import RESULTATS as SORTIDA, GRAU_NOU, Proposta
+from nivell2.base import RESULTATS as SORTIDA, RESULTATS_PRINCIPAL, Proposta
 from horaris.check import Informe, _col_loca
 
-RESULTATS = Path('/Users/bernatroca/Bernat/Hackathon/resultats/nivell2')
+RESULTATS = RESULTATS_PRINCIPAL
+NOMS_PROPOSTES = {'5.1': 'Aules assignades (5.1)', '5.2': 'Horari complet (5.2)',
+                 '5.3': 'Amb imprevistos (5.3)', '5.4': 'Amb el grau nou (5.4)'}
 
 
 def disponibles():
@@ -35,7 +37,7 @@ def llegeix(path, versio):
 
 @st.cache_data
 def genera(nom, versio, versio_relax):
-    escenari = GRAU_NOU if nom == '5.4' else None
+    escenari = junta.escenari_proposta(nom)
     base = junta.carrega_oficial(escenari)
     model = junta.carrega_model(escenari)
     if nom == 'Avui':
@@ -44,7 +46,7 @@ def genera(nom, versio, versio_relax):
         relax = None
     else:
         path = RESULTATS / nom / 'proposta.csv'
-        proposta, col = junta.carrega_proposta(path, base)
+        proposta, col = junta.carrega_proposta(path, base, escenari)
         relax = path.with_name('relaxacions.csv')
         relax = relax if relax.is_file() else None
     dades = junta.calcula(proposta, base, model, col, relax)
@@ -60,7 +62,7 @@ def carrega(nom):
     path = ruta_resum(nom)
     if path.is_file():
         dades = llegeix(str(path), path.stat().st_mtime_ns)
-        if 'fora_torn_ja_avui' in dades:
+        if 'fora_torn_ja_avui' in dades and 'aulari' in dades:
             return dades
         # Resum desat amb un format antic: es torna a generar.
     proposta = RESULTATS / nom / 'proposta.csv'
@@ -86,8 +88,8 @@ def ocupacio(classes, disponibles):
     marge = disponibles - classes
     if marge < 0:
         return 'vermell', 'Falten aules', 'var(--vermell)'
-    if marge < 3:
-        return 'ambre', 'Va just', '#e8820c'
+    if marge == 0:
+        return 'ambre', 'Sense marge', '#e8820c'
     return 'verd', 'Hi cap', 'var(--verd)'
 
 
@@ -113,8 +115,11 @@ def fitxes(d):
         color, text, tinta = ocupacio(p['classes'], p['aules_disponibles'])
         peces.append(f'<section class="junta-fitxa"><h3>{nom}, hora més plena</h3>'
                      f'<div class="junta-xifra">{p["classes"]} <small>de {p["aules_disponibles"]} aules</small></div>'
+                     + f'<small>{escape(junta.explicacio_aulari(d))}</small>'
                      + barra(100 * p['classes'] / max(1, p['aules_disponibles']), tinta)
                      + estat({'estat': color, 'etiqueta': text})
+                     + ('<small>Si una aula falla, cal fer servir la reserva.</small>'
+                        if p['classes'] == p['aules_disponibles'] else '')
                      + ('<small>Estimació de les aules necessàries.</small>' if p['estimacio'] else '')
                      + '</section>')
     cursos = files_cursos(d['sessions_mogudes'])
@@ -154,13 +159,14 @@ ESTIL = """<style>
 def mostra():
     st.markdown(ESTIL, unsafe_allow_html=True)
     opcions = disponibles()
-    triada = st.selectbox('Proposta', opcions, index=len(opcions)-1, key='junta-proposta')
-    if '5.2' not in opcions:
-        st.caption('El resum definitiu sortirà amb la proposta del 5.2')
+    triada = st.selectbox('Proposta', opcions,
+                         index=opcions.index('5.2') if '5.2' in opcions else len(opcions)-1,
+                         format_func=lambda nom: NOMS_PROPOSTES.get(nom, nom), key='junta-proposta')
     try:
         d = carrega(triada)
         try:
             assert 'fora_torn_ja_avui' in d
+            assert 'aulari' in d
             for torn in ('mati', 'tarda'):
                 assert 'estimacio' in d['pics'][torn]['pitjor']
                 assert all('ocupades_al_pic' in m for m in d['pics'][torn]['mides'])
@@ -200,6 +206,8 @@ def mostra():
                 else:
                     st.info('Resum antic: cal tornar-lo a generar.')
         with st.expander('Detall tècnic', expanded=False):
+            st.subheader(junta.titol_marge(d))
+            st.write(junta.explicacio_marge(d))
             st.write(d.get('detall_tecnic', junta.DETALL_TECNIC))
             st.write(junta.COM_HO_HEM_CALCULAT)
             st.caption(f"Resum calculat: {d['data']} · {triada}")
