@@ -1,4 +1,5 @@
 """Resum de decisió per a la Junta Permanent, sobre el segon semestre."""
+from html import escape
 import json
 from pathlib import Path
 
@@ -84,85 +85,121 @@ def grafic_mogudes(files):
     return fig
 
 
+def ocupacio(classes, disponibles):
+    marge = disponibles - classes
+    if marge < 0:
+        return 'vermell', 'Falten aules', 'var(--vermell)'
+    if marge < 3:
+        return 'ambre', 'Va just', '#e8820c'
+    return 'verd', 'Hi cap', 'var(--verd)'
+
+
+def barra(percent, color):
+    return (f'<div class="junta-barra"><i style="width:{max(0, min(100, percent)):.2f}%;'
+            f'background:{color}"></i></div>')
+
+
+def files_cursos(files):
+    return sorted(files, key=lambda r: (-r['franja_pct'], r['nom']))
+
+
+def barres_cursos(files):
+    return ''.join(f'<div class="junta-fila"><span>{escape(r["nom"])}</span>'
+                   + barra(r['franja_pct'], 'var(--blau)')
+                   + f'<b>{r["franja_pct"]:.1f} %</b></div>' for r in files)
+
+
+def fitxes(d):
+    peces = []
+    for torn, nom in (('mati', 'Matí'), ('tarda', 'Tarda')):
+        p = d['pics'][torn]['pitjor']
+        color, text, tinta = ocupacio(p['classes'], p['aules_disponibles'])
+        peces.append(f'<section class="junta-fitxa"><h3>{nom}, hora més plena</h3>'
+                     f'<div class="junta-xifra">{p["classes"]} <small>de {p["aules_disponibles"]} aules</small></div>'
+                     + barra(100 * p['classes'] / max(1, p['aules_disponibles']), tinta)
+                     + estat({'estat': color, 'etiqueta': text})
+                     + ('<small>Estimació de les aules necessàries.</small>' if p['estimacio'] else '')
+                     + '</section>')
+    cursos = files_cursos(d['sessions_mogudes'])
+    pitjor = cursos[0] if cursos else None
+    peces.append('<section class="junta-fitxa"><h3>Curs més afectat</h3>'
+                 + (f'<div class="junta-xifra">{pitjor["franja_pct"]:.1f} %</div>'
+                    f'<small>{escape(pitjor["nom"])}</small>' if pitjor else '<small>Sense classes.</small>')
+                 + '</section>')
+    peces.append('<section class="junta-fitxa"><h3>Excepcions als torns</h3>'
+                 f'<div class="junta-xifra">{len(d["excepcions"])} <small>classes</small></div>'
+                 '<small>Fora del torn que els toca.</small></section>')
+    return '<div class="junta-fitxes">' + ''.join(peces) + '</div>'
+
+
+ESTIL = """<style>
+.junta-fitxes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.junta-fitxa{background:var(--targeta,#fff);border:1px solid var(--linia,#e6e5e0);border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.junta-fitxa h3{font-size:14px!important;margin:0;padding:0;color:var(--tinta-2)}
+.junta-xifra{font-size:32px;font-weight:700;line-height:1.2}
+.junta-xifra small{font-size:15px;font-weight:500}
+.junta-fitxa .estat{align-self:flex-start}
+.junta-fitxa .estat.ambre,.junta-taula .estat.ambre{background:#fff1e0;color:#9a5200}
+.junta-barra{height:8px;background:#eceae4;border-radius:999px;overflow:hidden}
+.junta-barra i{display:block;height:100%;border-radius:999px}
+.junta-fila{display:grid;grid-template-columns:minmax(0,1fr) minmax(50px,120px) 55px;gap:10px;align-items:center;font-size:14px;padding:6px 0}
+.junta-taula{width:100%;border-collapse:collapse;font-size:14px}
+.junta-taula td,.junta-taula th{text-align:left;padding:8px 4px;border-bottom:1px solid var(--linia,#e6e5e0)}
+.st-key-junta-dos h3{font-size:17px!important}
+@media(max-width:900px){.junta-fitxes{grid-template-columns:repeat(2,minmax(0,1fr))}.st-key-junta-dos [data-testid="stHorizontalBlock"]{flex-direction:column}.st-key-junta-dos [data-testid="stColumn"]{width:100%!important;min-width:0!important}}
+</style>"""
+
+
 def mostra():
-    st.caption('2n semestre · Decisió sobre els torns: 1r i 2n al matí; 3r, 4t, dobles titulacions i màsters a la tarda.')
+    st.markdown(ESTIL, unsafe_allow_html=True)
     opcions = disponibles()
     triada = st.selectbox('Proposta', opcions, index=len(opcions)-1, key='junta-proposta')
     if '5.2' not in opcions:
-        st.info('El resum definitiu sortirà amb la proposta del 5.2')
+        st.caption('El resum definitiu sortirà amb la proposta del 5.2')
     try:
         d = carrega(triada)
-        st.caption(f"Resum calculat: {d['data']} · {triada}")
-        st.subheader('Moment amb més aules ocupades')
-        st.caption('Mostrem quantes aules calen en el moment de més ocupació. Si falta assignar una aula, en fem una estimació.')
-        st.caption('De les 21 aules per a classes, dues sempre han de quedar lliures: 19 disponibles. Mostrem el moment de més ocupació de cada torn durant el semestre.')
-        for columna, torn, nom in zip(st.columns(2), ('mati', 'tarda'), ('Matí', 'Tarda')):
-            p = d['pics'][torn]['pitjor']
-            cap = p['classes'] <= p['aules_disponibles']
-            with columna, st.container(border=True):
-                st.markdown(estat({'estat': 'verd' if cap else 'vermell', 'etiqueta': nom + (' · Hi cap' if cap else ' · Falten aules')}), unsafe_allow_html=True)
-                st.markdown(f'<div class="xifra-targeta" style="color:var(--{"verd" if cap else "vermell"}-text)">{p["classes"]} / {p["aules_disponibles"]} aules</div>', unsafe_allow_html=True)
-                st.caption('Estimació de les aules necessàries' if p['estimacio']
-                           else 'Aules ocupades en el moment de més ocupació')
-                st.caption(f"{p['data'] or 'Sense classes'} · {p['hora']}")
-        st.subheader('Aules que falten o sobren segons les places')
+        st.markdown(fitxes(d), unsafe_allow_html=True)
         format_actual = all('ocupades_al_pic' in m for torn in ('mati', 'tarda')
                             for m in d['pics'][torn]['mides'])
-        if not format_actual:
-            st.info('Resum antic: cal tornar-lo a generar per comparar les places amb el màxim d’ocupació.')
-        files = []
-        for m, t in zip(d['pics']['mati']['mides'], d['pics']['tarda']['mides']):
-            files.append({'Places': m.get('mida', str(max(1, m['minim_places']))),
-                'Matí: ocupades al màxim': m.get('ocupades_al_pic'),
-                'Tarda: ocupades al màxim': t.get('ocupades_al_pic'),
-                'Aules de la mida': m['aules_categoria'],
-                'Matí: sobren (+) o falten (−)': m['marge'] if format_actual else None,
-                'Tarda: sobren (+) o falten (−)': t['marge'] if format_actual else None})
-        mostra_taula(pd.DataFrame(files))
-        st.caption('Les aules ocupades per mida sumen el màxim de cada torn. La mida indica les places de l’aula; si encara no en té, indica els alumnes previstos (estimació).')
-        st.caption('Comparem les classes i les aules prou grans a partir del mínim de places de cada fila. Les aules grans també poden acollir grups petits. Cal mantenir dues aules lliures. No sumis els resultats de les files. Aquest recompte no garanteix que tot l’horari encaixi.')
-        st.subheader('Classes que canvien per titulació i curs')
-        st.write('Percentatge de les classes que canvien de dia o d’hora; cada classe compta un sol cop.')
-        if all(r['franja_pct'] == 0 for r in d['sessions_mogudes']):
-            st.write('Cap classe canvia de dia ni d’hora: totes les titulacions i cursos empaten al 0 %.')
-        else:
-            st.plotly_chart(grafic_mogudes(d['sessions_mogudes']), width='stretch')
-            pitjors = [r for r in d['sessions_mogudes'] if r['cohort'] in d['pitjor_cohort']]
-            st.write('Percentatge més alt: ' + '; '.join(f"{r['nom']}: {r['franja_pct']:.1f} % ({r['franja']} classes)" for r in pitjors))
-        mostra_taula(pd.DataFrame([{
-            'Titulació i curs': r['nom'],
-            'Canvien de dia o hora (%)': r['franja_pct'],
-            'Canvien d’aula (%)': r['aula_pct'],
-            'Canvis d’aula': r['aula'],
-            'Aules assignades': r['aules_assignades'],
-        } for r in d['sessions_mogudes']]))
-        st.caption('Assignar aula a una classe que no en tenia no és un canvi d’aula.')
-        st.subheader('Classes fora del torn que els toca')
-        if not d['excepcions']:
-            st.write('No hi ha cap classe fora del torn que li toca.')
-        else:
-            motius = {}
-            for r in d['excepcions']:
-                motius[r['motiu']] = motius.get(r['motiu'], 0) + 1
-            mostra_taula(pd.DataFrame([{'Motiu': f'Motiu {i} (detall tècnic)', 'Classes': n}
-                                       for i, (m, n) in enumerate(motius.items(), 1)]))
-            st.caption('Sabem a quina hora es fan aquestes classes, però això no demostra que sigui impossible canviar-les.')
-        if d['torn_no_avaluable']:
-            st.caption(f"{d['torn_no_avaluable']} classes sense torn definit: no es poden avaluar.")
-        st.subheader('Com ho hem calculat')
-        st.write(junta.COM_HO_HEM_CALCULAT)
+        with st.container(key='junta-dos'):
+            esquerra, dreta = st.columns([3, 2])
+            with esquerra, st.container(border=True):
+                st.subheader("Classes que canvien de dia o d'hora, per curs")
+                cursos = files_cursos(d['sessions_mogudes'])
+                st.markdown(barres_cursos(cursos[:8]), unsafe_allow_html=True)
+                if len(cursos) > 8:
+                    with st.expander('Veure tots els cursos', expanded=False):
+                        st.markdown(barres_cursos(cursos), unsafe_allow_html=True)
+            with dreta, st.container(border=True):
+                st.subheader("Aules per mida a l'hora més plena")
+                st.caption('Matí')
+                if format_actual:
+                    files = []
+                    for m in d['pics']['mati']['mides']:
+                        n, total = m['ocupades_al_pic'], m['aules_categoria']
+                        color, text, _ = ocupacio(n, total)
+                        text = 'Just' if color == 'ambre' else 'Falten' if color == 'vermell' else text
+                        mida = m.get('mida', str(max(1, m['minim_places'])))
+                        files.append(f'<tr><td>{escape(mida)}</td><td>{n} de {total}</td><td>'
+                                     + estat({'estat': color, 'etiqueta': text}) + '</td></tr>')
+                    st.markdown('<table class="junta-taula"><thead><tr><th>Mida</th><th>Ocupades</th><th>Estat</th></tr></thead><tbody>'
+                                + ''.join(files) + '</tbody></table>', unsafe_allow_html=True)
+                else:
+                    st.info('Resum antic: cal tornar-lo a generar.')
         with st.expander('Detall tècnic', expanded=False):
             st.write(d.get('detall_tecnic', junta.DETALL_TECNIC))
+            st.write(junta.COM_HO_HEM_CALCULAT)
+            st.caption(f"Resum calculat: {d['data']} · {triada}")
+            st.caption('Les mides corresponen al moment de més ocupació del matí; sense aula assignada, fem servir els alumnes previstos (estimació). Els colors són orientatius i no garanteixen que tot l’horari encaixi.')
+            if d['torn_no_avaluable']:
+                st.write(f"{d['torn_no_avaluable']} classes sense torn definit.")
+            mostra_taula(pd.DataFrame([{'Titulació i curs': r['nom'], 'Canvien de dia o hora (%)': r['franja_pct'], 'Canvis d’aula': r['aula'], 'Aules assignades': r['aules_assignades']} for r in d['sessions_mogudes']]))
+            for motiu in dict.fromkeys(r['motiu'] for r in d['excepcions']):
+                st.write(motiu)
             if d['excepcions']:
-                for i, motiu in enumerate(motius, 1):
-                    st.write(f'Motiu {i}: {motiu}')
-                mostra_taula(pd.DataFrame(d['excepcions']).rename(columns={
-                    'id_sessio': 'Classe', 'cohorts': 'Titulació i curs (identificador)',
-                    'torn_requerit': 'Torn requerit', 'motiu': 'Motiu',
-                    'prova': 'Data i hora', 'prova_impossibilitat': 'Prova d’impossibilitat'}))
+                mostra_taula(pd.DataFrame(d['excepcions']))
         if format_actual:
             _, html = junta.documents(d)
-            st.download_button('Descarrega junta.html · A4 per imprimir', html, file_name='junta.html', mime='text/html')
-            st.caption('Obre el fitxer al navegador i imprimeix-lo en PDF, mida A4.')
+            st.download_button('Descarrega el resum A4', html, file_name='junta.html', mime='text/html')
     except Exception:
         mostra_error()

@@ -45,7 +45,7 @@ junta.mostra()
 def test_junta_obre_sense_errors_i_zero_sense_grafic():
     app = obre(dades(), ['Avui', '5.1', '5.2'])
     assert app.selectbox[0].value == '5.2'
-    assert any('empaten al 0 %' in m.value for m in app.markdown)
+    assert any('0.0 %' in m.value for m in app.markdown)
     assert not app.get('plotly_chart')
     assert app.get('download_button')
     assert not app.info
@@ -54,7 +54,7 @@ def test_junta_obre_sense_errors_i_zero_sense_grafic():
 def test_sense_52():
     app = obre(dades(), ['Avui', '5.1'])
     assert app.selectbox[0].value == '5.1'
-    assert any(i.value == 'El resum definitiu sortirà amb la proposta del 5.2' for i in app.info)
+    assert any(i.value == 'El resum definitiu sortirà amb la proposta del 5.2' for i in app.caption)
 
 
 def test_percentatges_ordenats_i_absoluts_al_costat():
@@ -65,7 +65,7 @@ def test_percentatges_ordenats_i_absoluts_al_costat():
     fig = junta.grafic_mogudes([a, b])
     assert list(fig.data[0].x) == [50, 20]
     assert '1/2 classes' in fig.data[0].text[0]
-    assert obre(dict(d, sessions_mogudes=[a, b]), ['Avui', '5.2']).get('plotly_chart')
+    assert '50.0 %' in ''.join(m.value for m in obre(dict(d, sessions_mogudes=[a, b]), ['Avui', '5.2']).markdown)
 
 
 def test_descobreix_proposta_sense_resum(tmp_path):
@@ -95,8 +95,7 @@ def test_excepcions_agrupades_i_pic_vermell():
     app = obre(d, ['Avui'])
     assert any('estat vermell' in m.value for m in app.markdown)
     assert any(e.label == 'Detall tècnic' for e in app.expander)
-    assert app.dataframe[2].value.iloc[0]['Classes'] == 2
-    assert len(app.dataframe[3].value) == 2
+    assert len(app.dataframe[1].value) == 2
 
 
 def test_assignacions_no_generen_grafic_i_estimacio_visible():
@@ -105,8 +104,8 @@ def test_assignacions_no_generen_grafic_i_estimacio_visible():
     d['pics']['mati']['pitjor']['estimacio'] = True
     app = obre(d, ['Avui', '5.1'])
     assert not app.get('plotly_chart')
-    assert any('Estimació' in c.value for c in app.caption)
-    assert app.dataframe[1].value.iloc[0]['Aules assignades'] == 10
+    assert any('Estimació' in c.value for c in app.markdown)
+    assert app.dataframe[0].value.iloc[0]['Aules assignades'] == 10
 
 
 def test_resum_antic_es_regenera(tmp_path):
@@ -124,10 +123,9 @@ def test_resum_antic_es_regenera(tmp_path):
 def test_mides_actuals_i_explicacio():
     d = dades()
     app = obre(d, ['Avui', '5.1'])
-    taula = app.dataframe[0].value
-    assert taula['Matí: ocupades al màxim'].sum() == d['pics']['mati']['pitjor']['classes']
-    assert taula['Tarda: ocupades al màxim'].sum() == d['pics']['tarda']['pitjor']['classes']
-    assert any('moment de més ocupació' in c.value for c in app.caption)
+    html = ''.join(m.value for m in app.markdown)
+    assert html.count('3 de 19') == 5
+    assert 'junta-taula' in html
     assert any('alumnes previstos (estimació)' in c.value for c in app.caption)
 
 
@@ -146,7 +144,7 @@ def test_mides_antigues_es_regeneren(tmp_path):
     app = obre(d, ['Avui'])
     assert any('Resum antic' in i.value for i in app.info)
     assert not app.get('download_button')
-    assert app.dataframe[0].value['Matí: sobren (+) o falten (−)'].isna().all()
+    assert not any('<table' in m.value for m in app.markdown)
 
 
 def test_textos_principals_sense_codis_i_detall_tancat():
@@ -171,3 +169,34 @@ def test_textos_principals_sense_codis_i_detall_tancat():
         for cadena in ('R8', 'R1-', 'PLAB', ' J ', 'TE/', 'PAUL', 'SEM', 'llindar', 'cota'):
             assert cadena not in text
     assert any('R1-TORN PLAB TE/ PAUL SEM J R8' in m.value for m in detall.markdown)
+
+
+def test_quatre_fitxes_i_colors():
+    for n, color, text in ((19, 'ambre', 'Va just'), (13, 'verd', 'Hi cap'),
+                           (21, 'vermell', 'Falten aules')):
+        d = dades()
+        d['pics']['mati']['pitjor'] = dict(d['pics']['mati']['pitjor'], classes=n)
+        app = obre(d, ['Avui', '5.2'])
+        html = next(m.value for m in app.markdown if '<div class="junta-fitxes">' in m.value)
+        assert html.count('<section class="junta-fitxa">') == 4
+        for titol in ('Matí, hora més plena', 'Tarda, hora més plena', 'Curs més afectat', 'Excepcions als torns'):
+            assert titol in html
+        assert f'{n} <small>de 19 aules' in html
+        assert f'estat {color}' in html and text in html
+        assert 'grid-template-columns:repeat(2,minmax(0,1fr))' in junta.ESTIL
+    assert junta.ocupacio(19, 19)[2] == '#e8820c'
+    assert '#9a5200' in junta.ESTIL
+
+
+def test_barres_vuit_i_desplegable_ordenats():
+    d = dades()
+    base = d['sessions_mogudes'][0]
+    d['sessions_mogudes'] = [dict(base, nom=f'Curs inventat {i}', franja_pct=i * 10) for i in range(10)]
+    app = obre(d, ['Avui', '5.2'])
+    html = next(m.value for m in app.markdown if 'junta-fila' in m.value and not m.value.startswith('<style>'))
+    assert html.count('class="junta-fila"') == 8
+    assert html.index('Curs inventat 9') < html.index('Curs inventat 8') < html.index('Curs inventat 2')
+    assert 'Curs inventat 1<' not in html
+    tots = next(e for e in app.expander if e.label == 'Veure tots els cursos')
+    assert not tots.proto.expanded
+    assert tots.markdown[0].value.count('class="junta-fila"') == 10
