@@ -288,3 +288,9 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - 5.3 i Imprevistos: la reparació parteix del 5.2, dona el mateix resultat cada vegada i el veredicte surt de l'informe oficial.
 - Verificació: ja no pot llegir un informe antic, `xifres.csv` complets, els README expliquen cada empitjorament i el zip porta la graella per aula.
 - Resultat: les quatre propostes vàlides, persones CORRECTE, 301 proves correctes. Lliurament a `~/Downloads/lliurament-nivell2.zip`.
+
+### [ds 23:50] SOLUCIÓ · La Junta de vegades fallava o ensenyava xifres velles
+- Què passava: el resum desat no es comprovava contra la proposta. El del 5.2 era d'abans de tornar a calcular el 5.2, i a més el fitxer s'escrivia sense protecció: si una pàgina el llegia mentre una altra l'escrivia, sortia l'error genèric.
+- Com ho hem resolt (Codex `gpt-6.1-sol`): el resum guarda l'empremta de la proposta i es torna a calcular si canvia. S'escriu de manera segura, i si no es pot llegir es torna a calcular. Si no es pot actualitzar, es mostra l'últim resum bo amb un avís. Textos corregits.
+- Comprovat: 503 proves; AppTest amb 5 propostes × 2 torns × 3 rondes, cap error; dues pestanyes alhora a l'app real, cap error.
+- Per a la presentació: amb el 5.2 nou, la tarda queda a 18 de 19 aules a l'hora punta (abans 19 de 19, «sense marge») i el màxim de classes alhora és 17.

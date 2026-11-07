@@ -142,6 +142,8 @@
 10. [cap @ /junta] Clica «Descarrega el resum A4» → es baixa un HTML; obre'l amb doble clic des de Baixades i imprimeix-lo en PDF: cap en un sol A4 i separa les excepcions noves de les d'avui.
 11. [cap @ /junta] Llegeix tota la pàgina com si fossis de la Junta → frases curtes i planeres, sense sigles tècniques; el detall tècnic queda tancat dins «Detall tècnic».
 12. [cap @ /junta] Obre «Detall tècnic» → hi ha el paràgraf «Per què 19 de 19 no és prou», en paraules planeres, i també surt a l'A4 descarregat. (reprova)
+13. [cap @ /junta] Obre la Junta en dues pestanyes alhora i canvia de proposta a totes dues → cap mostra l'error genèric; si el resum s'ha de tornar a calcular, surt al cap d'uns segons amb les xifres de la proposta actual. (reprova)
+14. [cap @ /junta] Amb «Horari complet (5.2)» llegeix les excepcions → «1 classe» (no «1 classes»), «sense curs a les dades» (no «curs desconegut») i el cas de la setmana d'avaluació en paraules planeres, sense «diagnostic.md». (reprova)
 
 ## Imprevistos
 
