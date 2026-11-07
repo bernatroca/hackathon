@@ -245,3 +245,9 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - Es mantenen dos noms d'aula que el codi de la part 2 i una consulta necessiten com a constant: són espais, no persones.
 - GitHub no havia tingut mai dades; main s'hi ha pujat sense forçar.
 - Límit: la neteja és local i del repositori. No desfà el que es va enviar a Anthropic i a OpenAI abans de la restricció.
+
+### [ds 19:59] IA · Redisseny de l'horari proposat (opció A) unit a main
+- n2-frontend-4: l'horari és el protagonista, amb controls en una sola targeta, resum en tres xifres, una sola graella amb franja i pastilla de color (sense canvis en blau, aula assignada en verd, canvi en taronja, cas especial en vermell), filtres per estat, classe compartida en un sol bloc, grups en paraules i menú agrupat. Comprovat al navegador: la graella es veu sense fer scroll.
+- PROBLEMA: dues vegades s'ha unit a main una branca amb una prova vermella, perquè l'ordre de les proves anava amb un pipe que n'amagava la fallada. Solució: proves primer, i el merge en una ordre a part. La prova fallava pels números inventats de la reescriptura de l'historial.
+- Pendent de corregir (n2-frontend-6): la guia pas a pas no s'obre (st.html no executa el JavaScript), el camp «Grup» es trepitja, un títol numerat sobrant i dies partits en carrils sense que calgui.
+- Junta: l'equip tria la versió C (tauler compacte). Ho fa n2-frontend-5.
