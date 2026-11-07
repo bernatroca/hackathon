@@ -106,7 +106,7 @@
 1. [cap @ /part2] Obre «Horari proposat» al menú (grup «La proposta») → surt el títol, una caixa amb «Què vols veure», «Proposta», «Setmana», «Estudis», «Curs» i «Grup», i cap error vermell.
 2. [cap @ /part2] Mira «Proposta» i «Grup» → la proposta és «Aules assignades (5.1)»; si el curs només té un grup, «Grup» surt desactivat amb el seu nom i no queda tapat ni encavalcat amb «Curs».
 3. [cap @ /part2] A «Estudis» tria Gestió de Ciutats Intel·ligents i Sostenibles i a «Curs» 1r → el resum diu «Es conserva el dia i l'hora», que la proposta assigna aula a 15 classes que no en tenien, 0 canvis d'hora, 0 canvis d'aula i 3 aules a la setmana. Els tres números queden centrats damunt de les seves etiquetes, en tres columnes iguals, també al mòbil. (reprova)
-4. [cap @ /part2] Mira «La setmana del grup» en una pantalla de 1280 px → hi ha una sola graella seguida amb Dilluns, Dimarts, Dimecres, Dijous i Divendres, en aquest ordre; no es parteix en taules separades per dies. Si falta amplada, es desplaça lateralment la mateixa graella. (reprova)
+4. [cap @ /part2] Mira «La setmana del grup» en una pantalla de 1280 px → hi ha una sola graella seguida amb Dilluns, Dimarts, Dimecres, Dijous i Divendres, en aquest ordre; no es parteix en taules separades per dies. Hi cap sencera fins al divendres sense desplaçar-se de costat, i els cinc dies tenen la mateixa amplada encara que un dia tingui més subgrups. (reprova)
 5. [cap @ /part2] Mira el dilluns a les 10.30 → les classes que coincideixen van en carrils costat per costat; els dies i les hores sense coincidències ocupen tota la columna. (reprova)
 6. [cap @ /part2] Mira les classes → són rectangles arrodonits sense franja ni icones; el fons diu l'estat (blau sense canvis, verd aula assignada, taronja canvia, vermell cas especial), igual que la llegenda de dalt; les que canvien porten una línia curta com «Abans: dijous 12:30». (reprova)
 7. [cap @ /part2] Clica la pastilla «Aula assignada (15)» de sobre la graella → aquestes classes queden ressaltades i la resta s'atenua; amb «Sense canvis (0)» totes queden atenuades i «Totes» ho torna a deixar com abans.
@@ -125,7 +125,8 @@
 20. [cap @ /part2] Tria un curs amb subgrups simultanis i classes curtes i mira cada casella → cap text surt per sota de la casella ni trepitja la classe de sota; el nom llarg s'acaba amb «…». (reprova)
 21. [cap @ /part2] Mira una classe de 30 minuts → hi cap almenys el nom (escurçat si cal) i l'hora; les línies de tipus, grup i nota s'amaguen abans que el nom. (reprova)
 22. [cap @ /part2] Passa el ratolí per sobre d'una classe amb el nom escurçat i després clica-la → el nom sencer surt a l'etiqueta flotant i, en obrir-la, es veu tot el text. (reprova)
-23. [cap @ /part2] Tria Enginyeria Informàtica, 3r, i mira una classe d'un doble grau → diu «Amb el grup … · Aula …» o «Classe compartida amb un altre grup», mai «Pendent d’assignar aula». (reprova)
+23. [cap @ /part2] Tria Enginyeria Electrònica de Telecomunicació, 1r, grup 31, i mira el dijous → tres subgrups estrets costat per costat; els noms s'escurcen amb «…» sense partir cap paraula per la meitat. (reprova)
+24. [cap @ /part2] Tria Enginyeria Informàtica, 3r, i mira una classe d'un doble grau → diu «Amb el grup … · Aula …» o «Classe compartida amb un altre grup», mai «Pendent d’assignar aula». (reprova)
 
 ## Resum per a la Junta
 
