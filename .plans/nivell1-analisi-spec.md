@@ -54,7 +54,7 @@ Totes dues setmanes i tots dos semestres, amb selector de semestre. Les troballe
 
 ### Afegides per l'equip
 
-6. **Seients buits**: `alumnes / capacitat` de cada sessió amb aula. Quines aules s'omplen menys del 50 % de mitjana, i quantes hores-aula grans es fan servir per a grups petits.
+6. **Problemes i millores** (`problemes-millores`). Substitueix «seients buits»: suposem que ve tot l'alumnat matriculat, perquè no tenim dades d'assistència. És un catàleg dels problemes de l'horari d'avui i de les dades. Cada problema porta la xifra, com s'ha calculat, una proposta de millora i els `id_sessio` d'exemple.
 7. **Hores mortes d'avui**: buits entre dues classes del mateix grup d'alumnes, el mateix dia. El grup d'alumnes es defineix com al verificador: mateixa cohort, i la TE d'una línia amb els seus subgrups. Es dona per cohort i en total. És la línia base de l'objectiu 9 per a la part 2.
 8. **Canvis d'aula per grup**: quantes aules diferents fa servir cada grup a la setmana, i quants canvis entre classes seguides surten del passadís. El passadís és l'espina i la planta: `Q4/0xxx` és la planta baixa i `Q4/1xxx` la primera.
 9. **Dobles amb grup de matí**: sessions de doble titulació que avui fan classe amb un grup de 1r o 2n al matí, i que la regla vol a la tarda. Són 248 dels 2.008 R1-TORN del 2n semestre. Quantes són, de quines cohorts, i quantes hores-aula costaria separar-les.
@@ -86,7 +86,7 @@ Cada subagent treballa al seu worktree, a la seva branca, i només crea els seus
 | dades-1 | `../hack-dades1` · `dades-1` | 1 `ocupacio`, 2 `hores-aula`, 5 `aforament` | `nivell1/preguntes/{ocupacio,hores_aula,aforament}.py`, `nivell1/consultes/{ocupacio,hores_aula,aforament}*.sql` |
 | dades-2 | `../hack-dades2` · `dades-2` | 3 `fora-torn`, 4 `hi-cap-mati` | `nivell1/preguntes/{fora_torn,hi_cap_mati}.py`, `nivell1/consultes/{fora_torn,hi_cap_mati}*.sql` |
 | dades-3 | `../hack-dades3` · `dades-3` | 7 `hores-mortes`, 9 `dobles-mati`, 11 `marge-grau-nou` | `nivell1/preguntes/{hores_mortes,dobles_mati,marge_grau_nou}.py`, `nivell1/consultes/{hores_mortes,dobles_mati,marge_grau_nou}*.sql` |
-| dades-4 | `../hack-dades4` · `dades-4` | 6 `seients-buits`, 8 `canvis-aula`, 10 `docents-cavall` | `nivell1/preguntes/{seients_buits,canvis_aula,docents_cavall}.py`, `nivell1/consultes/{seients_buits,canvis_aula,docents_cavall}*.sql` |
+| dades-4 | `../hack-dades4` · `dades-4` | 6 `problemes-millores`, 8 `canvis-aula`, 10 `docents-cavall` | `nivell1/preguntes/{problemes_millores,canvis_aula,docents_cavall}.py`, `nivell1/consultes/{problemes_millores,canvis_aula,docents_cavall}*.sql` |
 | frontend | `../hack-frontend` · `frontend` | l'app | `app/**` |
 
 - Si un subagent necessita una vista comuna nova, no toca `dades.py`: la fa dins la seva consulta (amb `WITH`) i la proposa a «problemes». La integració decideix si passa a l'esquelet.

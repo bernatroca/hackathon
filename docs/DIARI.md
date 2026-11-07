@@ -28,3 +28,19 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - Feta quan `python -m nivell1.comprova` quadra amb les xifres de l'enunciat i l'app ho mostra.
 - Rols: dades fa nivell1/ (SQL i xifres), frontend fa app/. Backend comença a mirar el verificador per a la part 2.
 - Espec: .plans/nivell1-analisi-spec.md
+
+### [ds 13:17] IA · Llançats 5 subagents de Codex per a la part 1
+- dades-1 (ocupació, hores-aula, aforament), dades-2 (fora de torn, hi cap el matí), dades-3 (hores mortes, dobles amb matí, marge grau nou), dades-4 (seients buits, canvis d'aula, docents a cavall) i frontend-1 (app Streamlit).
+- Model gpt-6.1-sol, effort medium, sense xarxa. Cada un al seu worktree (../hack-*) i branca, només amb els seus fitxers.
+- Esquelet comú (dades.py, troballes.py, comprova.py) fet per la integració abans de llançar-los, perquè no es trepitgin.
+
+### [ds 13:24] DECISIÓ · Fora «seients buits», dins «problemes i millores»
+- Pregunta de dades-4: què és una aula gran per a un grup petit?
+- L'equip respon que suposem que ve tot l'alumnat matriculat. Si una aula va mig buida no ho podem saber, perquè no tenim dades d'assistència.
+- La pregunta 6 passa a ser un catàleg de problemes de l'horari d'avui, cadascun amb la xifra, el càlcul i una proposta de millora.
+
+### [ds 13:24] IA · Part 1: 4 de 5 subagents acabats a la primera
+- dades-1, dades-2, dades-3 i frontend-1 han acabat en 2-4 minuts cadascun. Branques unides a main sense conflictes.
+- `python -m nivell1.comprova`: 15/15 xifres de l'enunciat quadren (5.722 sense aula, pic 15 de 19, 68,25 % del matí, 2.008 fora de torn, 43 d'aforament, 248 dobles).
+- DADA: amb comparació directa hi ha 3.246 sessions fora de torn; 1.238 són fixades heretades i en compten 2.008.
+- DADA: cap llindar de mida d'aula falla al matí; condició necessària, no prova que hi càpiga.

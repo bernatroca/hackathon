@@ -18,7 +18,7 @@ import pandas as pd
 
 from nivell1 import preguntes
 
-PORTADA: list[str] = ['hi-cap-mati', 'fora-torn', 'hores-aula', 'aforament', 'ocupacio']
+PORTADA: list[str] = ['hi-cap-mati', 'fora-torn', 'hores-aula', 'marge-grau-nou', 'problemes-millores']
 
 
 @dataclass
