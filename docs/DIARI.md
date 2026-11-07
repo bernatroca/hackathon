@@ -104,3 +104,10 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 ### [ds 16:24] DECISIÓ · Rutina com a prioritat forta i quatre respostes al 5.4
 - La rutina (mateix dia, hora i aula cada setmana) passa de regla dura a prioritat forta. S'hi admeten excepcions puntuals per calendari o setmanes concretes, i cada una es compta i s'explica. Mai passa per davant del verificador.
 - El 5.4 respon sempre una de quatre: hi cap; no hi cap sense tocar el 5.2; no l'hem trobat; hem demostrat que no existeix (recompte o INFEASIBLE d'un model complet).
+
+### [ds 16:30] DADA · Hi cap la tarda amb 3r i 4t? Sí: el coll d'ampolla és el matí
+- Dubte de l'Uri: si 3r i 4t passen a la tarda, hi haurà moltes més classes. El recompte ja les inclou.
+- Pitjor setmana (2027-W09): la tarda passa de 105 h d'aula (les que avui ja hi són) a 259 h (+154 h de les 1.526 sessions de 3r i 4t que avui són al matí). Oferta: 19 aules × 6 h (15-21 h) × 5 dies = 570 h, o 617 h si comptem des de les 14.30. Ocupació: 45 %.
+- Matí (pitjor setmana 2027-W06): 397 h contra 570 h, el 70 %. És el torn ajustat.
+- Per mida a la tarda no falla cap llindar (p. ex. grups de més de 63 alumnes: 50 h contra 455 h).
+- Per què sobra tarda: els laboratoris (PLAB) i les dobles no ocupen aules de l'aulari, i 3r, 4t i màsters tenen menys hores de teoria i problemes que 1r i 2n.
