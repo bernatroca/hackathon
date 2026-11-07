@@ -2,7 +2,7 @@ from html import escape
 import streamlit as st
 from components.grafics import grafics, quadrets
 from mostra import exemples
-from presentacio import text, abast
+from presentacio import text, abast, desglos, valor
 from servei import una
 from textos import PROBLEMES
 
@@ -53,6 +53,8 @@ def heroi(t):
             st.markdown(f'<p class="pregunta">{escape(info["titol"])}</p>',unsafe_allow_html=True)
             st.subheader(info['c']['resposta'])
             st.write(info['frase'])
+            if info['c'].get('coll_ampolla'):
+                st.write(info['c']['coll_ampolla'])
             obre(t)
         with dreta:
             quadrets(t)
@@ -62,16 +64,17 @@ def heroi(t):
 
 def targeta(t, posicio=0):
     info = contingut(t)
-    with st.container(border=True):
+    with st.container(border=True, key='targeta-'+t.id):
         mostra_avis(t)
-        st.markdown(estat(info),unsafe_allow_html=True)
-        st.subheader(info['titol'])
-        st.markdown(f'<div class="xifra-targeta">{escape(info["c"]["xifra"])}</div>',unsafe_allow_html=True)
         percent = info['c'].get('percent')
+        metre = ''
         if percent is not None:
-            st.markdown(f'<div class="metre" role="img" aria-label="{percent:.1f} %"><i style="width:{max(0,min(100,percent)):.2f}%;background:var(--blau)"></i></div>',unsafe_allow_html=True)
-        st.write(info['frase'])
-        st.markdown(f'<div class="proposem"><b>Proposem:</b> {escape(info["proposem"])}</div>',unsafe_allow_html=True)
+            metre = f'<div class="metre" role="img" aria-label="{percent:.1f} %"><i style="width:{max(0,min(100,percent)):.2f}%;background:var(--blau)"></i></div>'
+        detall_desglos = desglos(t.extra) if t.id == 'hores-aula' else ''
+        st.markdown(f'<article class="targeta-cor">{estat(info)}<h3>{escape(info["titol"])}</h3>'
+            f'<div class="xifra-targeta">{escape(info["c"]["xifra"])}</div>'
+            f'<p class="desglos">{escape(detall_desglos)}</p>{metre}<p>{escape(info["frase"])}</p>'
+            f'<div class="proposem"><b>Proposem:</b> {escape(info["proposem"])}</div></article>',unsafe_allow_html=True)
         obre(t)
 
 
@@ -96,10 +99,14 @@ def detall(t):
         for fila in t.taula.itertuples():
             nom = PROBLEMES.get(fila.problema, fila.problema)
             proposta = fila.proposta.replace('una única finestra completa', 'el torn que li correspon')
-            st.markdown(f'**{nom}**: {proposta}')
+            n = valor(fila.xifra)
+            compte = ('1 cas' if n == 1 else f'{fila.xifra} casos') if n is not None else 'Recomanació sense recompte'
+            st.markdown(f'**{nom} · {compte}**: {proposta}')
+        st.caption('El gràfic mostra com a màxim les vuit categories amb més casos de la setmana. La llista inclou també la resta i les recomanacions sense recompte; les categories poden coincidir en una mateixa classe.')
     st.subheader('Com ho hem calculat')
-    st.write(t.metode)
+    st.write(info.get('metode_planer', 'Consulta les definicions detallades al desplegable tècnic.'))
     with st.expander('Per a tècnics: consulta SQL i sessions d’exemple',expanded=False):
+        st.write(t.metode)
         st.code(t.sql,language='sql')
         st.caption('id_sessio per buscar al CSV original')
         if len(t.exemples):

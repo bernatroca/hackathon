@@ -17,7 +17,7 @@ def quadrets(t):
         return
     icones = ''.join('<i class="' + ('' if n < ocupades else 'l') + '"></i>' for n in range(AULES_DISPONIBLES))
     icones += '<i class="r"></i>' * AULES_RESERVA
-    peu = f'{numero(ocupades)} ocupades · {numero(max(0, AULES_DISPONIBLES - ocupades))} lliures · {numero(AULES_RESERVA)} de reserva'
+    peu = f'{numero(AULES_DISPONIBLES)} aules disponibles: {numero(ocupades)} ocupades al moment més ple i {numero(max(0, AULES_DISPONIBLES - ocupades))} lliures. A part, {numero(AULES_RESERVA)} aules de reserva (vora discontínua).'
     st.markdown(f'<div class="aules" role="img" aria-label="{escape(peu)}">{icones}</div><p class="aules-peu">{escape(peu)}</p>', unsafe_allow_html=True)
 
 
@@ -25,10 +25,10 @@ def figura(fig, clau):
     fig.update_layout(template='plotly_white', height=350, margin=dict(l=12,r=65,t=35,b=25),
         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
         font=dict(family='-apple-system, Segoe UI, system-ui, sans-serif',color='#0b0b0b',size=15),
-        separators=',.', showlegend=False)
-    fig.update_xaxes(showgrid=False,zeroline=False,automargin=True)
-    fig.update_yaxes(showgrid=False,zeroline=False,automargin=True)
-    st.plotly_chart(fig, key=clau, width='stretch', theme=None, config={'displayModeBar':False,'locale':'ca'})
+        separators=',.', showlegend=False, dragmode=False)
+    fig.update_xaxes(showgrid=False,zeroline=False,automargin=True,fixedrange=True)
+    fig.update_yaxes(showgrid=False,zeroline=False,automargin=True,fixedrange=True)
+    st.plotly_chart(fig, key=clau, width='stretch', theme=None, config={'staticPlot':False,'displayModeBar':False,'scrollZoom':False,'doubleClick':False})
 
 
 def barres(labels, values, clau, unitat=''):
@@ -38,7 +38,7 @@ def barres(labels, values, clau, unitat=''):
         st.info('No hi ha casos per mostrar en aquesta setmana.')
         return
     fig = go.Figure(go.Bar(x=df.valor,y=df.nom,orientation='h',marker_color='#2a78d6',
-        text=[f'{numero(v)}{unitat}' for v in df.valor],textposition='outside',cliponaxis=False,
+        text=[f'{numero(v)}' + (' cas' if v == 1 else ' casos') if unitat == ' casos' else f'{numero(v)}{unitat}' for v in df.valor],textposition='outside',cliponaxis=False,
         hovertemplate='%{y}: %{text}<extra></extra>'))
     fig.update_xaxes(visible=False)
     fig.update_yaxes(autorange='reversed',ticks='')
@@ -68,7 +68,7 @@ def planol(t):
                 color = '#f1f0ec' if intensitat is None else 'rgb(' + ','.join(str(round(a+(b-a)*intensitat)) for a,b in zip((205,226,251),(24,79,149))) + ')'
                 tinta = '#fff' if intensitat is not None and intensitat > .65 else '#0b0b0b'
                 tip = f'{r.aula} · {numero(r.capacitat)} places · ' + (f'{numero(pct)} % ocupada' if pct is not None else 'ocupació no disponible')
-                html += f'<div class="rajola" tabindex="0" title="{escape(tip)}" aria-label="{escape(tip)}" style="background:{color};color:{tinta}"><b>{escape(r.aula)}</b>{escape(numero(r.capacitat))} places</div>'
+                html += f'<div class="rajola" tabindex="0" title="{escape(tip)}" aria-label="{escape(tip)}" style="background:{color};color:{tinta}"><b>{escape(r.aula)}</b>{escape(numero(r.capacitat))} places<small class="ocupacio-rajola">{escape(numero(pct)) + ' %' if pct is not None else 'Sense dada'}</small></div>'
             html += '</div>'
         html += '</section>'
     st.markdown(html+'</div><p class="escala">Poc ocupada <i></i> Molt ocupada</p>',unsafe_allow_html=True)
@@ -96,7 +96,7 @@ def grafics(t, clau='detall', altres=None):
         cobertura = (altres or {}).get('hores-aula')
         if cobertura is not None:
             c = context(cobertura)
-            st.info(f"Moltes aules semblen buides perquè aproximadament {c['proporcio']} classes no tenen aula assignada a les dades. Cal assignar-les abans de donar l’espai per lliure.")
+            st.info(f"Moltes aules semblen buides perquè hi ha sense aula aproximadament {c['proporcio']}. Cal assignar-les abans de donar l’espai per lliure.")
         return
     if df.empty:
         st.info('No hi ha casos per mostrar en aquesta setmana.')
