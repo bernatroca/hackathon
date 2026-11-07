@@ -1,0 +1,32 @@
+:root {
+  --fons: #f4f3ef; --targeta: #ffffff; --tinta: #0b0b0b; --tinta-2: #52514e; --suau: #8a8984; --linia: #e6e5e0;
+  --blau: #2a78d6; --blau-clar: #cde2fb;
+  --verd: #0ca30c; --verd-fons: #e7f6e7; --verd-text: #086b08;
+  --ambre: #fab219; --ambre-fons: #fff5dc; --ambre-text: #8a5c00;
+  --vermell: #d03b3b; --vermell-fons: #fbe9e9; --vermell-text: #a12c2c;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--fons); color: var(--tinta); font: 17px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif; display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+aside.menu { background: var(--targeta); border-right: 1px solid var(--linia); padding: 32px 24px; }
+aside.menu b { display: block; font-size: 18px; margin-bottom: 32px; }
+aside.menu a { display: block; padding: 10px 12px; border-radius: 8px; color: var(--tinta-2); text-decoration: none; margin-bottom: 4px; }
+aside.menu a.actiu { background: var(--fons); color: var(--tinta); font-weight: 600; }
+main { padding: 40px 48px 80px; max-width: 1240px; }
+h1 { font-size: 36px; margin: 0 0 4px; letter-spacing: -0.01em; }
+.intro { color: var(--tinta-2); margin: 0 0 28px; font-size: 18px; }
+.estat { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; padding: 4px 12px; border-radius: 999px; align-self: flex-start; white-space: nowrap; }
+.estat.verd { background: var(--verd-fons); color: var(--verd-text); }
+.estat.ambre { background: var(--ambre-fons); color: var(--ambre-text); }
+.estat.vermell { background: var(--vermell-fons); color: var(--vermell-text); }
+.estat svg { width: 16px; height: 16px; flex: none; }
+.targeta { background: var(--targeta); border-radius: 16px; padding: 24px; border: 1px solid var(--linia); display: flex; flex-direction: column; gap: 12px; }
+.targeta h3 { margin: 0; font-size: 20px; }
+.xifra { font-size: 44px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+.xifra small { font-size: 18px; font-weight: 500; color: var(--tinta-2); }
+.metre { height: 12px; background: #eceae4; border-radius: 999px; overflow: hidden; }
+.metre i { display: block; height: 100%; border-radius: 999px; }
+.targeta p { margin: 0; color: var(--tinta-2); }
+.proposem { padding-top: 12px; border-top: 1px solid var(--linia); font-size: 15px; color: var(--tinta-2); }
+.proposem b { color: var(--tinta); }
+a.mes { color: var(--blau); text-decoration: none; font-size: 15px; white-space: nowrap; }
+.versio { position: fixed; right: 16px; bottom: 16px; background: var(--tinta); color: #fff; font-size: 13px; padding: 6px 12px; border-radius: 999px; }

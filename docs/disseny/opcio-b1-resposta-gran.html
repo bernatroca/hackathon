@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<title>B1 · Semàfor amb la resposta en gran</title>
+<link rel="stylesheet" href="b-base.css">
+<style>
+  .heroi { background: var(--targeta); border: 1px solid var(--linia); border-left: 8px solid var(--ambre); border-radius: 16px; padding: 28px 32px; display: grid; grid-template-columns: 1fr auto; gap: 32px; align-items: center; margin-bottom: 28px; }
+  .heroi .pregunta { color: var(--tinta-2); font-size: 18px; margin: 12px 0 0; }
+  .heroi h2 { font-size: 48px; margin: 4px 0 8px; letter-spacing: -0.02em; line-height: 1.05; }
+  .heroi p { margin: 0; color: var(--tinta-2); max-width: 560px; }
+  .aules { display: grid; grid-template-columns: repeat(7, 28px); gap: 6px; }
+  .aules i { width: 28px; height: 28px; border-radius: 6px; background: var(--blau); }
+  .aules i.l { background: var(--blau-clar); }
+  .aules i.r { background: transparent; border: 2px dashed var(--suau); }
+  .aules-peu { font-size: 13px; color: var(--tinta-2); margin-top: 8px; text-align: center; }
+  .graella { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+  .peu { display: flex; justify-content: flex-end; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="ok" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M4.5 8.5l2.5 2.5 4.5-5" stroke="#fff" stroke-width="2" fill="none"/></symbol>
+  <symbol id="alerta" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor"/><rect x="7" y="4" width="2" height="5" fill="#fff"/><rect x="7" y="10.5" width="2" height="2" fill="#fff"/></symbol>
+  <symbol id="creu" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M5 5l6 6M11 5l-6 6" stroke="#fff" stroke-width="2"/></symbol>
+</svg>
+<aside class="menu">
+  <b>Espais de l'Escola</b>
+  <a class="actiu" href="#">Com estem avui</a><a href="#">Proposta d'horari</a><a href="#">Imprevistos</a><a href="#">Pregunta-ho</a>
+</aside>
+<main>
+  <h1>Com estem avui</h1>
+  <p class="intro">2n semestre · Verd: tot bé. Groc: vigilar. Vermell: cal actuar.</p>
+
+  <section class="heroi">
+    <div>
+      <span class="estat ambre"><svg><use href="#alerta"/></svg>Hi cap, just</span>
+      <p class="pregunta">Si 1r i 2n fan classe al matí, hi cabem?</p>
+      <h2>Sí, però just.</h2>
+      <p>Al moment més ple (dimarts) calen <b>15 aules</b> de les 19 lliures. El matí queda ocupat al 68 %.</p>
+    </div>
+    <div>
+      <div class="aules" aria-label="15 de 19 aules ocupades">
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+        <i></i><i class="l"></i><i class="l"></i><i class="l"></i><i class="l"></i><i class="r"></i><i class="r"></i>
+      </div>
+      <div class="aules-peu">15 ocupades · 4 lliures · 2 de reserva</div>
+    </div>
+  </section>
+
+  <div class="graella">
+    <section class="targeta">
+      <span class="estat vermell"><svg><use href="#creu"/></svg>Cal actuar</span>
+      <h3>Classes al torn equivocat</h3>
+      <div class="xifra">2.008 <small>classes</small></div>
+      <div class="metre"><i style="width:26%;background:var(--vermell)"></i></div>
+      <p>1 de cada 4 classes s'ha de canviar de matí a tarda o al revés.</p>
+      <div class="proposem"><b>Proposem:</b> moure-les amb la proposta d'horari.</div>
+      <div class="peu"><a class="mes" href="#">Com ho sabem →</a></div>
+    </section>
+    <section class="targeta">
+      <span class="estat vermell"><svg><use href="#creu"/></svg>Cal actuar</span>
+      <h3>Classes sense aula</h3>
+      <div class="xifra">74 % <small>5.722 classes</small></div>
+      <div class="metre"><i style="width:74%;background:var(--vermell)"></i></div>
+      <p>3 de cada 4 classes no tenen aula assignada a les dades.</p>
+      <div class="proposem"><b>Proposem:</b> assignar-les automàticament.</div>
+      <div class="peu"><a class="mes" href="#">Com ho sabem →</a></div>
+    </section>
+    <section class="targeta">
+      <span class="estat verd"><svg><use href="#ok"/></svg>Hi cap</span>
+      <h3>Un grau nou de 40 places</h3>
+      <div class="xifra">26 h <small>de 185 h lliures</small></div>
+      <div class="metre"><i style="width:14%;background:var(--verd)"></i></div>
+      <p>Ocuparia 1 de cada 7 hores d'aula que queden lliures al matí.</p>
+      <div class="proposem"><b>Proposem:</b> col·locar-lo sobre la proposta nova.</div>
+      <div class="peu"><a class="mes" href="#">Com ho sabem →</a></div>
+    </section>
+    <section class="targeta">
+      <span class="estat ambre"><svg><use href="#alerta"/></svg>Vigilar</span>
+      <h3>Més alumnes que places</h3>
+      <div class="xifra">43 <small>classes</small></div>
+      <p>Fan classe en una aula on no hi caben tots.</p>
+      <div class="proposem"><b>Proposem:</b> una aula més gran del mateix passadís.</div>
+      <div class="peu"><a class="mes" href="#">Com ho sabem →</a></div>
+    </section>
+    <section class="targeta">
+      <span class="estat ambre"><svg><use href="#alerta"/></svg>Vigilar</span>
+      <h3>Altres problemes de l'horari</h3>
+      <div class="xifra">8 <small>tipus</small></div>
+      <p>Classes fora d'hora, professorat amb dues classes alhora…</p>
+      <div class="proposem"><b>Proposem:</b> una solució per a cadascun.</div>
+      <div class="peu"><a class="mes" href="#">Veure'ls →</a></div>
+    </section>
+  </div>
+</main>
+<span class="versio">B1 · Resposta en gran</span>
+</body>
+</html>

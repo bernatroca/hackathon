@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<title>B2 · Semàfor en llista, per urgència</title>
+<link rel="stylesheet" href="b-base.css">
+<style>
+  .resum { display: flex; gap: 12px; margin-bottom: 28px; }
+  .resum .estat { font-size: 16px; padding: 8px 16px; }
+  .llista { display: flex; flex-direction: column; gap: 12px; }
+  .fila { background: var(--targeta); border: 1px solid var(--linia); border-radius: 14px; padding: 20px 24px; display: grid; grid-template-columns: 8px 150px 1.3fr 1fr auto; gap: 24px; align-items: center; }
+  .fila .tira { align-self: stretch; border-radius: 4px; }
+  .fila .xifra { font-size: 36px; }
+  .fila h3 { margin: 0 0 2px; font-size: 18px; }
+  .fila p { margin: 0; color: var(--tinta-2); font-size: 15px; }
+  .fila .proposem { border: 0; padding: 0; }
+  .grup { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--suau); margin: 20px 0 4px; font-weight: 600; }
+  @media (max-width: 1100px) {
+    body { grid-template-columns: 1fr; }
+    aside.menu { display: none; }
+    main { padding: 28px 24px 64px; }
+    .fila { grid-template-columns: 8px 1fr; grid-template-rows: auto; gap: 8px 20px; }
+    .fila .tira { grid-row: span 4; }
+    .fila .xifra { font-size: 32px; }
+    .fila .boto, .fila .mes { justify-self: start; }
+  }
+  .boto { background: var(--tinta); color: #fff; text-decoration: none; padding: 8px 14px; border-radius: 8px; font-size: 14px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="ok" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M4.5 8.5l2.5 2.5 4.5-5" stroke="#fff" stroke-width="2" fill="none"/></symbol>
+  <symbol id="alerta" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor"/><rect x="7" y="4" width="2" height="5" fill="#fff"/><rect x="7" y="10.5" width="2" height="2" fill="#fff"/></symbol>
+  <symbol id="creu" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M5 5l6 6M11 5l-6 6" stroke="#fff" stroke-width="2"/></symbol>
+</svg>
+<aside class="menu">
+  <b>Espais de l'Escola</b>
+  <a class="actiu" href="#">Com estem avui</a><a href="#">Proposta d'horari</a><a href="#">Imprevistos</a><a href="#">Pregunta-ho</a>
+</aside>
+<main>
+  <h1>Què cal fer</h1>
+  <p class="intro">2n semestre · Primer el més urgent.</p>
+  <div class="resum">
+    <span class="estat vermell"><svg><use href="#creu"/></svg>2 cal actuar</span>
+    <span class="estat ambre"><svg><use href="#alerta"/></svg>3 vigilar</span>
+    <span class="estat verd"><svg><use href="#ok"/></svg>1 tot bé</span>
+  </div>
+
+  <div class="llista">
+    <div class="grup">Cal actuar</div>
+    <div class="fila"><span class="tira" style="background:var(--vermell)"></span><div class="xifra">2.008</div>
+      <div><h3>Classes al torn equivocat</h3><p>1 de cada 4 classes s'ha de canviar de matí a tarda o al revés.</p></div>
+      <div class="proposem"><b>Proposem:</b> moure-les amb la proposta d'horari.</div><a class="boto" href="#">Veure proposta</a></div>
+    <div class="fila"><span class="tira" style="background:var(--vermell)"></span><div class="xifra">74 %</div>
+      <div><h3>Classes sense aula</h3><p>5.722 classes no tenen aula assignada a les dades.</p></div>
+      <div class="proposem"><b>Proposem:</b> assignar-les automàticament.</div><a class="boto" href="#">Assignar aules</a></div>
+
+    <div class="grup">Vigilar</div>
+    <div class="fila"><span class="tira" style="background:var(--ambre)"></span><div class="xifra">15 de 19</div>
+      <div><h3>1r i 2n al matí: hi cap, just</h3><p>Al moment més ple (dimarts) calen 15 de les 19 aules lliures.</p></div>
+      <div class="proposem"><b>Proposem:</b> repartir les classes grans entre dimarts i dimecres.</div><a class="mes" href="#">Com ho sabem →</a></div>
+    <div class="fila"><span class="tira" style="background:var(--ambre)"></span><div class="xifra">43</div>
+      <div><h3>Més alumnes que places</h3><p>Classes en una aula on no hi caben tots.</p></div>
+      <div class="proposem"><b>Proposem:</b> una aula més gran del mateix passadís.</div><a class="mes" href="#">Com ho sabem →</a></div>
+    <div class="fila"><span class="tira" style="background:var(--ambre)"></span><div class="xifra">8</div>
+      <div><h3>Altres problemes de l'horari</h3><p>Classes fora d'hora, professorat amb dues classes alhora…</p></div>
+      <div class="proposem"><b>Proposem:</b> una solució per a cadascun.</div><a class="mes" href="#">Veure'ls →</a></div>
+
+    <div class="grup">Tot bé</div>
+    <div class="fila"><span class="tira" style="background:var(--verd)"></span><div class="xifra">26 h</div>
+      <div><h3>Un grau nou de 40 places hi cap</h3><p>Necessita 26 h d'aula a la setmana; en queden 185 de lliures al matí.</p></div>
+      <div class="proposem"><b>Proposem:</b> col·locar-lo sobre la proposta nova.</div><a class="mes" href="#">Com ho sabem →</a></div>
+  </div>
+</main>
+<span class="versio">B2 · Llista per urgència</span>
+</body>
+</html>

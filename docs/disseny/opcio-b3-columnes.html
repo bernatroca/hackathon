@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<title>B3 · Semàfor en tres columnes</title>
+<link rel="stylesheet" href="b-base.css">
+<style>
+  .columnes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: start; }
+  .columna { border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .columna.vermell { background: var(--vermell-fons); }
+  .columna.ambre { background: var(--ambre-fons); }
+  .columna.verd { background: var(--verd-fons); }
+  .columna > header { display: flex; justify-content: space-between; align-items: center; padding: 4px 6px; }
+  .columna > header h2 { margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px; }
+  .columna > header h2 svg { width: 20px; height: 20px; }
+  .columna.vermell h2 { color: var(--vermell-text); } .columna.ambre h2 { color: var(--ambre-text); } .columna.verd h2 { color: var(--verd-text); }
+  .columna > header span { font-size: 14px; color: var(--tinta-2); }
+  .targeta { border: 0; box-shadow: 0 1px 2px rgba(0,0,0,.06); padding: 20px; gap: 10px; }
+  .targeta h3 { font-size: 17px; }
+  .xifra { font-size: 38px; }
+  .proposem { font-size: 14px; }
+  .icones { display: flex; gap: 4px; flex-wrap: wrap; }
+  .icones i { width: 18px; height: 18px; border-radius: 4px; background: var(--blau); }
+  .icones i.l { background: var(--blau-clar); }
+  .icones i.r { background: transparent; border: 2px dashed var(--suau); }
+  .peu { display: flex; justify-content: flex-end; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="ok" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M4.5 8.5l2.5 2.5 4.5-5" stroke="#fff" stroke-width="2" fill="none"/></symbol>
+  <symbol id="alerta" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor"/><rect x="7" y="4" width="2" height="5" fill="#fff"/><rect x="7" y="10.5" width="2" height="2" fill="#fff"/></symbol>
+  <symbol id="creu" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M5 5l6 6M11 5l-6 6" stroke="#fff" stroke-width="2"/></symbol>
+</svg>
+<aside class="menu">
+  <b>Espais de l'Escola</b>
+  <a class="actiu" href="#">Com estem avui</a><a href="#">Proposta d'horari</a><a href="#">Imprevistos</a><a href="#">Pregunta-ho</a>
+</aside>
+<main>
+  <h1>Com estem avui</h1>
+  <p class="intro">2n semestre · Cada targeta diu què passa i què proposem.</p>
+  <div class="columnes">
+    <section class="columna vermell">
+      <header><h2><svg><use href="#creu"/></svg>Cal actuar</h2><span>2</span></header>
+      <div class="targeta"><h3>Classes al torn equivocat</h3><div class="xifra">2.008 <small>classes</small></div>
+        <div class="metre"><i style="width:26%;background:var(--vermell)"></i></div>
+        <p>1 de cada 4 classes s'ha de canviar de matí a tarda o al revés.</p>
+        <div class="proposem"><b>Proposem:</b> moure-les amb la proposta d'horari.</div><div class="peu"><a class="mes" href="#">Com ho sabem →</a></div></div>
+      <div class="targeta"><h3>Classes sense aula</h3><div class="xifra">74 % <small>5.722</small></div>
+        <div class="metre"><i style="width:74%;background:var(--vermell)"></i></div>
+        <p>3 de cada 4 classes no tenen aula a les dades.</p>
+        <div class="proposem"><b>Proposem:</b> assignar-les automàticament.</div><div class="peu"><a class="mes" href="#">Com ho sabem →</a></div></div>
+    </section>
+    <section class="columna ambre">
+      <header><h2><svg><use href="#alerta"/></svg>Vigilar</h2><span>3</span></header>
+      <div class="targeta"><h3>1r i 2n al matí</h3><div class="xifra">15 <small>de 19 aules</small></div>
+        <div class="icones" aria-label="15 de 19 aules">
+          <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="l"></i><i class="l"></i><i class="l"></i><i class="l"></i><i class="r"></i><i class="r"></i>
+        </div>
+        <p>Hi cap, però just: al moment més ple (dimarts) en queden 4.</p>
+        <div class="proposem"><b>Proposem:</b> repartir les classes grans entre dimarts i dimecres.</div><div class="peu"><a class="mes" href="#">Com ho sabem →</a></div></div>
+      <div class="targeta"><h3>Més alumnes que places</h3><div class="xifra">43 <small>classes</small></div>
+        <p>Fan classe en una aula on no hi caben tots.</p>
+        <div class="proposem"><b>Proposem:</b> una aula més gran del mateix passadís.</div><div class="peu"><a class="mes" href="#">Com ho sabem →</a></div></div>
+      <div class="targeta"><h3>Altres problemes</h3><div class="xifra">8 <small>tipus</small></div>
+        <p>Classes fora d'hora, professorat amb dues classes alhora…</p>
+        <div class="peu"><a class="mes" href="#">Veure'ls →</a></div></div>
+    </section>
+    <section class="columna verd">
+      <header><h2><svg><use href="#ok"/></svg>Tot bé</h2><span>1</span></header>
+      <div class="targeta"><h3>Un grau nou de 40 places</h3><div class="xifra">26 h <small>de 185 h lliures</small></div>
+        <div class="metre"><i style="width:14%;background:var(--verd)"></i></div>
+        <p>Hi cap: ocuparia 1 de cada 7 hores lliures del matí.</p>
+        <div class="proposem"><b>Proposem:</b> col·locar-lo sobre la proposta nova.</div><div class="peu"><a class="mes" href="#">Com ho sabem →</a></div></div>
+    </section>
+  </div>
+</main>
+<span class="versio">B3 · Tres columnes</span>
+</body>
+</html>

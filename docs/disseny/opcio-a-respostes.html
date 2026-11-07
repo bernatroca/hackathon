@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<title>Opció A · Respostes</title>
+<style>
+  :root {
+    --fons: #fcfcfb; --tinta: #0b0b0b; --tinta-2: #52514e; --suau: #8a8984; --linia: #e6e5e0;
+    --blau: #2a78d6; --blau-clar: #cde2fb; --verd: #0ca30c; --ambre: #fab219; --vermell: #d03b3b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fons); color: var(--tinta); font: 17px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif; }
+  header { padding: 28px 64px; border-bottom: 1px solid var(--linia); display: flex; align-items: baseline; gap: 24px; }
+  header b { font-size: 18px; }
+  header nav a { color: var(--tinta-2); text-decoration: none; margin-right: 20px; font-size: 15px; }
+  header nav a.actiu { color: var(--tinta); border-bottom: 2px solid var(--blau); padding-bottom: 4px; }
+  main { max-width: 1080px; margin: 0 auto; padding: 48px 64px 80px; }
+  .pregunta { font-size: 20px; color: var(--tinta-2); margin: 0; }
+  h1 { font-size: 56px; line-height: 1.1; margin: 8px 0 12px; letter-spacing: -0.02em; }
+  .sub { font-size: 20px; color: var(--tinta-2); max-width: 720px; margin: 0 0 32px; }
+  .aules { display: flex; gap: 8px; margin: 8px 0 8px; }
+  .aula { width: 40px; height: 40px; border-radius: 8px; background: var(--blau); }
+  .aula.lliure { background: var(--blau-clar); }
+  .aula.reserva { background: transparent; border: 2px dashed var(--suau); }
+  .llegenda { color: var(--tinta-2); font-size: 15px; display: flex; gap: 24px; margin-bottom: 56px; }
+  .llegenda span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 8px; vertical-align: -1px; background: var(--blau); }
+  .llegenda .l::before { background: var(--blau-clar); }
+  .llegenda .r::before { background: transparent; border: 2px dashed var(--suau); width: 9px; height: 9px; }
+  h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .08em; color: var(--suau); margin: 0 0 8px; }
+  .resposta { display: grid; grid-template-columns: 200px 1fr auto; gap: 24px; align-items: baseline; padding: 24px 0; border-top: 1px solid var(--linia); }
+  .resposta .xifra { font-size: 40px; font-weight: 600; letter-spacing: -0.02em; }
+  .resposta p { margin: 0; font-size: 18px; }
+  .resposta small { display: block; color: var(--tinta-2); font-size: 15px; margin-top: 4px; }
+  .resposta a { color: var(--blau); text-decoration: none; font-size: 15px; white-space: nowrap; }
+  .dies { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin: 0 0 56px; }
+  .dia { text-align: center; }
+  .barra { height: 120px; display: flex; align-items: flex-end; justify-content: center; border-bottom: 1px solid var(--linia); position: relative; }
+  .barra i { width: 48px; background: var(--blau); border-radius: 4px 4px 0 0; }
+  .barra .limit { position: absolute; left: 0; right: 0; border-top: 2px dashed var(--vermell); }
+  .dia b { display: block; font-size: 22px; margin-top: 8px; }
+  .dia span { color: var(--tinta-2); font-size: 14px; }
+  .nota { color: var(--tinta-2); font-size: 15px; }
+</style>
+</head>
+<body>
+<header>
+  <b>Espais de l'Escola</b>
+  <nav><a class="actiu" href="#">Avui</a><a href="#">Proposta d'horari</a><a href="#">Pregunta-ho</a></nav>
+</header>
+<main>
+  <p class="pregunta">Si 1r i 2n fan classe al matí, hi cabem?</p>
+  <h1>Sí, però just.</h1>
+  <p class="sub">Al moment més ple de la setmana, 1r i 2n necessiten <b>15 aules</b>. N'hi ha 19 de lliures (en guardem 2 de reserva).</p>
+
+  <div class="aules" aria-label="15 de 19 aules ocupades">
+    <div class="aula"></div><div class="aula"></div><div class="aula"></div><div class="aula"></div><div class="aula"></div>
+    <div class="aula"></div><div class="aula"></div><div class="aula"></div><div class="aula"></div><div class="aula"></div>
+    <div class="aula"></div><div class="aula"></div><div class="aula"></div><div class="aula"></div><div class="aula"></div>
+    <div class="aula lliure"></div><div class="aula lliure"></div><div class="aula lliure"></div><div class="aula lliure"></div>
+    <div class="aula reserva"></div><div class="aula reserva"></div>
+  </div>
+  <div class="llegenda"><span>15 ocupades</span><span class="l">4 lliures</span><span class="r">2 de reserva</span></div>
+
+  <h2>El dia més ple de cada setmana</h2>
+  <div class="dies">
+    <div class="dia"><div class="barra"><div class="limit" style="bottom:100%"></div><i style="height:74%"></i></div><b>14</b><span>Dilluns</span></div>
+    <div class="dia"><div class="barra"><div class="limit" style="bottom:100%"></div><i style="height:79%"></i></div><b>15</b><span>Dimarts</span></div>
+    <div class="dia"><div class="barra"><div class="limit" style="bottom:100%"></div><i style="height:58%"></i></div><b>11</b><span>Dimecres</span></div>
+    <div class="dia"><div class="barra"><div class="limit" style="bottom:100%"></div><i style="height:68%"></i></div><b>13</b><span>Dijous</span></div>
+    <div class="dia"><div class="barra"><div class="limit" style="bottom:100%"></div><i style="height:63%"></i></div><b>12</b><span>Divendres</span></div>
+  </div>
+  <p class="nota">La línia vermella són les 19 aules. Cap dia la toca.</p>
+
+  <h2 style="margin-top:56px">Les altres respostes</h2>
+  <div class="resposta"><div class="xifra">2.008</div><p>classes s'han de canviar de torn<small>Avui fan matí i els tocaria tarda, o al revés.</small></p><a href="#">Com ho sabem →</a></div>
+  <div class="resposta"><div class="xifra">3 de 4</div><p>classes no tenen aula a les dades<small>5.722 de 7.739 al 2n semestre. Cal posar-n'hi.</small></p><a href="#">Com ho sabem →</a></div>
+  <div class="resposta"><div class="xifra">Hi cap</div><p>un grau nou de 40 places<small>Necessita 26 hores d'aula a la setmana; en queden 185 de lliures.</small></p><a href="#">Com ho sabem →</a></div>
+  <div class="resposta"><div class="xifra">8</div><p>problemes a arreglar a l'horari d'avui<small>Cada un amb una proposta concreta.</small></p><a href="#">Veure'ls →</a></div>
+</main>
+</body>
+</html>

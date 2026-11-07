@@ -44,3 +44,17 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - `python -m nivell1.comprova`: 15/15 xifres de l'enunciat quadren (5.722 sense aula, pic 15 de 19, 68,25 % del matí, 2.008 fora de torn, 43 d'aforament, 248 dobles).
 - DADA: amb comparació directa hi ha 3.246 sessions fora de torn; 1.238 són fixades heretades i en compten 2.008.
 - DADA: cap llindar de mida d'aula falla al matí; condició necessària, no prova que hi càpiga.
+
+### [ds 13:29] DECISIÓ · Portada de la part 1 i xifres del semestre
+- Portada: Hi cap el matí (15 de 19, 68 %), Fora de torn (2.008), Sense aula (74 %), Marge per al grau nou i Problemes i millores. Responen «com s'usen» i «hi cap», i preparen el 5.4.
+- La xifra gran és sempre la del semestre, perquè el jurat la pugui comparar amb l'enunciat. La setmana es veu als gràfics.
+- PROBLEMA trobat en provar l'app: tema clar i fosc barrejats, textos dels gràfics il·legibles i xifres tallades a la portada. Ho arregla frontend-1 en una segona passada.
+
+### [ds 13:52] DECISIÓ · Disseny per al coordinador: semàfor amb la resposta en gran (B1)
+- PROBLEMA: la persona és un coordinador, no un informàtic. Els gràfics de l'app (mapa de calor, eixos, llegendes) no s'entenien.
+- Hem fet 3 propostes en HTML (A respostes, B semàfor, C edifici) i 3 variants de la B. L'equip tria la B1:
+  - a dalt, la resposta en gran («Sí, però just.») amb 19 quadrets, un per aula;
+  - a sota, targetes amb color d'estat (verd, groc, vermell), la xifra, què vol dir i «Proposem:».
+- Gràfics: cap mapa de calor ni gràfic tècnic a la portada. Quadrets d'aules, barres amb el número escrit i el plànol d'aules per espina (de l'opció C) al detall d'ocupació. Seguim la skill dataviz (paleta validada, colors d'estat sempre amb icona i text).
+- Llibreries mirades: Plotly (ja la fem servir, bona integració), Altair i ECharts (streamlit-echarts, més vistós però menys integrat). Ens quedem amb HTML/CSS propi per a les targetes i Plotly simplificat.
+- Claude Design (tipus d'artefacte) no estava disponible en aquesta sessió: les maquetes són HTML locals a docs/disseny/.

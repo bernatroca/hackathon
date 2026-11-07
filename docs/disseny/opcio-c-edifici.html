@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<title>Opció C · L'edifici</title>
+<style>
+  :root {
+    --fons: #fcfcfb; --tinta: #0b0b0b; --tinta-2: #52514e; --suau: #8a8984; --linia: #e6e5e0;
+    --b100: #cde2fb; --b200: #9ec5f4; --b300: #6da7ec; --b450: #2a78d6; --b600: #184f95; --buit: #f1f0ec;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fons); color: var(--tinta); font: 16px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif; }
+  header { padding: 20px 48px; border-bottom: 1px solid var(--linia); display: flex; justify-content: space-between; align-items: center; }
+  header b { font-size: 18px; }
+  .tabs a { margin-left: 8px; padding: 8px 16px; border-radius: 999px; color: var(--tinta-2); text-decoration: none; font-size: 15px; }
+  .tabs a.actiu { background: var(--tinta); color: #fff; }
+  .cos { display: grid; grid-template-columns: 1fr 380px; gap: 40px; padding: 40px 48px 64px; max-width: 1360px; margin: 0 auto; }
+  h1 { font-size: 32px; margin: 0 0 4px; }
+  .sub { color: var(--tinta-2); margin: 0 0 24px; }
+  .espines { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .espina { background: #fff; border: 1px solid var(--linia); border-radius: 14px; padding: 16px; }
+  .espina h3 { margin: 0 0 12px; font-size: 18px; }
+  .planta { font-size: 12px; color: var(--suau); text-transform: uppercase; letter-spacing: .06em; margin: 12px 0 6px; }
+  .rajoles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .aula { border-radius: 8px; padding: 8px 10px; font-size: 13px; color: var(--tinta); position: relative; cursor: default; }
+  .aula b { display: block; font-size: 14px; }
+  .aula span { color: var(--tinta-2); font-size: 12px; }
+  .aula.fosc, .aula.fosc span { color: #fff; }
+  .aula:hover::after { content: attr(data-tip); position: absolute; left: 0; top: 100%; margin-top: 4px; z-index: 2; background: var(--tinta); color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 13px; white-space: nowrap; }
+  .escala { display: flex; align-items: center; gap: 8px; margin-top: 20px; color: var(--tinta-2); font-size: 14px; }
+  .escala i { width: 36px; height: 12px; border-radius: 3px; display: inline-block; }
+  aside { display: flex; flex-direction: column; gap: 16px; }
+  .resposta { background: #fff; border: 1px solid var(--linia); border-radius: 14px; padding: 20px; }
+  .resposta.principal { background: var(--tinta); color: #fff; border: 0; }
+  .resposta.principal p { color: #d8d7d2; }
+  .resposta h4 { margin: 0 0 4px; font-size: 15px; font-weight: 500; color: inherit; opacity: .8; }
+  .resposta .x { font-size: 36px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+  .resposta p { margin: 6px 0 0; color: var(--tinta-2); font-size: 15px; }
+  .avis { font-size: 14px; color: var(--tinta-2); background: #fff8e6; border: 1px solid #f3dea6; border-radius: 10px; padding: 10px 14px; margin-top: 16px; }
+</style>
+</head>
+<body>
+<header>
+  <b>Espais de l'Escola</b>
+  <nav class="tabs"><a class="actiu" href="#">L'edifici avui</a><a href="#">Proposta d'horari</a><a href="#">Pregunta-ho</a></nav>
+</header>
+<div class="cos">
+  <section>
+    <h1>Les 21 aules, espina per espina</h1>
+    <p class="sub">Com més fosca, més hores ocupada en una setmana normal del 2n semestre. Passa el ratolí per sobre d'una aula.</p>
+    <div class="espines">
+      <div class="espina"><h3>Q1</h3>
+        <div class="planta">Primera planta</div>
+        <div class="rajoles">
+          <div class="aula" style="background:var(--b200)" data-tip="Q9/5004 · 90 places · 19 % ocupada"><b>1003</b><span>90 pl.</span></div>
+          <div class="aula" style="background:var(--b200)" data-tip="Q9/5005 · 90 places · 18 % ocupada"><b>1007</b><span>90 pl.</span></div>
+          <div class="aula" style="background:var(--buit)" data-tip="Q9/5006 · 160 places · 1 % ocupada"><b>1011</b><span>160 pl.</span></div>
+        </div>
+      </div>
+      <div class="espina"><h3>Q2</h3>
+        <div class="planta">Primera planta</div>
+        <div class="rajoles">
+          <div class="aula" style="background:var(--b200)" data-tip="Q9/5008 · 63 places · 18 % ocupada"><b>1003</b><span>63 pl.</span></div>
+          <div class="aula" style="background:var(--b100)" data-tip="Q9/5009 · 63 places · 10 % ocupada"><b>1005</b><span>63 pl.</span></div>
+          <div class="aula" style="background:var(--buit)" data-tip="Q9/5010 · 90 places · 3 % ocupada"><b>1009</b><span>90 pl.</span></div>
+          <div class="aula" style="background:var(--buit)" data-tip="Q9/5011 · 90 places · 2 % ocupada"><b>1013</b><span>90 pl.</span></div>
+        </div>
+      </div>
+      <div class="espina"><h3>Q3</h3>
+        <div class="planta">Planta baixa</div>
+        <div class="rajoles">
+          <div class="aula" style="background:var(--b200)" data-tip="Q9/5012 · 100 places · 18 % ocupada"><b>0003</b><span>100 pl.</span></div>
+          <div class="aula" style="background:var(--b200)" data-tip="Q9/5013 · 48 places · 16 % ocupada"><b>0009</b><span>48 pl.</span></div>
+          <div class="aula" style="background:var(--buit)" data-tip="Q9/5014 · 24 places · 1 % ocupada"><b>0011</b><span>24 pl.</span></div>
+          <div class="aula fosc" style="background:var(--b600)" data-tip="Q9/5015 · 48 places · 43 % ocupada"><b>0013</b><span>48 pl.</span></div>
+        </div>
+        <div class="planta">Primera planta</div>
+        <div class="rajoles">
+          <div class="aula" style="background:var(--buit)" data-tip="Q9/5016 · 100 places · 1 % ocupada"><b>1003</b><span>100 pl.</span></div>
+          <div class="aula" style="background:var(--buit)" data-tip="Q9/5017 · 130 places · 1 % ocupada"><b>1007</b><span>130 pl.</span></div>
+          <div class="aula" style="background:var(--buit)" data-tip="Q9/5018 · 130 places · 1 % ocupada"><b>1011</b><span>130 pl.</span></div>
+        </div>
+      </div>
+      <div class="espina"><h3>Q4</h3>
+        <div class="planta">Planta baixa</div>
+        <div class="rajoles">
+          <div class="aula" style="background:var(--buit)" data-tip="Q9/5019 · 90 places · 1 % ocupada"><b>0003</b><span>90 pl.</span></div>
+          <div class="aula" style="background:var(--buit)" data-tip="Q9/5020 · 117 places · 1 % ocupada"><b>0007</b><span>117 pl.</span></div>
+          <div class="aula fosc" style="background:var(--b450)" data-tip="Q9/5021 · 117 places · 26 % ocupada"><b>0011</b><span>117 pl.</span></div>
+        </div>
+        <div class="planta">Primera planta</div>
+        <div class="rajoles">
+          <div class="aula" style="background:var(--b200)" data-tip="Q9/5022 · 48 places · 19 % ocupada"><b>1003</b><span>48 pl.</span></div>
+          <div class="aula" style="background:var(--b100)" data-tip="Q9/5023 · 50 places · 14 % ocupada"><b>1005</b><span>50 pl.</span></div>
+          <div class="aula" style="background:var(--buit)" data-tip="Q9/5024 · 88 places · 6 % ocupada"><b>1009</b><span>88 pl.</span></div>
+          <div class="aula" style="background:var(--b100)" data-tip="Q9/5025 · 88 places · 10 % ocupada"><b>1013</b><span>88 pl.</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="escala">Poc ocupada <i style="background:var(--buit)"></i><i style="background:var(--b100)"></i><i style="background:var(--b200)"></i><i style="background:var(--b450)"></i><i style="background:var(--b600)"></i> Molt ocupada</div>
+    <div class="avis">Moltes aules semblen buides perquè 3 de cada 4 classes no tenen aula assignada a les dades. La proposta d'horari les omple.</div>
+  </section>
+  <aside>
+    <div class="resposta principal"><h4>Si 1r i 2n van al matí, hi cabem?</h4><div class="x">Sí, just</div><p>15 de 19 aules al moment més ple (dimarts).</p></div>
+    <div class="resposta"><h4>Classes al torn equivocat</h4><div class="x">2.008</div><p>S'han de canviar de matí a tarda o al revés.</p></div>
+    <div class="resposta"><h4>Classes sense aula</h4><div class="x">3 de 4</div><p>5.722 classes del 2n semestre.</p></div>
+    <div class="resposta"><h4>Un grau nou de 40 places</h4><div class="x">Hi cap</div><p>Necessita 26 h d'aula a la setmana; en queden 185.</p></div>
+    <div class="resposta"><h4>Problemes a arreglar</h4><div class="x">8</div><p>Cadascun amb una proposta.</p></div>
+  </aside>
+</div>
+</body>
+</html>
