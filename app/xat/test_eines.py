@@ -245,3 +245,48 @@ def test_horaris_limit_global(paquet, monkeypatch):
 def test_hores_invalides(paquet, hora):
     r = e.executa('aules_lliures', dict(dia='L', hora_ini=hora, durada_min=60, places_min=20))
     assert not r['ok']
+
+
+def test_metadades_xifres_sense_calcular(monkeypatch):
+    from types import SimpleNamespace
+    from nivell1 import troballes
+    def prohibit(*a, **kw):
+        pytest.fail('Les metadades no han de calcular ni llegir dades')
+    moduls = [SimpleNamespace(ID='fora-torn', calcula=prohibit),
+              SimpleNamespace(ID='inventada', TITOL='Pregunta inventada', calcula=prohibit)]
+    monkeypatch.setattr(troballes, 'moduls', lambda: moduls)
+    monkeypatch.setattr(e.dades, 'connexio', prohibit)
+    ids, desc = e._metadades_xifres()
+    assert ids == ['fora-torn', 'inventada']
+    assert desc.startswith("Primer opció per a xifres generals de l'horari d'avui (part 1).")
+    assert 'fora-torn: quantes sessions són al torn equivocat' in desc
+    assert '\ninventada: Pregunta inventada' in desc
+
+
+def test_definicions_xifra_i_sql():
+    from nivell1 import troballes
+    defs = {d['function']['name']: d['function'] for d in e.EINES}
+    assert defs['xifra']['parameters']['properties']['id']['enum'] == [m.ID for m in troballes.moduls()]
+    for m in troballes.moduls():
+        assert f'\n{m.ID}:' in defs['xifra']['description']
+    sql = defs['consulta_sql']['description']
+    for vista, columnes in e._COLUMNES_SQL.items():
+        assert f'{vista}: {columnes}' in sql
+    assert "el torn d'una sessió es dedueix de h_ini (abans de 14.30 matí); torn_requerit és el que li toca" in sql
+
+
+def test_error_duckdb_util_i_retallat(paquet):
+    r = e.executa('consulta_sql', {'sql': 'SELECT columna_inventada FROM sessions'})
+    assert not r['ok']
+    assert 'Binder Error' in r['error']
+    assert 'columna_inventada' in r['error']
+    assert len(r['error']) <= 300
+    r = e.executa('consulta_sql', {'sql': 'SELECT columna_' + 'x'*400 + ' FROM sessions'})
+    assert not r['ok'] and len(r['error']) == 300
+
+
+def test_error_conversio_no_exposa_valors(paquet):
+    r = e.executa('consulta_sql', {'sql': 'SELECT CAST(id_sessio AS INTEGER) FROM sessions'})
+    assert not r['ok']
+    assert 'Conversion Error' in r['error']
+    assert 'S0' not in r['error']
