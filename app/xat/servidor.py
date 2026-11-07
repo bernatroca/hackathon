@@ -312,6 +312,7 @@ def _trossos_prova(missatges: list[dict]) -> Iterator[tuple[str, object]]:
     for paraula in re.findall(r"\S+\s*", resposta):
         time.sleep(0.03)
         yield "tros", paraula
+    yield "consulta", _resum_consulta("eco_prova", {"missatges": len(missatges) - 1}, resultat)
     yield "fi", {"tallada": False, "model": "prova"}
 
 
@@ -346,6 +347,40 @@ def _executa(crida):
         return {"ok": False, "error": "No s’ha pogut executar l’eina."}
 
 
+def _resum_consulta(nom, args, resultat):
+    """Traça per al navegador, separada dels missatges que rep la IA."""
+    ids, vistos = [], set()
+
+    def afegeix(valor):
+        if isinstance(valor, str) and valor and valor not in vistos:
+            vistos.add(valor)
+            ids.append(valor)
+        elif isinstance(valor, list):
+            for element in valor:
+                afegeix(element)
+
+    def recorre(valor):
+        if isinstance(valor, dict):
+            for clau, element in valor.items():
+                if clau == "id_sessio":
+                    afegeix(element)
+                else:
+                    recorre(element)
+        elif isinstance(valor, list):
+            for element in valor:
+                recorre(element)
+
+    afegeix(resultat.get("id_sessio"))
+    if not ids:
+        recorre(resultat.get("resultat"))
+    resum = {"eina": nom, "args": args, "ok": resultat.get("ok") is True,
+             "consulta": resultat.get("consulta", ""), "id_sessio": ids[:10],
+             "total_id": len(ids)}
+    if not resum["ok"]:
+        resum["error"] = _sense_claus(str(resultat.get("error", "")))[:200]
+    return _neteja_secrets(resum)
+
+
 def _trossos(p: dict, missatges: list[dict]):
     if p["nom"] == "prova":
         yield from _trossos_prova(missatges)
@@ -370,6 +405,11 @@ def _trossos(p: dict, missatges: list[dict]):
         for crida in crides:
             yield "eina", crida["function"]["name"]
             resultat = _executa(crida)
+            try:
+                args = json.loads(crida["function"]["arguments"])
+            except (ValueError, TypeError):
+                args = {}
+            yield "consulta", _resum_consulta(crida["function"]["name"], args, resultat)
             conversa.append({"role": "tool", "tool_call_id": crida["id"],
                              "content": "<dades>\n" + json.dumps(resultat, ensure_ascii=False)
                              + "\n</dades>"})
@@ -432,6 +472,7 @@ def _amb_reserva(missatges):
 
 def _segueix(primer, trossos) -> Iterator[str]:
     escrit = False
+    consultes = []
     try:
         for tipus, valor in _amb_primer(primer, trossos):
             if tipus == "tros":
@@ -439,10 +480,14 @@ def _segueix(primer, trossos) -> Iterator[str]:
                 yield _sse({"tros": valor})
             elif tipus == "eina":
                 yield _sse({"eina": valor})
+            elif tipus == "consulta":
+                consultes.append(valor)
             elif tipus == "fi":
                 if not escrit:
                     yield _sse({"error": "La IA no ha tornat cap resposta."})
                     return
+                if consultes:
+                    yield _sse({"consultes": consultes})
                 yield _sse({"fi": True, **valor})
     except ErrorIA as e:
         yield _sse({"error": str(e)})
