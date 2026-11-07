@@ -12,7 +12,7 @@ from nivell2.base import carrega_oficial, Proposta, PAQUET, GRAU_NOU
 from components.graella import (grups, setmana_tipica, dilluns, celles_grup,
     celles_aula, taula_html, exporta_aula_html, resum_grup, llegenda_html)
 
-RESULTATS = Path("/Users/bernatroca/Bernat/Hackathon/resultats/nivell2")
+from nivell2.base import RESULTATS_PRINCIPAL; RESULTATS = RESULTATS_PRINCIPAL
 
 
 @st.cache_data
