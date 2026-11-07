@@ -56,21 +56,58 @@ def conflictes(col) -> dict[tuple[str, str], str]:
     return out
 
 
-def parelles_dobles(base) -> tuple[dict[str, list[str]], int]:
-    """Sessió sense espai -> sessions de la classe on va avui. També quantes no en tenen cap."""
+# Com pot estar lligada una classe del doble a la classe d'un altre grup, de més estricte a més ampli.
+# Les quatre primeres serveixen per aparellar; la de docent només es compta (és massa àmplia).
+CLAUS = {
+    'mateixa classe compartida': lambda s: [('u', s.unitat)],
+    'assignatura, tipus, grup, dia i hora': lambda s: [('g', s.codi, s.tipus, s.grup, s.data, s.ini)],
+    'assignatura, tipus, dia i hora': lambda s: [('t', s.codi, s.tipus, s.data, s.ini)],
+    'assignatura, dia i hora': lambda s: [('a', s.codi, s.data, s.ini)],
+}
+CLAU_DOCENT = 'mateix docent, dia i hora (només informatiu)'
+
+
+def _index(base):
     index = defaultdict(list)
     for s in base.sessions.values():
         if not s.sense_espai:
-            index[s.codi, s.tipus, s.grup, s.data, s.ini].append(s.id)
+            for f in CLAUS.values():
+                for k in f(s):
+                    index[k].append(s.id)
+            for d in s.docents:
+                index['d', d, s.data, s.ini].append(s.id)
+    return index
+
+
+def parelles_dobles(base) -> tuple[dict[str, list[str]], int]:
+    """Sessió sense espai -> sessions de la classe on va avui (primera clau que coincideix). I quantes no en tenen."""
+    index = _index(base)
     parelles, sense_parella = {}, 0
     for s in base.sessions.values():
         if s.sense_espai:
-            p = index.get((s.codi, s.tipus, s.grup, s.data, s.ini))
+            p = next((index[k] for f in CLAUS.values() for k in f(s) if index.get(k)), None)
             if p:
                 parelles[s.id] = p
             else:
                 sense_parella += 1
     return parelles, sense_parella
+
+
+def diagnosi_dobles(base) -> dict[str, int]:
+    """Només recomptes: amb quantes classes sense espai coincideix cada clau, i com són."""
+    index = _index(base)
+    dobles = [s for s in base.sessions.values() if s.sense_espai]
+    altres_codis = {s.codi for s in base.sessions.values() if not s.sense_espai}
+    cohorts_amb_classes_propies = {c for s in base.sessions.values() if not s.sense_espai for c in s.cohorts}
+    d = {nom: sum(any(index.get(k) for k in f(s)) for s in dobles) for nom, f in CLAUS.items()}
+    d[CLAU_DOCENT] = sum(any(index.get(('d', x, s.data, s.ini)) for x in s.docents) for s in dobles)
+    d["la mateixa assignatura la fa un altre grup (a qualsevol hora)"] = sum(s.codi in altres_codis for s in dobles)
+    d['tenen aula avui'] = sum(bool(s.aula) for s in dobles)
+    d['estudis diferents'] = len({c for s in dobles for c in s.cohorts})
+    d['dels quals també tenen classes amb espai'] = len({c for s in dobles for c in s.cohorts} & cohorts_amb_classes_propies)
+    for t in sorted({s.tipus for s in dobles}):
+        d[f'de tipus {t}'] = sum(s.tipus == t for s in dobles)
+    return d
 
 
 def comprova_dobles(base, col, parelles) -> dict[str, list[str]]:
@@ -135,6 +172,10 @@ def comprova(detall: Path | None = None) -> bool:
             print(f'    - que ja hi eren avui: {len(conf) - len(nous)}')
         print(f'  Dobles: {n_dobles} classes que fan amb un altre grup; {len(parelles)} coincideixen avui amb la classe '
               f'd\'aquell grup i {sense_parella} no en tenen cap a la mateixa hora.')
+        if path is None:
+            print('    Com estan lligades a les dades (quantes coincideixen amb cada criteri):')
+            for nom_clau, n in diagnosi_dobles(base).items():
+                print(f'      · {nom_clau}: {n}')
         print(f'    - separades de la classe on van: {len(d["separades"])}')
         print(f'    - amb aula pròpia nova (classe duplicada): {len(d["duplicades"])}')
         if path is not None and (nous or d['separades'] or d['duplicades']):

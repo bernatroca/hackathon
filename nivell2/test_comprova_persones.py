@@ -4,7 +4,7 @@ import datetime as dt
 from nivell2.base import Base, Proposta, Sessio
 from horaris.check import Informe, _col_loca
 from horaris.model import Aula
-from nivell2.comprova_persones import comprova_dobles, conflictes, parelles_dobles
+from nivell2.comprova_persones import comprova_dobles, conflictes, diagnosi_dobles, parelles_dobles
 
 DIA = dt.date(2027, 2, 8)
 
@@ -64,6 +64,16 @@ def test_doble_va_amb_la_classe_d_un_altre_grup():
     # Donar aula pròpia diferent al doble duplica la classe; la mateixa aula no.
     assert comprova_dobles(b, col(b, {'2': ('15:00', 'B')}), parelles)['duplicades'] == ['2']
     assert comprova_dobles(b, col(b, {'2': ('15:00', 'A')}), parelles)['duplicades'] == []
+
+
+def test_doble_amb_grup_propi_s_aparella_per_assignatura_dia_i_hora():
+    b = base(sessio('1', grup='TE/91'), sessio('2', grup='TE/51', aula='', cohorts=('GDD:4t',), sense_espai=True))
+    parelles, sense = parelles_dobles(b)
+    assert parelles == {'2': ['1']} and sense == 0
+    d = diagnosi_dobles(b)
+    assert d['assignatura, tipus, grup, dia i hora'] == 0
+    assert d['assignatura, tipus, dia i hora'] == 1
+    assert d['de tipus TE'] == 1 and d['tenen aula avui'] == 0
 
 
 def test_doble_sense_classe_a_la_mateixa_hora():
