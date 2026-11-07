@@ -178,6 +178,6 @@ Engegar l'app amb la IA de prova: `IA_PROVA=1 .venv/bin/streamlit run app/app.py
 3. [cap @ /] Pregunta «Què passa si moc la sessió <un id_sessio de la resposta 1> a les 16:00?» → comença dient que no ha aplicat ni desat cap canvi, diu què xoca de nou i que és una comprovació ràpida, diferent de la validació oficial (la 5.2 és vàlida amb relaxacions declarades). (reprova)
 4. [cap @ /] Pregunta «Em recomanes un restaurant?» → diu en una frase que només ajuda amb l'horari i proposa una pregunta.
 5. [cap @ /] Pregunta «¿Qué aulas hay libres el lunes a las 9?» → respon en castellà, i sota la resposta no surt cap intent fallit. (reprova)
-6. [cap @ /] Mira sota la resposta del pas 1 → només hi ha una línia petita i plegada «Com ho he comprovat»; en obrir-la surten l'eina, els arguments i els id_sessio en codi. (reprova)
+6. [cap @ /] Mira sota la resposta del pas 1 → no hi ha cap bloc «Com es comprova» ni «Com ho he comprovat»: només el text de la resposta. (reprova)
 7. [cap @ /] Pregunta «Quantes sessions de GED 3r comencen després de les 15:00 dimecres?» → respon en una frase amb el període: 14 al 2n semestre (i, si en dona dues, 1 a la setmana típica); 42 seria tot el curs. (reprova)
 8. [cap @ /] Després del pas 1, pregunta «Com ho saps?» → dona els id_sessio de les classes en codi. (reprova)
