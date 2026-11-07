@@ -6,6 +6,7 @@ from html import escape
 from statistics import median
 
 from nivell2.base import fmt, hm
+from horaris.model import a_traslladar
 
 DIES = ('L', 'M', 'X', 'J', 'V')
 NOMS_DIES = ('Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres')
@@ -50,6 +51,8 @@ class Cella:
     canvi_aula: bool
     relaxacions: tuple[str, ...] = ()
 
+    aula_assignada: bool = False
+
     @property
     def canvi(self):
         return self.canvi_franja or self.canvi_aula
@@ -84,8 +87,10 @@ def celles(base, proposta, setmana, *, cohort=None, linia=None, aula=None,
             raise ValueError(f'Hora incorrecta a la sessió {sid}.')
         resultat.append(Cella(sid, a.dia, inici, inici + s.durada, a.aula,
             (noms or {}).get(s.codi, s.codi), TIPUS.get(s.tipus, s.tipus), s.grup,
-            data != s.data or inici != s.ini, a.aula != s.aula,
-            tuple((relaxacions or {}).get(sid, ()))))
+            data != s.data or inici != s.ini,
+            bool(s.aula and not a_traslladar(s.aula) and not s.sense_espai and a.aula != s.aula),
+            tuple((relaxacions or {}).get(sid, ())),
+            bool(not s.aula and a.aula and not s.sense_espai)))
     return sorted(resultat, key=lambda c: (DIES.index(c.dia), c.ini, c.id_sessio))
 
 
@@ -101,18 +106,19 @@ def celles_aula(base, proposta, setmana, aula, **kwargs):
 def resum_grup(base, proposta, actuals, noves):
     """Compara les sessions presents en qualsevol de les dues setmanes visibles."""
     ids = {c.id_sessio for c in actuals + noves}
-    franja = aula = torn = 0
+    franja = aula = torn = assignades = 0
     for sid in ids:
         s, a = base.sessions[sid], proposta.files[sid]
         data = date.fromisoformat(a.data) if a.data else dilluns(s.data) + timedelta(days=DIES.index(a.dia))
         inici = hm(a.h_ini)
         franja += data != s.data or inici != s.ini
-        aula += a.aula != s.aula
+        aula += bool(s.aula and not a_traslladar(s.aula) and not s.sense_espai and a.aula != s.aula)
+        assignades += bool(not s.aula and a.aula and not s.sense_espai)
         torn += (s.ini < 870) != (inici < 870)
     abans = len({c.aula for c in actuals if c.aula})
     despres = len({c.aula for c in noves if c.aula})
     return (f'{franja} classes canvien de dia o d’hora · {aula} canvien d’aula · '
-            f'{torn} canvien de torn · Aules diferents aquesta setmana: {abans} avui → {despres} a la proposta.')
+            f'{assignades} amb aula assignada · {torn} canvien de torn · Aules diferents aquesta setmana: {abans} avui → {despres} a la proposta.')
 
 
 CSS = ''' .horari-scroll{overflow:auto;min-width:0}.horari{border-collapse:collapse;table-layout:fixed;width:100%;min-width:580px;font:12px/1.35 system-ui;color:var(--tinta,#0b0b0b);background:white}.horari th,.horari td{border:1px solid #e6e5e0;padding:3px;vertical-align:top}.horari th{background:#f4f3ef}.horari tbody tr{height:32px}.horari .hora{width:78px}.classe{background:#cde2fb;border-left:3px solid #2a78d6;border-radius:4px;padding:5px;overflow-wrap:anywhere;height:100%;box-sizing:border-box}.classe.canvi{background:#fff5dc;border-color:#b67b00}.classe.relaxada{border:2px dashed #a12c2c}.classe small{display:block}.horari caption{text-align:left;font-size:16px;font-weight:600;padding:8px}.comparacio-horaris{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;container-type:normal}@container contingut (max-width:1180px){.comparacio-horaris{grid-template-columns:minmax(0,1fr)}}@media(max-width:900px){.comparacio-horaris{grid-template-columns:minmax(0,1fr)}}'''
@@ -160,6 +166,7 @@ def taula_html(celles, titol='Horari setmanal'):
                 marques = (' canvi' if c.canvi else '') + (' relaxada' if c.relaxacions else '')
                 detall = f'{fmt(c.ini)}–{fmt(c.fi)} · {c.tipus} · {c.grup} · {c.aula or "Sense aula assignada"}'
                 avis = ('Canvi de franja. ' if c.canvi_franja else '') + ('Canvi d’aula. ' if c.canvi_aula else '')
+                avis += 'Aula assignada. ' if c.aula_assignada else ''
                 avis += ' '.join(c.relaxacions)
                 html += f'<td rowspan="{final-primera}"><div class="classe{marques}" title="{escape(avis, quote=True)}"><b>{escape(c.assignatura)}</b><small>{escape(detall)}</small><small>{escape(avis)}</small></div></td>'
         html += '</tr>'

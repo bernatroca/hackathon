@@ -65,8 +65,9 @@ def test_percentatges_unio_i_pitjor_cohort(tmp_path):
     rows = {r['cohort']: r for r in d['sessions_mogudes']}
     assert rows['GED:1r']['mogudes'] == 1
     assert rows['GED:1r']['mogudes_pct'] == pytest.approx(100 / 3)
-    assert rows['GEQ:1r']['mogudes_pct'] == 100
-    assert d['pitjor_cohort'] == ['GEQ:1r']
+    assert rows['GEQ:1r']['mogudes_pct'] == 0
+    assert rows['GEQ:1r']['aula'] == 1
+    assert d['pitjor_cohort'] == ['GED:1r']
     assert d['excepcions'][0]['motiu'] == 'Prova explicada'
     assert d['excepcions_resum'][0]['percentatge'] == pytest.approx(100 / 3)
 
@@ -93,7 +94,7 @@ def test_tipica_mediana_i_franja_interseccio():
     b.ordre.append(s.id)
     p = Proposta.de_base(b)
     r = pics_i_mides(b, b, colloca(b, p))['mati']
-    assert r['pitjor']['classes'] == 2
+    assert r['pitjor']['classes'] == 1
     assert r['tipica']['classes'] == 1
     assert r['tipica']['setmana'] == '2027-W06'
 
@@ -130,3 +131,41 @@ def test_cli_tres_fitxers(tmp_path):
     d = json.loads((tmp_path / 'junta.json').read_text())
     assert {'pics', 'sessions_mogudes', 'excepcions', 'excepcions_resum'} <= d.keys()
     assert all((tmp_path / f'junta.{ext}').stat().st_size for ext in ('json', 'md', 'html'))
+
+
+def test_proposta_51_pic_i_franja():
+    from pathlib import Path
+    path = Path('/Users/bernatroca/Bernat/Hackathon/resultats/nivell2/5.1/proposta.csv')
+    b, m, _, _ = reals()
+    p, col = carrega_proposta(path, b)
+    d = calcula(p, b, m, col)
+    assert all(r['mogudes_pct'] == 0 for r in d['sessions_mogudes'])
+    assert all(d['pics'][t]['pitjor']['classes'] <= 19 for t in ('mati', 'tarda'))
+    assert all(not d['pics'][t]['pitjor']['estimacio'] for t in ('mati', 'tarda'))
+
+
+def test_assignar_aula_no_es_moure():
+    b = petita()
+    b.sessions['0'].aula = ''
+    b.sessions['1'].aula = 'J/001'
+    b.sessions['2'].sense_espai = True
+    p = Proposta.de_base(b)
+    for a in p.files.values():
+        a.aula = 'A'
+    d = calcula(p, b, b, colloca(b, p))
+    r, = d['sessions_mogudes']
+    assert r['mogudes'] == r['aula'] == 0
+    assert r['aules_assignades'] == 1
+
+
+def test_pic_exclou_seminaris_i_externes_i_compta_aules_diferents():
+    b = petita()
+    b.aules['S'] = Aula('S', '', 'Seminaris', 30)
+    for i, aula in enumerate(('S', 'B3/0021', '')):
+        s = deepcopy(b.sessions['0'])
+        s.id, s.aula = f'extra{i}', aula
+        b.sessions[s.id] = s
+        b.ordre.append(s.id)
+    p = Proposta.de_base(b)
+    r = pics_i_mides(b, b, colloca(b, p))['mati']['pitjor']
+    assert r['classes'] == 2 and r['estimacio']
