@@ -14,10 +14,9 @@ PREGUNTES = {
 PER_DEFECTE = ['Quina aula de 60 places està lliure dijous a les 10?', 'On té classe el grup 81 dimarts?']
 
 
-@st.cache_resource(show_spinner=False)
 def _api():
-    # Import diferit: el backend pot no estar integrat encara. Els errors no
-    # queden a la memòria cau i es pot tornar a provar al renderitzat següent.
+    # Import diferit: el backend pot no estar integrat encara. arrenca és
+    # idempotent i comprova a cada renderitzat que el servidor continua viu.
     from xat import servidor
     url = servidor.arrenca().rstrip('/')
     return url if url.endswith('/api/xat') else url + '/api/xat'
@@ -86,6 +85,7 @@ def posa_widget(pantalla: dict | None = None):
     document.head.appendChild(script);
   }}
   window.XatIA.inicia({_json(opcions)});
+  window.XatIA.api({_json(api)});
   window.XatIA.pantalla({_json(pantalla)});
 }})();
 </script>''', unsafe_allow_javascript=True)

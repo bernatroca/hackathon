@@ -9,18 +9,17 @@ import pytest
 from xat import widget
 
 
-@pytest.fixture(autouse=True)
-def neteja_cache():
-    widget._api.clear()
-    yield
-    widget._api.clear()
-
-
-def test_arrenca_un_sol_cop_i_endpoint():
-    with patch('xat.servidor.arrenca', create=True, return_value='http://localhost:8502') as arrenca:
-        assert widget._api() == 'http://localhost:8502/api/xat'
-        assert widget._api() == 'http://localhost:8502/api/xat'
-        arrenca.assert_called_once_with()
+def test_arrenca_a_cada_renderitzat_i_actualitza_endpoint():
+    with patch('xat.servidor.arrenca', create=True,
+               side_effect=['http://localhost:8502', OSError('aturat'), 'http://localhost:8503/api/xat/']) as arrenca, \
+            patch.object(widget.st, 'html') as html:
+        widget.posa_widget(None)
+        assert 'window.XatIA.api("http://localhost:8502/api/xat")' in html.call_args.args[0]
+        widget.posa_widget(None)
+        assert '%22teClau%22%3Afalse' in html.call_args.args[0]
+        widget.posa_widget(None)
+        assert 'window.XatIA.api("http://localhost:8503/api/xat")' in html.call_args.args[0]
+        assert arrenca.call_count == 3
 
 
 def test_endpoint_complet():
@@ -99,7 +98,7 @@ const vm = require('node:vm');
 const assert = require('node:assert/strict');
 let desat;
 const sandbox = {
-  window: {}, TextDecoder, performance: { now: () => 0 },
+  window: {}, TextDecoder, AbortSignal, performance: { now: () => 0 },
   localStorage: {
     setItem: (k, v) => { if (k === 'prova') desat = v; },
     getItem: (k) => k === 'prova' ? desat : null,
@@ -107,6 +106,7 @@ const sandbox = {
 };
 const source = fs.readFileSync(process.argv[1], 'utf8').replace('  window.XatIA = {', `
   window.prova = { markdown, htmlMissatge, llegeixFlux, perAlServidor, desa, llegeixMemoria, estat,
+    adreca() { return op.api; },
     prepara() { op = { clauMemoria: 'prova' }; },
     parcial(text) {
       el = {conversa: {innerHTML: ''}, final: {scrollIntoView() {}}};
@@ -145,6 +145,23 @@ async function flux(fi) {
   }})});
 }
 (async () => {
+  const urls = [];
+  sandbox.fetch = async (url) => { urls.push(url); return {json: async () => ({teClau: false})}; };
+  await sandbox.window.XatIA.api('data:application/json,indisponible');
+  assert.equal(p.estat.llesta, false);
+  sandbox.fetch = async (url) => { urls.push(url); return {json: async () => ({teClau: true})}; };
+  await sandbox.window.XatIA.api('http://localhost:8503/api/xat');
+  assert.equal(p.adreca(), 'http://localhost:8503/api/xat');
+  assert.equal(urls[1], 'http://localhost:8503/api/xat');
+  assert.equal(p.estat.llesta, true);
+  let acabaAntiga;
+  sandbox.fetch = () => new Promise((resolve) => { acabaAntiga = resolve; });
+  const antiga = sandbox.window.XatIA.api('http://localhost:8502/api/xat');
+  sandbox.fetch = async () => ({json: async () => ({teClau: true})});
+  await sandbox.window.XatIA.api('http://localhost:8503/api/xat');
+  acabaAntiga({json: async () => ({teClau: false})});
+  await antiga;
+  assert.equal(p.estat.llesta, true);
   const r = await flux(true);
   assert.equal(r.text, 'Resposta inventada');
   assert.equal(r.consultes[0].total_id, 23);

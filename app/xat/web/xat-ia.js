@@ -636,14 +636,19 @@
     pinta();
   }
 
+  let salutActual = 0;
   async function miraSalut() {
+    const peticio = ++salutActual;
+    let llesta;
     try {
       const r = await fetch(op.api, { signal: AbortSignal.timeout(8000) });
       const dades = await r.json();
-      estat.llesta = !!(dades && dades.teClau);
+      llesta = !!(dades && dades.teClau);
     } catch (e) {
-      estat.llesta = false;
+      llesta = false;
     }
+    if (peticio !== salutActual) return;
+    estat.llesta = llesta;
     pinta();
   }
 
@@ -658,6 +663,11 @@
       });
       pinta();
       miraSalut();
+    },
+    api(url) {
+      if (!op) return;
+      op.api = url;
+      return miraSalut();
     },
     pantalla(p) {
       estat.pantalla = p || null;
