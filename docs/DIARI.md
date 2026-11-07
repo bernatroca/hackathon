@@ -270,3 +270,10 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - Com que no podem llegir les dades, hem fet nivell2/comprova_persones.py: l'executa l'equip i només en surten recomptes. Primer intent: no aparellava cap classe del doble (la clau incloïa el grup); amb claus més amples, gairebé totes s'aparellen.
 - Decisió: les classes del doble es mouen amb la classe on van i no tenen aula pròpia; les fixades de 1r i 2n sense aula reben aula i es declara la regla 1 relaxada; les poques sense parella no es mouen.
 - n2-backend-2 (Codex gpt-6.1-sol high): 5.2 VALIDA AMB RELAXACIONS DECLARADES, i la comprovació de persones dona CORRECTE (cap solapament nou; en resol alguns d'avui).
+
+### [ds 21:55] SOLUCIÓ · 5.3 i 5.4 vàlids: la part 2 té totes les propostes
+- n2-backend-3 i n2-backend-4 (Codex gpt-6.1-sol high) en paral·lel, sobre el 5.2 congelat i en worktrees separats.
+- 5.3 (imprevistos): reparació local, `repara(proposta, canvi)` a nivell2/reparacio.py, en segons. Canvia el mínim; les sessions fixades que eren en una aula tancada només canvien d'aula, amb la relaxació declarada.
+- 5.4 (grau nou): resposta 1, hi cap, sense moure cap sessió del 5.2 i amb rutina setmanal.
+- Tots dos: verificador oficial VALIDA AMB RELAXACIONS DECLARADES, 0 incompliments que compten; comprovació de persones CORRECTE a tots els escenaris.
+- La targeta «Hi cap el matí?» de la portada ja es posa en verd sola amb el 5.2; la del grau nou ho farà amb el 5.4 (Part 1).
