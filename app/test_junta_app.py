@@ -64,7 +64,7 @@ def test_percentatges_ordenats_i_absoluts_al_costat():
     b = dict(a, nom='Titulació petita', sessions=2, mogudes=2, mogudes_pct=100, franja=1, franja_pct=50)
     fig = junta.grafic_mogudes([a, b])
     assert list(fig.data[0].x) == [50, 20]
-    assert '1/2 sessions' in fig.data[0].text[0]
+    assert '1/2 classes' in fig.data[0].text[0]
     assert obre(dict(d, sessions_mogudes=[a, b]), ['Avui', '5.2']).get('plotly_chart')
 
 
@@ -94,8 +94,8 @@ def test_excepcions_agrupades_i_pic_vermell():
         prova_impossibilitat=None) for i in range(2)]
     app = obre(d, ['Avui'])
     assert any('estat vermell' in m.value for m in app.markdown)
-    assert any(e.label == 'Veure les dades' for e in app.expander)
-    assert app.dataframe[2].value.iloc[0]['Sessions'] == 2
+    assert any(e.label == 'Detall tècnic' for e in app.expander)
+    assert app.dataframe[2].value.iloc[0]['Classes'] == 2
     assert len(app.dataframe[3].value) == 2
 
 
@@ -125,10 +125,10 @@ def test_mides_actuals_i_explicacio():
     d = dades()
     app = obre(d, ['Avui', '5.1'])
     taula = app.dataframe[0].value
-    assert taula['Matí: ocupades al pic'].sum() == d['pics']['mati']['pitjor']['classes']
-    assert taula['Tarda: ocupades al pic'].sum() == d['pics']['tarda']['pitjor']['classes']
-    assert any('diferents ocupades durant cada hora' in c.value for c in app.caption)
-    assert any('alumnes (estimació)' in c.value for c in app.caption)
+    assert taula['Matí: ocupades al màxim'].sum() == d['pics']['mati']['pitjor']['classes']
+    assert taula['Tarda: ocupades al màxim'].sum() == d['pics']['tarda']['pitjor']['classes']
+    assert any('moment de més ocupació' in c.value for c in app.caption)
+    assert any('alumnes previstos (estimació)' in c.value for c in app.caption)
 
 
 def test_mides_antigues_es_regeneren(tmp_path):
@@ -146,4 +146,28 @@ def test_mides_antigues_es_regeneren(tmp_path):
     app = obre(d, ['Avui'])
     assert any('Resum antic' in i.value for i in app.info)
     assert not app.get('download_button')
-    assert app.dataframe[0].value['Matí: marge acumulat'].isna().all()
+    assert app.dataframe[0].value['Matí: sobren (+) o falten (−)'].isna().all()
+
+
+def test_textos_principals_sense_codis_i_detall_tancat():
+    d = dades()
+    d['com_ho_hem_calculat'] = 'R8 PLAB llindar cota'
+    d['excepcions'] = [dict(id_sessio='S90001', cohorts=['GXX:1r'],
+        torn_requerit='mati', motiu='R1-TORN PLAB TE/ PAUL SEM J R8',
+        prova='2027-03-08 15:00', prova_impossibilitat=None)]
+    app = obre(d, ['Avui', '5.2'])
+    detall = next(e for e in app.expander if e.label == 'Detall tècnic')
+    assert not detall.proto.expanded
+    nodes_tecnics = {id(node) for node in detall}
+    for node in app:
+        if id(node) in nodes_tecnics:
+            continue
+        if node.type in ('markdown', 'caption', 'subheader', 'info'):
+            text = node.value
+        elif node.type == 'arrow_data_frame':
+            text = node.value.to_string(index=False)
+        else:
+            continue
+        for cadena in ('R8', 'R1-', 'PLAB', ' J ', 'TE/', 'PAUL', 'SEM', 'llindar', 'cota'):
+            assert cadena not in text
+    assert any('R1-TORN PLAB TE/ PAUL SEM J R8' in m.value for m in detall.markdown)

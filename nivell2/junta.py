@@ -27,6 +27,31 @@ NOMS = {'GED': 'Enginyeria de Dades', 'GEI': 'Enginyeria Informàtica',
         'MET': 'Màster en Enginyeria de Telecomunicació', 'MRICSE': 'Màster (pla 1530)'}
 
 
+COM_HO_HEM_CALCULAT = (
+    'Hem comptat les aules necessàries per a les classes del segon semestre, '
+    'amb els dies i les hores de la proposta. '
+    'Les places de les aules i els torns venen de les dades oficials; '
+    'el nombre d’alumnes ve de les dades del model. '
+    'Si una classe no té aula, estimem quantes places necessita. '
+    'També comptem quines classes canvien de dia, d’hora o d’aula i quines queden fora del torn que els toca.')
+
+DETALL_TECNIC = (
+                'Segon semestre; hores proposades; franges d’una hora des de les 8.30 '
+                '(última: 20.30–21); aules ordinàries diferents ocupades (R8). Sense aula: estimació de demanda ordinària, sense PLAB, dobles sense espai, seminaris, laboratoris ni aules externes de partida. Mides segons les places de l’aula ocupada; sense aula, alumnes estimats. Compartides un cop i alumnes sumats; sense laboratoris '
+                'ni dobles sense espai per a la demanda. Setmana típica: sessions més properes '
+                'a la mediana, desempat per la primera. Pitjor setmana: pic màxim de cada torn. '
+                'Torns de la base oficial, segons l’hora d’inici. Alumnes de la base del model. '
+                'Sessió moguda: canvi de dia o hora; canvi d’aula només si ja en tenia, sense J ni dobles sense espai; denominador: totes les sessions de cada titulació i curs. '
+                'Les compartides compten en cada titulació. Excepcions: totes les sessions fora de torn, '
+                'incloses les heretades que el verificador pot no penalitzar. No és una validació de l’horari.')
+DETALL_TECNIC += (
+    ' R1-TORN identifica la regla de torn; PLAB identifica els laboratoris. '
+    'Les aules J són aules d’un altre edifici que s’han de portar a l’Escola. '
+    'Llindars acumulats: demanda i oferta de totes les mides a partir del mínim indicat. '
+    'Oferta limitada a 19, amb reserva flexible de dues aules: cota optimista, '
+    'no garantia d’encaix. No se sumen els marges.')
+
+
 def nom(cohort):
     tit, _, curs = cohort.partition(':')
     sufix = ', curs desconegut' if curs == '?' else f', {curs}' if curs not in ('', 'M') else ''
@@ -163,60 +188,62 @@ def calcula(proposta, base, model, col, relaxacions=None):
                                   'percentatge': 100 * n / totals[c]}
                                  for (m, c), n in sorted(grups.items())],
             'torn_no_avaluable': sum(c.s.torn not in ('mati', 'tarda') for c in col.values()),
-            'com_ho_hem_calculat': (
-                'Segon semestre; hores proposades; franges d’una hora des de les 8.30 '
-                '(última: 20.30–21); aules ordinàries diferents ocupades (R8). Sense aula: estimació de demanda ordinària, sense PLAB, dobles sense espai, seminaris, laboratoris ni aules externes de partida. Mides segons les places de l’aula ocupada; sense aula, alumnes estimats. Compartides un cop i alumnes sumats; sense laboratoris '
-                'ni dobles sense espai per a la demanda. Setmana típica: sessions més properes '
-                'a la mediana, desempat per la primera. Pitjor setmana: pic màxim de cada torn. '
-                'Torns de la base oficial, segons l’hora d’inici. Alumnes de la base del model. '
-                'Sessió moguda: canvi de dia o hora; canvi d’aula només si ja en tenia, sense J ni dobles sense espai; denominador: totes les sessions de cada titulació i curs. '
-                'Les compartides compten en cada titulació. Excepcions: totes les sessions fora de torn, '
-                'incloses les heretades que el verificador pot no penalitzar. No és una validació de l’horari.')}
+            'com_ho_hem_calculat': COM_HO_HEM_CALCULAT,
+            'detall_tecnic': DETALL_TECNIC}
 
 
 def documents(d):
     """Una mateixa pàgina de contingut per al Markdown i l’HTML imprimible."""
     md = ['# Resum per a la Junta', f"Data: {d['data'][:10]}",
-          '## Pic d’aules ordinàries',
-          'Comptem les aules ordinàries diferents ocupades durant cada hora. Sense aula assignada, estimem la demanda ordinària.', '21 aules ordinàries − 2 de reserva = **19 disponibles**.',
-          '| Torn | Pitjor setmana: pic | Setmana típica: pic |', '|---|---|---|']
+          '## Moment amb més aules ocupades',
+          'Mostrem quantes aules calen en el moment de més ocupació. Si falta assignar una aula, en fem una estimació.', 'De les 21 aules per a classes, dues sempre han de quedar lliures: **19 disponibles**.',
+          '| Torn | Màxim de la setmana més plena | Màxim d’una setmana habitual |', '|---|---|---|']
     for torn, nom_torn in [('mati', 'Matí'), ('tarda', 'Tarda')]:
         p, t = d['pics'][torn]['pitjor'], d['pics'][torn]['tipica']
-        nom_torn += ' (estimació)' if p['estimacio'] else ' (aules ordinàries)'
+        nom_torn += ' (estimació)' if p['estimacio'] else ' (aules per a classes)'
         md.append(f"| {nom_torn} | {p['classes']}/19 · {p['setmana']} · {p['hora']} | {t['classes']}/19 · {t['setmana']} · {t['hora']} |")
-    md += ['## Aules ordinàries per mida (estimació si falta aula)',
-           'Les mides són les places de l’aula assignada; sense aula, les dels alumnes (estimació). Les ocupades al pic se sumen i coincideixen amb el pic del torn. Marge al pitjor moment del semestre: + sobren; − falten. Llindars acumulats: una aula gran pot acollir un grup petit. Reserva flexible de dues aules; cota optimista, no garantia d’encaix. No se sumen els marges.',
-           '| Places | Aules ordinàries | Ocupades al pic matí / tarda | Matí: demanda/oferta (marge) acumulats | Tarda: demanda/oferta (marge) acumulats |', '|---|---|---|---|---|']
+    md += ['## Aules per nombre de places (estimació si falta aula)',
+           'La mida indica les places de l’aula; si encara no en té, indica els alumnes previstos. Les aules ocupades per mida sumen el màxim de cada torn. Comparem també les classes i les aules prou grans: + vol dir que sobren aules; − vol dir que en falten. Una aula gran pot acollir un grup petit. Cal mantenir dues aules lliures. No s’han de sumar els resultats de les files. Aquest recompte no garanteix que tot l’horari encaixi.',
+           '| Places · mínim per comparar | Aules d’aquesta mida | Ocupades al màxim: matí / tarda | Matí: classes/aules prou grans (sobren o falten) | Tarda: classes/aules prou grans (sobren o falten) |', '|---|---|---|---|---|']
     for i, (_, _, mida) in enumerate(MIDES):
         vals = [d['pics'][t]['mides'][i] for t in ('mati', 'tarda')]
         llindar = ['Totes', '≥35', '≥51', '≥64', '≥91'][i]
         md.append('| ' + mida + ' · ' + llindar + f" | {vals[0]['aules_categoria']} | {vals[0]['ocupades_al_pic']} / {vals[1]['ocupades_al_pic']} | " + ' | '.join(
             f"{v['demanda_acumulada']}/{v['oferta_acumulada']} ({v['marge']:+})" for v in vals) + ' |')
-    md += ['## Sessions mogudes',
-           'Sessions mogudes: canvi de dia o hora. Aules assignades: abans sense aula; no són canvis. Percentatge i nombre sobre les seves sessions.',
-           '| Titulació i curs | Canvien de franja | Canvien d’aula | Canvien de torn | Aules assignades |', '|---|---|---|---|---|']
+    md += ['## Classes que canvien',
+           'Comptem les classes que canvien de dia o d’hora. Les aules assignades són per a classes que abans no en tenien. Els percentatges es calculen sobre totes les classes de cada titulació i curs.',
+           '| Titulació i curs | Canvien de dia o hora | Canvien d’aula | Canvien de torn | Aules assignades |', '|---|---|---|---|---|']
     for r in d['sessions_mogudes']:
         md.append(f"| {r['nom']} | {r['mogudes_pct']:.1f}% ({r['mogudes']}/{r['sessions']}) | " +
                   ' | '.join(f"{r[c+'_pct']:.1f}% ({r[c]})" for c in ('aula', 'torn')) + f" | {r['aules_assignades']} |")
     pitjors = [r for r in d['sessions_mogudes'] if r['cohort'] in d['pitjor_cohort']]
-    md.append('Cap sessió moguda; totes les titulacions i cursos empaten al 0%.' if all(r['mogudes'] == 0 for r in pitjors)
-              else 'Pitjor percentatge: ' + '; '.join(f"{r['nom']}: {r['mogudes_pct']:.1f}% ({r['mogudes']})" for r in pitjors) + '.')
-    md += ['## Excepcions al torn requerit']
+    md.append('Cap classe canvia de dia ni d’hora; totes les titulacions i cursos empaten al 0%.' if all(r['mogudes'] == 0 for r in pitjors)
+              else 'Percentatge més alt: ' + '; '.join(f"{r['nom']}: {r['mogudes_pct']:.1f}% ({r['mogudes']})" for r in pitjors) + '.')
+    md += ['## Classes fora del torn que els toca']
     if not d['excepcions']:
-        md.append('No hi ha cap sessió fora del torn requerit.')
+        md.append('No hi ha cap classe fora del torn que li toca.')
     else:
-        md.append(f"{len(d['excepcions'])} sessions fora de torn. L’hora acredita l’incompliment, no la impossibilitat de corregir-lo. Detall individual i hores a junta.json.")
+        md.append(f"{len(d['excepcions'])} classes fora del torn que els toca. Sabem a quina hora es fan, però això no demostra que sigui impossible canviar-les. Els motius consten al detall tècnic.")
         motius = defaultdict(list)
         for r in d['excepcions_resum']:
             motius[r['motiu']].append(f"{r['nom']}: {r['percentatge']:.1f}% ({r['sessions']})")
         for motiu, files in motius.items():
-            md.append(motiu + ': ' + '; '.join(files) + '.')
+            md.append('; '.join(files) + '.')
     if d['torn_no_avaluable']:
-        md.append(f"Torn no avaluable: {d['torn_no_avaluable']} sessions sense torn definit.")
-    md += ['## Com ho hem calculat', d['com_ho_hem_calculat']]
+        md.append(f"No podem comprovar el torn de {d['torn_no_avaluable']} classes perquè no tenen un torn definit.")
+    md += ['## Com ho hem calculat', COM_HO_HEM_CALCULAT,
+           '## Detall tècnic', '<small>', d.get('detall_tecnic', DETALL_TECNIC)]
+    for r in d['excepcions_resum']:
+        md.append(r['motiu'] + ': ' + r['nom'] + f": {r['percentatge']:.1f}% ({r['sessions']}).")
+    md.append('</small>')
     # Petit renderitzador segur: tot text de la proposta s’escapa abans d’anar a HTML.
     html, taula = [], False
     for line in md:
+        if line == '## Detall tècnic':
+            html.append('<section class="detall-tecnic">')
+        if line in ('<small>', '</small>'):
+            html.append(line)
+            continue
         if line.startswith('|'):
             if not taula:
                 html.append('<table>')
@@ -230,7 +257,9 @@ def documents(d):
                 taula = False
             tag = 'h1' if line.startswith('# ') else 'h2' if line.startswith('## ') else 'p'
             html.append(f'<{tag}>' + escape(line.lstrip('# ')).replace('**', '') + f'</{tag}>')
+    html.append('</section>')
     css = '''@page{size:A4;margin:10mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#172b38;margin:0;font-size:8pt;line-height:1.15}main{max-width:190mm;margin:auto}h1{font-size:17pt;margin:0 0 3mm}h2{font-size:10pt;margin:3mm 0 1mm}p{margin:1mm 0}table{width:100%;border-collapse:collapse;font-size:7.2pt}td{padding:1mm;border-bottom:1px solid #ccd5da}tr:first-child{font-weight:bold;background:#edf2f4}@media screen{body{background:#eee;padding:12mm}main{background:white;padding:8mm;max-width:210mm}}@media print{main{width:190mm}h2{break-after:avoid}tr{break-inside:avoid}}'''
+    css += '.detall-tecnic{font-size:7pt}.detall-tecnic h2{font-size:8pt}'
     css += '@media print{#page{width:190mm;height:277mm}}'
     ajust = '''<script>
 window.addEventListener('beforeprint', () => {
