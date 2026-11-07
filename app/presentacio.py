@@ -2,7 +2,7 @@
 import re
 import pandas as pd
 from servei import AULES_DISPONIBLES, PLACES_GRAU_NOU
-from textos import TEXTOS
+from textos import TEXTOS, TEXTOS_PORTADA
 from components.format import numero
 
 DIES = {'L': 'Dilluns', 'M': 'Dimarts', 'X': 'Dimecres', 'J': 'Dijous', 'V': 'Divendres'}
@@ -209,6 +209,22 @@ def text(t, altres=None, *, setmana_triada=None):
 def abast(t):
     setmana = (t.extra or {}).get('setmana')
     return f'Detall de la setmana {setmana}' if setmana else 'Setmana no indicada'
+
+
+def text_portada(t, info):
+    """Escurça només la presentació; conserva xifres, estat i explicació del detall."""
+    resum = {k: v.format_map(info['c']) for k, v in TEXTOS_PORTADA[t.id].items()}
+    if t.id == 'hi-cap-mati':
+        if info['c'].get('falla'):
+            resum['frase'] = 'Falta espai per a algunes mides d’aula; consulta el detall.'
+        elif info['c'].get('validat'):
+            resum['frase'] = 'L’horari proposat ho confirma amb el verificador oficial.'
+    elif t.id == 'marge-grau-nou':
+        if info['c'].get('validat'):
+            resum['frase'] = 'Hores setmanals necessàries, amb encaix confirmat pel verificador oficial.'
+        elif info['estat'] == 'vermell':
+            resum['frase'] = 'Hores setmanals necessàries; cal revisar si el grau hi cap.'
+    return dict(info, **resum)
 
 
 def grup_estat(info):

@@ -5,169 +5,122 @@
   --ambre: #fab219; --ambre-fons: #fff5dc; --ambre-text: #8a5c00;
   --vermell: #d03b3b; --vermell-fons: #fbe9e9; --vermell-text: #a12c2c;
 }
-* { box-sizing: border-box; }
-body { margin: 0; background: var(--fons); color: var(--tinta); font: 17px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif; display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
-aside.menu { background: var(--targeta); border-right: 1px solid var(--linia); padding: 32px 24px; }
-aside.menu b { display: block; font-size: 18px; margin-bottom: 32px; }
-aside.menu a { display: block; padding: 10px 12px; border-radius: 8px; color: var(--tinta-2); text-decoration: none; margin-bottom: 4px; }
-aside.menu a.actiu { background: var(--fons); color: var(--tinta); font-weight: 600; }
-main { padding: 40px 48px 80px; max-width: 1240px; }
-h1 { font-size: 36px; margin: 0 0 4px; letter-spacing: -0.01em; }
-.intro { color: var(--tinta-2); margin: 0 0 28px; font-size: 18px; }
-.estat { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; padding: 4px 12px; border-radius: 999px; align-self: flex-start; white-space: nowrap; }
-.estat.verd { background: var(--verd-fons); color: var(--verd-text); }
-.estat.ambre { background: var(--ambre-fons); color: var(--ambre-text); }
-.estat.vermell { background: var(--vermell-fons); color: var(--vermell-text); }
-.estat svg { width: 16px; height: 16px; flex: none; }
-.targeta { background: var(--targeta); border-radius: 16px; padding: 24px; border: 1px solid var(--linia); display: flex; flex-direction: column; gap: 12px; }
-.targeta h3 { margin: 0; font-size: 20px; }
-.xifra { font-size: 44px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
-.xifra small { font-size: 18px; font-weight: 500; color: var(--tinta-2); }
-.metre { height: 12px; background: #eceae4; border-radius: 999px; overflow: hidden; }
-.metre i { display: block; height: 100%; border-radius: 999px; }
-.targeta p { margin: 0; color: var(--tinta-2); }
-.proposem { padding-top: 12px; border-top: 1px solid var(--linia); font-size: 15px; color: var(--tinta-2); }
-.proposem b { color: var(--tinta); }
-a.mes { color: #256abf; text-decoration: none; font-size: 15px; white-space: nowrap; }
-.versio { position: fixed; right: 16px; bottom: 16px; background: var(--tinta); color: #fff; font-size: 13px; padding: 6px 12px; border-radius: 999px; }
-/* Adaptació del disseny B1 als contenidors de Streamlit. */
-.stApp {background:var(--fons);color:var(--tinta);font:17px/1.5 -apple-system,"Segoe UI",system-ui,sans-serif;}
-[data-testid="stSidebar"] {background:white;border-right:1px solid var(--linia);}
-.block-container {max-width:1240px;padding:40px 40px 80px;}
-#MainMenu,[data-testid="stAppDeployButton"],footer {display:none!important;}
-h1 {font-size:36px!important;letter-spacing:-.01em;}
+* {box-sizing:border-box;}
+body {margin:0;display:block;background:var(--fons);color:var(--tinta);font:16px/1.45 -apple-system,"Segoe UI",system-ui,sans-serif;min-height:100vh;}
+main {padding:0;max-width:none;}
+aside.menu {background:var(--targeta);border-right:1px solid var(--linia);padding:32px 24px;}
+aside.menu b {display:block;font-size:18px;margin-bottom:32px;}
+aside.menu a {display:block;padding:10px 12px;border-radius:8px;color:var(--tinta-2);text-decoration:none;margin-bottom:4px;}
+aside.menu a.actiu {background:var(--fons);color:var(--tinta);font-weight:600;}
+h1 {font-size:28px!important;margin:0!important;letter-spacing:-.01em;}
 h2,h3 {letter-spacing:-.02em;}
+.intro {color:var(--tinta-2);margin:0 0 28px;font-size:18px;}
+.estat {display:inline-flex;align-items:center;gap:8px;max-width:100%;width:fit-content;font-size:14px;font-weight:500;line-height:1.45;padding:6px 12px;border-radius:999px;align-self:flex-start;white-space:normal;}
+.estat.verd {background:var(--verd-fons);color:var(--verd-text);}
+.estat.ambre {background:var(--ambre-fons);color:var(--ambre-text);}
+.estat.vermell {background:var(--vermell-fons);color:var(--vermell-text);}
+.estat svg {width:16px;height:16px;flex:none;}
+.estat-text {min-width:0;overflow-wrap:anywhere;}
+.targeta {background:var(--targeta);border-radius:16px;padding:24px;border:1px solid var(--linia);display:flex;flex-direction:column;gap:16px;}
+.targeta h3 {margin:0;font-size:20px;}
+.xifra {font-size:44px;font-weight:600;letter-spacing:-.02em;line-height:1.2;}
+.xifra small {font-size:18px;font-weight:400;color:var(--tinta-2);}
+.metre {height:12px;background:#eceae4;border-radius:999px;overflow:hidden;}
+.metre i {display:block;height:100%;border-radius:999px;}
+.targeta p {margin:0;color:var(--tinta-2);}
+.proposem {padding-top:12px;border-top:1px solid var(--linia);font-size:16px;color:var(--tinta-2);}
+.proposem b {color:var(--tinta);font-weight:500;}
+a.mes {color:var(--blau);text-decoration:none;font-size:16px;}
+.versio {position:fixed;right:16px;bottom:16px;background:var(--tinta);color:#fff;font-size:13px;padding:6px 12px;border-radius:999px;}
+/* Adaptació als contenidors de Streamlit. */
+.stApp {background:var(--fons);color:var(--tinta);font:16px/1.45 -apple-system,"Segoe UI",system-ui,sans-serif;}
+[data-testid="stAppViewContainer"] {background:var(--fons);}
+[data-testid="stSidebar"] {background:white;border-right:1px solid var(--linia);}
+[data-testid="stSidebar"] h1 {font-size:20px!important;}
+.block-container {max-width:1240px;padding:24px 40px 80px;margin-left:auto!important;margin-right:auto!important;container-type:inline-size;container-name:contingut;}
+#MainMenu,[data-testid="stAppDeployButton"],footer {display:none!important;}
 [data-testid="stVerticalBlockBorderWrapper"]>div {border-radius:16px;}
-.st-key-heroi {background:white;border:1px solid var(--linia);border-left:8px solid var(--ambre);border-radius:16px;padding:28px 32px;margin:20px 0 28px;}
-.st-key-heroi h2 {font-size:clamp(32px,4vw,48px)!important;line-height:1.05;margin:4px 0 8px;}
-.pregunta {font-size:18px;color:var(--tinta-2);margin:12px 0 0;}
-.xifra-targeta {font-size:clamp(28px,3vw,44px);font-weight:700;line-height:1.15;overflow-wrap:anywhere;margin:12px 0;}
-.st-key-targetes [data-testid="stHorizontalBlock"] {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;}
-.st-key-targetes [data-testid="stColumn"] {width:100%!important;min-width:0!important;}
-.st-key-targetes [data-testid="stVerticalBlockBorderWrapper"] {background:white;border-radius:16px;}
-.st-key-targetes button {color:#256abf;border:0;background:transparent;padding-left:0;}
-.estat {margin:0 0 8px;}
-.aules {display:grid;grid-template-columns:repeat(7,28px);gap:6px;margin:12px 0;}
-.aules i {width:28px;height:28px;border-radius:6px;background:var(--blau);}
+.stApp p,.stApp button,.stApp h1,.stApp h2,.stApp h3,.stApp label {font-family:-apple-system,"Segoe UI",system-ui,sans-serif;}
+.stApp p {font-size:16px;line-height:1.45;}
+.xifra-targeta {font-size:clamp(28px,3vw,44px);font-weight:600;line-height:1.2;overflow-wrap:anywhere;margin:12px 0;}
+/* Portada: alçada natural, el mateix aire als quatre costats. */
+.st-key-heroi {background:var(--targeta);border:1px solid var(--linia);border-left:8px solid var(--ambre);border-radius:16px;padding:32px;margin:20px 0 28px;min-width:0;}
+.st-key-heroi:has([data-estat="verd"]) {border-left-color:var(--verd);}
+.st-key-heroi:has([data-estat="vermell"]) {border-left-color:var(--vermell);}
+.st-key-heroi [data-testid="stVerticalBlock"] {gap:16px;}
+.st-key-heroi [data-testid="stColumn"] {min-width:0!important;}
+.st-key-heroi h2.pregunta {font-size:18px!important;font-weight:400;line-height:1.45;margin:0;padding:0;overflow-wrap:anywhere;}
+.st-key-heroi h3 {font-size:clamp(32px,3.4vw,44px)!important;font-weight:600;line-height:1.2;margin:0;padding:0;overflow-wrap:anywhere;}
+.st-key-heroi .frase-heroi {margin:0;color:var(--tinta-2);}
+.aules {display:grid;grid-template-columns:repeat(7,minmax(0,28px));gap:6px;margin:12px 0;max-width:100%;}
+.aules i {width:100%;height:auto;aspect-ratio:1;border-radius:6px;background:var(--blau);}
 .aules i.l {background:var(--blau-clar);}
 .aules i.r {background:transparent;border:2px dashed var(--suau);}
-.aules-peu {font-size:14px;color:var(--tinta-2);}
+.aules-peu {font-size:14px;color:var(--tinta-2);word-break:normal;overflow-wrap:normal;hyphens:none;white-space:normal;max-width:38rem;}
+.aules-portada {margin:0;min-width:0;}
+.aules-portada .aules {margin:0 0 16px;}
+.aules-portada figcaption {font-size:16px;line-height:1.45;color:var(--tinta-2);overflow-wrap:anywhere;}
+/* La graella estira les caixes, sense fixar l'alçada del text. */
+.st-key-targetes [data-testid="stHorizontalBlock"] {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items: stretch;}
+.st-key-targetes [data-testid="stColumn"] {width:100%!important;min-width:0!important;}
+.st-key-targetes [data-testid="stColumn"],
+.st-key-targetes [data-testid="stColumn"] > [data-testid="stVerticalBlock"],
+.st-key-targetes [data-testid="stLayoutWrapper"]:has(> [class*="st-key-targeta-"]),
+.st-key-targetes [data-testid="stVerticalBlockBorderWrapper"]:has([class*="st-key-targeta-"]) {
+ display: flex;flex-direction: column;min-width:0;flex:1 1 auto;
+}
+.st-key-targetes [class*="st-key-targeta-"] {display:flex;flex-direction:column;flex:1 1 auto;background:var(--targeta);border-radius:16px;padding:24px;min-width:0;}
+.targeta-cor {display:flex;flex-direction:column;gap:16px;min-width:0;}
+.targeta-cor h2 {font-size:18px!important;font-weight:500;line-height:1.45;margin:0;padding:0;overflow-wrap:anywhere;}
+.targeta-cor .xifra-targeta {font-size:clamp(30px,2.8vw,40px);margin:0;}
+.targeta-cor p {margin:0;font-size:16px;line-height:1.45;color:var(--tinta-2);overflow-wrap:anywhere;}
+/* El peu creix amb el contingut i deixa aire abans de l'enllaç. */
+.st-key-targetes [data-testid="stLayoutWrapper"]:has(> [class*="st-key-peu-targeta-"]),
+.st-key-targetes [class*="st-key-peu-targeta-"] {margin-top: auto;flex:0 0 auto;width:100%;}
+.st-key-targetes [class*="st-key-peu-targeta-"] {padding-top:16px;}
+.st-key-heroi button,.st-key-targetes button,.st-key-respostes button[kind="secondary"] {
+ border:0!important;background:transparent!important;box-shadow:none!important;color:var(--blau)!important;
+ min-height:44px!important;height:auto!important;padding:10px 12px!important;line-height:1.45!important;overflow:visible!important;white-space:normal;
+}
+.st-key-heroi button p,.st-key-targetes button p,.st-key-respostes button[kind="secondary"] p {font-size:16px!important;font-weight:400;line-height:1.45!important;margin:0!important;overflow:visible!important;}
+.st-key-heroi button:hover p,.st-key-targetes button:hover p,.st-key-respostes button[kind="secondary"]:hover p {text-decoration:underline;}
+.st-key-heroi button:focus-visible,.st-key-targetes button:focus-visible {outline:2px solid var(--blau)!important;outline-offset:2px;border-radius:4px;}
+@container contingut (min-width:1000px) {
+ .st-key-targetes [data-testid="stHorizontalBlock"] {grid-template-columns:repeat(4,minmax(0,1fr));}
+}
+@container contingut (max-width:760px) {
+ .st-key-heroi [data-testid="stHorizontalBlock"] {flex-direction:column;}
+ .st-key-heroi [data-testid="stColumn"] {width:100%!important;flex:1 1 auto!important;min-width:0!important;}
+}
+@container contingut (max-width:540px) {
+ .st-key-targetes [data-testid="stHorizontalBlock"] {grid-template-columns:minmax(0,1fr);}
+}
 .espines {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:20px 0;}
 .espina {background:white;border:1px solid var(--linia);border-radius:14px;padding:16px;}
 .planta {font-size:12px;color:var(--tinta-2);text-transform:uppercase;margin:12px 0 6px;}
 .rajoles {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}
 .rajola {border-radius:8px;padding:8px;font-size:13px;position:relative;}
 .rajola b {display:block;}
-.rajola:focus-visible {outline:2px solid #256abf;outline-offset:2px;}
-@media (hover:hover) {.rajola:hover {outline:2px solid #256abf;}}
+.rajola:focus-visible {outline:2px solid var(--blau);outline-offset:2px;}
+@media (hover:hover) {.rajola:hover {outline:2px solid var(--blau);}}
+.ocupacio-rajola {display:block;font-size:12px;margin-top:4px;}
 .escala {font-size:14px;color:var(--tinta-2);}
 .escala i {display:inline-block;width:100px;height:12px;background:linear-gradient(to right,#cde2fb,#184f95);border-radius:3px;margin:0 8px;}
-@media(max-width:1000px) {.espines {grid-template-columns:repeat(2,minmax(0,1fr));}.block-container {padding:24px 20px 60px;}}
-@media(max-width:650px) {.st-key-targetes [data-testid="stHorizontalBlock"] {grid-template-columns:minmax(0,1fr);}.st-key-heroi {padding:20px;}.espines {grid-template-columns:minmax(0,1fr);}}
-body {display:block;font-family:-apple-system,"Segoe UI",system-ui,sans-serif;}
-main {padding:0;max-width:none;}
-[data-testid="stAppViewContainer"] {background:var(--fons);}
-[data-testid="stSidebar"] h1 {font-size:20px!important;}
-.stApp p,.stApp button,.stApp h1,.stApp h2,.stApp h3,.stApp label {
- font-family:-apple-system,"Segoe UI",system-ui,sans-serif;
-}
-/* El contingut útil, amb el menú obert, determina quan s'apila l'heroi. */
-.block-container {container-type:inline-size;container-name:contingut;}
-@container contingut (max-width:760px) {
- .st-key-heroi [data-testid="stHorizontalBlock"] {flex-direction:column;}
- .st-key-heroi [data-testid="stColumn"] {width:100%!important;flex:1 1 100%!important;min-width:0!important;}
-}
-
-.aules {grid-template-columns:repeat(7,minmax(0,28px));max-width:100%;}
-.aules i {width:100%;height:auto;aspect-ratio:1;}
-.aules-peu {word-break:normal;overflow-wrap:normal;hyphens:none;white-space:normal;max-width:38rem;}
-.ocupacio-rajola {display:block;font-size:12px;margin-top:4px;}
-/* La columna, el wrapper de Streamlit i la targeta formen una cadena flex.
-   stLayoutWrapper és present a Streamlit actual; el selector del wrapper antic
-   es conserva per a instal·lacions anteriors. No estirem els elements del peu. */
-.st-key-targetes [data-testid="stHorizontalBlock"] {
- align-items: stretch;
-}
-.st-key-targetes [data-testid="stColumn"],
-.st-key-targetes [data-testid="stColumn"] > [data-testid="stVerticalBlock"],
-.st-key-targetes [data-testid="stLayoutWrapper"]:has(> [class*="st-key-targeta-"]),
-.st-key-targetes [data-testid="stVerticalBlockBorderWrapper"]:has([class*="st-key-targeta-"]) {
- display: flex;
- flex-direction: column;
- height: 100%;
- min-width: 0;
- flex: 1 1 auto;
-}
-.st-key-targetes [class*="st-key-targeta-"] {
- display: flex;
- flex-direction: column;
- height: 100%;
- flex: 1 1 auto;
- background: var(--targeta);
- border-radius: 16px;
-}
-/* El contingut té alçada natural. El peu absorbeix l'espai sobrant per sobre,
-   sense donar flex:1 també al botó, que era la causa de l'alineació desigual. */
-.st-key-targetes [data-testid="stLayoutWrapper"]:has(> [class*="st-key-peu-targeta-"]),
-.st-key-targetes [class*="st-key-peu-targeta-"] {
- margin-top: auto;
- flex: 0 0 auto;
- width: 100%;
-}
-.st-key-targetes [class*="st-key-peu-targeta-"] {
- display: flex;
- flex-direction: column;
-}
-.targeta-cor {display:flex;flex-direction:column;gap:12px;}
-.targeta-cor h2,.targeta-cor p {margin:0;}
-.targeta-cor .estat {align-self:flex-start;}
-.st-key-targetes .proposem {
- margin-top: auto;
- min-height: 6rem;
- line-height: 1.5;
-}
-.st-key-targetes [class*="st-key-peu-targeta-"] [data-testid="stElementContainer"] {
- flex: 0 0 auto;
-}
 .desglos:empty {display:none;}
-/* Manté el context visible mentre es recalculen les dades. */
 [data-testid="stMain"] [data-stale="true"] {opacity:.6;}
-
-.targeta-cor p {font-size:17px;line-height:1.5;color:#52514e;}
-.franja-context {font-size:16px;color:#52514e;margin:0 0 20px;}
-.franja-context strong {font-weight:600;}
-.marca-escola {font-size:20px;font-weight:700;margin-bottom:24px;}
-.st-key-heroi button {color:#256abf;}
-@media (max-width:650px) {.st-key-targetes .proposem {min-height:0;}}
-
-.st-key-heroi h2.pregunta {font-size:18px!important;font-weight:400;line-height:1.5;}
-.st-key-heroi:has(h2.pregunta) h3 {font-size:clamp(32px,4vw,48px)!important;line-height:1.05;}
-
-.st-key-torna button {color:#256abf;}
-
-.targeta-cor h2 {font-size:20px!important;line-height:1.3;}
-
+.franja-context {font-size:16px;color:var(--tinta-2);margin:0 0 20px;}
+.franja-context strong {font-weight:500;}
+.marca-escola {font-size:20px;font-weight:600;margin-bottom:24px;}
+.st-key-torna button {color:var(--blau);}
 .resum-grau p {margin:8px 0;}
 .resum-grau .xifra-targeta {display:inline-block;}
 .marge-semestral {border-top:1px solid var(--linia);padding-top:12px;}
-
-/* ds vespre: totes les pàgines centrades com la portada, amb la mateixa amplada màxima. */
-.block-container {margin-left:auto!important;margin-right:auto!important;}
-/* Portada: caixes més petites. */
-.st-key-targetes [data-testid="stHorizontalBlock"] {gap:16px;}
-.st-key-targetes .targeta-cor {gap:8px;}
-.st-key-targetes .targeta-cor h2 {font-size:18px!important;}
-.st-key-targetes .xifra-targeta {font-size:clamp(26px,2.4vw,34px);margin:4px 0;}
-.st-key-targetes .targeta-cor p {font-size:16px;}
-.st-key-targetes .metre {height:8px;}
-.st-key-targetes .proposem {min-height:0;padding-top:8px;font-size:14px;}
-/* ds vespre: sense barra fantasma a dalt en fer scroll. La capçalera de Streamlit no ocupa lloc
-   ni té fons; els seus botons (obrir el menú) continuen visibles i clicables. */
+@media(max-width:1000px) {.espines {grid-template-columns:repeat(2,minmax(0,1fr));}.block-container {padding:24px 20px 60px;}}
+@media(max-width:650px) {.st-key-heroi {padding:24px;}.st-key-targetes [class*="st-key-targeta-"] {padding:24px;}.espines {grid-template-columns:minmax(0,1fr);}}
+/* Capçalera transparent i botó del menú sempre accessible. */
 header[data-testid="stHeader"] {background:transparent!important;height:0!important;min-height:0!important;box-shadow:none!important;border:0!important;}
 [data-testid="stDecoration"] {display:none!important;}
 [data-testid="stSidebarHeader"] {height:auto!important;min-height:0!important;padding:12px 16px 0!important;margin-bottom:0!important;}
-
-/* ds 21:30 · Botó per obrir el menú: sempre visible, a dalt a l'esquerra, quan el menú està plegat. */
 [data-testid="stExpandSidebarButton"] {
  position:fixed!important;top:12px!important;left:12px!important;z-index:1000001;
  width:40px!important;height:40px!important;border-radius:10px!important;
@@ -175,67 +128,12 @@ header[data-testid="stHeader"] {background:transparent!important;height:0!import
  display:flex!important;align-items:center;justify-content:center;
 }
 [data-testid="stExpandSidebarButton"] span {color:var(--tinta)!important;}
-[data-testid="stExpandSidebarButton"]:hover {border-color:#256abf!important;}
-[data-testid="stExpandSidebarButton"]:focus-visible {outline:2px solid #256abf;outline-offset:2px;}
-
-/* Menú: els noms de les seccions es distingeixen de les pàgines. */
-[data-testid="stNavSectionHeader"] {
- font-size:13px!important;font-weight:700!important;color:var(--tinta)!important;
- text-transform:uppercase;letter-spacing:.06em;margin:18px 0 6px!important;padding-left:8px;
-}
+[data-testid="stExpandSidebarButton"]:hover {border-color:var(--blau)!important;}
+[data-testid="stExpandSidebarButton"]:focus-visible {outline:2px solid var(--blau);outline-offset:2px;}
+.stApp:has([data-testid="stExpandSidebarButton"]) .block-container {padding-top:64px!important;}
+[data-testid="stNavSectionHeader"] {font-size:13px!important;font-weight:700!important;color:var(--tinta)!important;text-transform:uppercase;letter-spacing:.06em;margin:18px 0 6px!important;padding-left:8px;}
 [data-testid="stNavSectionHeader"] * {font-weight:700!important;color:var(--tinta)!important;}
 [data-testid="stSidebarNavItems"] > :first-child [data-testid="stNavSectionHeader"],
 [data-testid="stSidebarNavItems"] [data-testid="stNavSectionHeader"]:first-child {margin-top:4px!important;}
 [data-testid="stSidebarNavLink"] {padding-left:14px!important;}
 [data-testid="stSidebarNavLink"] span {font-size:15px;}
-
-/* Portada: tot a la primera pantalla d'un portàtil (1.440 × 900). */
-.block-container {padding-top:24px!important;}
-h1 {font-size:28px!important;margin-bottom:0!important;}
-.franja-context {margin:0 0 8px;}
-.st-key-heroi {padding:18px 24px;margin:8px 0 16px;}
-.st-key-heroi h2,.st-key-heroi:has(h2.pregunta) h3 {font-size:clamp(26px,2.6vw,34px)!important;margin:2px 0 4px;}
-.st-key-heroi h2.pregunta {font-size:16px!important;margin:0!important;}
-.st-key-heroi p {margin:0 0 4px;font-size:15px;}
-.st-key-heroi [data-testid="stCaptionContainer"] p {font-size:13px;margin:0;}
-.st-key-heroi [data-testid="stVerticalBlock"] {gap:6px;}
-.aules {grid-template-columns:repeat(7,minmax(0,22px));gap:5px;margin:4px 0;}
-@container contingut (min-width:1000px) {
- .st-key-targetes [data-testid="stHorizontalBlock"] {grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;}
-}
-.st-key-targetes .targeta-cor {gap:6px;}
-.st-key-targetes .targeta-cor h2 {font-size:16px!important;}
-.st-key-targetes .xifra-targeta {font-size:clamp(22px,2vw,28px);margin:0;}
-.st-key-targetes .targeta-cor p {font-size:14px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
-.st-key-targetes .desglos:not(:empty) {font-size:13px!important;}
-.st-key-targetes .proposem {font-size:13px;line-height:1.4;padding-top:6px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
-.st-key-targetes [data-testid="stVerticalBlock"] {gap:6px;}
-/* Portada: menys aire entre els elements de dalt perquè també hi càpiga amb el menú obert. */
-.block-container:has(.st-key-heroi) {padding-top:16px!important;}
-.block-container:has(.st-key-heroi) [data-testid="stVerticalBlock"] {gap:10px;}
-.block-container:has(.st-key-heroi) h1 {padding:0!important;}
-.block-container:has(.st-key-heroi) .st-key-heroi {margin:4px 0 8px;}
-/* Amb el menú plegat, el botó per obrir-lo no tapa el títol. */
-.stApp:has([data-testid="stExpandSidebarButton"]) .block-container {padding-top:64px!important;}
-
-/* ds 21:50 · «Com ho sabem →»: enllaç net, mateix aspecte a tot arreu, sense text tallat. */
-.st-key-heroi button,.st-key-targetes button,.st-key-respostes button[kind="secondary"] {
- border:0!important;background:transparent!important;box-shadow:none!important;color:#256abf!important;
- min-height:32px!important;height:auto!important;padding:4px 0!important;line-height:1.4!important;overflow:visible!important;
-}
-.st-key-heroi button p,.st-key-targetes button p,.st-key-respostes button[kind="secondary"] p {
- font-size:15px!important;font-weight:600;line-height:1.4!important;margin:0!important;overflow:visible!important;
-}
-.st-key-heroi button:hover p,.st-key-targetes button:hover p,.st-key-respostes button[kind="secondary"]:hover p {text-decoration:underline;}
-.st-key-heroi button:focus-visible,.st-key-targetes button:focus-visible {outline:2px solid #256abf!important;outline-offset:2px;border-radius:4px;}
-/* Bloc gran: menys marge a dalt i a baix; els quadrets d'aules al costat de la resposta i més grans. */
-.block-container:has(.st-key-heroi) .st-key-heroi {padding:14px 24px 10px;}
-.st-key-heroi [data-testid="stVerticalBlock"] {gap:4px!important;}
-.st-key-heroi .estat {margin:0 0 2px;}
-.st-key-heroi h2.pregunta {margin:2px 0 0!important;}
-.st-key-heroi [data-testid="stCaptionContainer"] {margin-top:4px;}
-.st-key-heroi .aules {grid-template-columns:repeat(7,28px);gap:6px;margin:0 0 6px;}
-.st-key-heroi .aules-peu {font-size:14px;max-width:24rem;margin:0;}
-/* La vora del bloc gran segueix l'estat de la resposta. */
-.st-key-heroi:has(.estat.verd) {border-left-color:var(--verd)!important;}
-.st-key-heroi:has(.estat.vermell) {border-left-color:var(--vermell)!important;}

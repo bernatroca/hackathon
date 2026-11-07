@@ -1,4 +1,18 @@
 """Textos per al coordinador. Les xifres s'interpolen des de les troballes."""
+# Resums de portada; les explicacions i les propostes es conserven al detall.
+TEXTOS_PORTADA = {
+    'hi-cap-mati': dict(titol='Si 1r i 2n fan classe al matí, hi cabem?',
+        frase='El balanç d’hores deixa marge; falta validar l’horari.'),
+    'fora-torn': dict(titol='Classes fora de torn',
+        frase='Classes del semestre que cal revisar de torn.'),
+    'hores-aula': dict(titol='Classes sense aula',
+        frase='Classes del semestre sense cap aula assignada.'),
+    'marge-grau-nou': dict(titol='Un grau nou de {places} places',
+        frase='Hores setmanals necessàries; l’horari encara s’ha de validar.'),
+    'problemes-millores': dict(titol='Altres problemes',
+        frase='Casos del semestre amb desajustos que cal revisar.'),
+}
+
 TEXTOS = {
     'hi-cap-mati': dict(estat='ambre', etiqueta='Pendent de validar', titol='Si 1r i 2n fan classe al matí, hi cabem?',
         frase='Al moment més ple ({dia}) calen {pic} aules de les {disponibles} disponibles. El matí queda ocupat al {ocupacio} %.',
