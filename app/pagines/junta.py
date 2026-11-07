@@ -60,7 +60,9 @@ def carrega(nom):
     path = ruta_resum(nom)
     if path.is_file():
         dades = llegeix(str(path), path.stat().st_mtime_ns)
-        return dades
+        if 'fora_torn_ja_avui' in dades:
+            return dades
+        # Resum desat amb un format antic: es torna a generar.
     proposta = RESULTATS / nom / 'proposta.csv'
     relax = proposta.with_name('relaxacions.csv')
     return genera(nom, proposta.stat().st_mtime_ns if proposta.is_file() else 0,
