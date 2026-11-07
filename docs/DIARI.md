@@ -174,3 +174,14 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - Amb la reparació local (moure només les activitats fora de torn, matí i tarda per separat i setmana tipus), n2-backend-2 troba solució en uns 12 s, sense sessions fora de torn ni solapaments nous de docent o alumnat. Comprovat per la integració.
 - Mou només les sessions que la regla 1 obliga a moure. Les sessions que cauen en festiu es mouen a un altre dia de la mateixa setmana i surten com a excepcions.
 - Fase 2 llançada: n2-backend-2 (5.2 sencer, amb aules) i n2-dades-2 (resum de la Junta). n2-frontend-2 espera que la sessió Part 1 acabi la passada de disseny d'app/.
+
+### [ds 18:13] SOLUCIÓ · Passada de disseny de la part 1 amb les skills de disseny
+- Revisió de només lectura (Codex) amb les Web Interface Guidelines de Vercel, better-ui, dataviz i la B1: 18 troballes i la paleta amb el contrast WCAG (docs/revisio-disseny-1.md).
+- L'equip aprova els 10 retocs petits i els 4 canvis grans:
+  - bloc gran en vermell si no hi cap;
+  - semestre i setmana visibles;
+  - «Veure les dades» i barres primes;
+  - icones SVG, un sol h1, ?resposta=<id> i errors planers.
+- Abans de canviar res: etiqueta part1-v1 per poder tornar enrere.
+- Coordinació: la sessió Part 2 havia esborrat els worktrees de la part 1. S'ha refet ../hack-frontend i s'ha acordat qui toca què a app/. La part 2 continua els seus fitxers ara que la passada és a main.
+- Skills noves trobades, per instal·lar a mà: jakubkrehel better-colors, better-layout i better-interface, i pbakaus impeccable.
