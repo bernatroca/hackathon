@@ -131,14 +131,11 @@ def detall(t):
         st.caption('El gràfic mostra com a màxim les vuit categories amb més casos de la setmana. La llista inclou també la resta i les recomanacions sense recompte; les categories poden coincidir en una mateixa classe.')
     st.subheader('Com ho hem calculat')
     st.write(info.get('metode_planer', 'Consulta les definicions detallades al desplegable tècnic.'))
-    with st.expander('Detalls informàtics: consulta SQL i identificadors',expanded=False):
+    with st.expander('Detalls informàtics: consulta SQL',expanded=False):
         st.write(t.metode)
         st.code(t.sql,language='sql')
-        st.caption('id_sessio per buscar al CSV original')
-        if len(t.exemples):
-            st.code('\n'.join(map(str,t.exemples)),language=None)
-        else:
-            st.write('No s’han facilitat sessions d’exemple.')
+        # No mostrem identificadors de sessió: la consulta SQL permet reproduir la xifra.
+        st.caption('Per comprovar la xifra, executa aquesta consulta sobre les dades del repte.')
 
 
 def detall_obert():

@@ -80,9 +80,9 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - Espec: .plans/nivell2-horari-spec.md (substitueix .plans/nivell2-prompt.md).
 
 ### [ds 15:51] DECISIÓ · Desdoblament de PAUL i SEM i punts pendents de la part 2
-- Tot PAUL o SEM movible de més de 34 alumnes es parteix en dues meitats (aula petita = seminari o Q9/5014). Amb parella, rotació: la 1a hora A fa X i B fa Y, i la 2a es canvien. Sense parella, es parteix igualment; si no hi ha hora seguida, la 2a meitat la fa un altre dia.
+- Tot PAUL o SEM movible de més de 34 alumnes es parteix en dues meitats (aula petita = seminari o una aula de fins a 34 places). Amb parella, rotació: la 1a hora A fa X i B fa Y, i la 2a es canvien. Sense parella, es parteix igualment; si no hi ha hora seguida, la 2a meitat la fa un altre dia.
 - DADA: 101 grups de problemes tenen de 35 a 50 alumnes i només hi ha 4 aules d'aquesta mida; avui ocupen aules de 63-90 que necessita la teoria.
-- TE/908 (5.3): aula més gran a la mateixa hora. Les excepcions a la regla 1 es demostren amb recompte o INFEASIBLE. La vista de l'estudiant posa avui i proposta costat per costat.
+- Grup de teoria que creix (5.3): aula més gran a la mateixa hora. Les excepcions a la regla 1 es demostren amb recompte o INFEASIBLE. La vista de l'estudiant posa avui i proposta costat per costat.
 - Queda per confirmar el format del resum de la Junta. Espec: .plans/nivell2-horari-spec.md
 
 ### [ds 15:52] DECISIÓ · Horari oficial de diumenge: entrega a les 12:00
@@ -126,10 +126,10 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - 25/25 comprovacions; tests de l'app OK. VALIDATION.md amb 17 passos marcats per reprovar.
 
 ### [ds 17:40] DADA · Alumnes reals dels 14 grups sense dada (2n semestre, 276 sessions)
-- El paquet hi posa 0. El portal públic SIQ de la UAB dona els matriculats per assignatura i any: Assignatura Inventada A (GEQ 4t) 16–24 (16 el 2025), Assignatura Inventada B (GED 4t) 14–18 (18 el 2025). Font: [enllaç retirat] i …/900003/
-- Les places previstes de Sigma (30 i 40) gairebé doblaven els alumnes reals.
-- Les dues de GIA 3r (900005, 900006) són obligatòries i noves el 2026-27: sense històric. Estimació: 45, la promoció de GIA 3r al paquet (42–49).
-- Assignatura Inventada C (4 PAUL) ja té alumnes: és la mateixa classe que Assignatura Inventada D (43, 44, 39, 44).
+- El paquet hi posa 0. Per a dues optatives de 4t hem fet servir els matriculats que publica el portal públic SIQ de la UAB. (Noms, codis i enllaços retirats d'aquest diari el ds 7-11 al vespre.)
+- Les places previstes de Sigma gairebé doblaven els alumnes reals.
+- Dues obligatòries de 3r, noves el 2026-27, no tenen històric: estimació amb la promoció del mateix curs al paquet.
+- Una assignatura amb quatre grups de problemes ja té alumnes: és la mateixa classe que una altra (classe compartida).
 
 ### [ds 17:40] DECISIÓ · El model de la part 2 fa servir aquestes xifres
 - Fitxer `dades/alumnes_sense_dada.json` (xifra, font i nota per grup). Especificació i tasca 0.3 actualitzades.
@@ -229,5 +229,5 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 ### [ds 19:20] DECISIÓ · Norma de dades a la part 2 i resultats de la validació
 - Norma de la direcció: cap agent llegeix repte/, resultats/ ni dades/; només recomptes, errors o el veredicte. Cada encàrrec a Codex de la part 2 porta la frase de la norma. El servidor de la part 2 (8503) ja només escolta a 127.0.0.1.
 - nivell2/base.py llegeix la carpeta de les dades de REPTE_DIR. Pendent per a la branca del 5.2: que franges.py imprimeixi només el nombre d'excepcions i desi el detall en un fitxer.
-- Validació de l'equip, coses a arreglar de la part 2: graelles una sota l'altra en pantalla ampla (7.4), subgrups massa estrets (7.7), classe compartida que surt com dos blocs a Q9/5006 (7.9), codis de grup sense explicar (7.12) i sigles al resum de la Junta (8.7). La 8.7 ja és en marxa (n2-dades-5); la resta entra amb el disseny que triï l'equip.
+- Validació de l'equip, coses a arreglar de la part 2: graelles una sota l'altra en pantalla ampla (7.4), subgrups massa estrets (7.7), classe compartida que surt com dos blocs a una aula (7.9), codis de grup sense explicar (7.12) i sigles al resum de la Junta (8.7). La 8.7 ja és en marxa (n2-dades-5); la resta entra amb el disseny que triï l'equip.
 - PROBLEMA: uns canvis de la pàgina de la part 2 sense commit a la carpeta principal van entrar al commit c1a5ebb d'una altra sessió, i app/components/ajuda_part2.py havia quedat fora de git. Solució: s'ha fet el commit del fitxer, i a la carpeta principal només es fan commits amb camins explícits.

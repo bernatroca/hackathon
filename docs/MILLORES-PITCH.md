@@ -17,7 +17,7 @@ Idees que no fem durant el hackató però que expliquem a la presentació. Cada 
 - L'enunciat diu que l'usuari és Gestió Acadèmica, i el jurat avalua «Utilitat per a Gestió Acadèmica».
 - La Direcció i la Junta Permanent decideixen; el docent i els estudiants només reben avisos.
 - Els avisos es redacten però no s'envien, i el paquet no té adreces.
-- Els docents són pseudònims (D950): no hi ha manera d'identificar-los, i no s'ha d'intentar.
+- Els docents són pseudònims (del tipus D900): no hi ha manera d'identificar-los, i no s'ha d'intentar.
 
 **El que sí ensenyem al hackató.** La vista «horari d'un grup» (part 2) i l'avís redactat per al docent i els estudiants quan hi ha un imprevist (part 3). Són la llavor d'aquesta idea.
 

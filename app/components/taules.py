@@ -34,7 +34,7 @@ NOMS = {
 
 
 # Dades que no són necessàries per interpretar cap xifra de la part 1.
-# Els exemples id_sessio es conserven només al desplegable informàtic.
+# Tampoc es mostren identificadors de sessió en cap lloc de l'app.
 COLUMNES_OMESES = frozenset({
     'docent', 'docents', 'id_docent', 'docent_id', 'codi', 'codi_assignatura',
     'assignatura', 'nom_assignatura', 'id_sessio', 'id_compartida', 'activitat_id',

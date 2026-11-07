@@ -354,7 +354,7 @@ detall(t)
         self.assertIn('26 h',html)
         self.assertIn('181 h',html)
         self.assertIn('4.679 h',html)
-        self.assertTrue(any(c.value == 'id_sessio per buscar al CSV original' for c in app.caption))
+        self.assertFalse(any('S90001' in c.value for c in app.code))
         self.assertEqual(t.metode,'Text tècnic inventat: la xifra gran és semestral.')
 
     def test_columnes_privades_i_resum_docents_inventats(self):
