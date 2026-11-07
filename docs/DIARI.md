@@ -169,3 +169,8 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 ### [ds 18:05] PROBLEMA · El model de franges del 5.2 no troba solució a temps
 - n2-backend-2: el model sencer (totes les sessions, tots dos torns) acaba en UNKNOWN després de 300 s. UNKNOWN no vol dir impossible.
 - Com ho resolem: torna a Codex amb effort high i una estratègia de reparació local. Primer es mouen només les activitats fora de torn o de finestra; matí i tarda per separat; setmana tipus amb conflictes només entre activitats que comparteixen setmana; i primer complir, després optimitzar.
+
+### [ds 18:12] SOLUCIÓ · El model de franges del 5.2 ja troba solució
+- Amb la reparació local (moure només les activitats fora de torn, matí i tarda per separat i setmana tipus), n2-backend-2 troba solució en uns 12 s, sense sessions fora de torn ni solapaments nous de docent o alumnat. Comprovat per la integració.
+- Mou només les sessions que la regla 1 obliga a moure. Les sessions que cauen en festiu es mouen a un altre dia de la mateixa setmana i surten com a excepcions.
+- Fase 2 llançada: n2-backend-2 (5.2 sencer, amb aules) i n2-dades-2 (resum de la Junta). n2-frontend-2 espera que la sessió Part 1 acabi la passada de disseny d'app/.
