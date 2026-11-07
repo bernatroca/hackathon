@@ -1,20 +1,18 @@
 import streamlit as st
-from components.vistes import detall
-from servei import totes
+from components.vistes import detall_obert, targeta
 
 
 def mostra():
-    st.title('Totes les preguntes')
-    st.caption('Troballes reals disponibles al registre, sense dades de mostra.')
-    try:
-        resultat = totes(st.session_state.semestre, st.session_state.setmana, st.session_state.versio)
-    except Exception as exc:
-        st.error(f'No s’han pogut carregar les preguntes: {exc}')
+    if detall_obert():
         return
+    st.title('Totes les respostes')
+    st.write('Una resposta i una proposta per a cada pregunta sobre els espais.')
+    resultat = list(st.session_state.get('resultats',{}).values())
     if not resultat:
-        st.info('Aviat · Els mòduls de preguntes encara no són al registre.')
+        st.info('Les respostes encara no estan disponibles.')
         return
-    ids = [t.id for t in resultat]
-    titols = {t.id: t.titol for t in resultat}
-    id_ = st.selectbox('Pregunta', ids, format_func=titols.get)
-    detall(next(t for t in resultat if t.id == id_))
+    with st.container(key='targetes'):
+        columnes = st.columns(len(resultat))
+        for posicio,(columna,t) in enumerate(zip(columnes,resultat)):
+            with columna:
+                targeta(t,posicio)

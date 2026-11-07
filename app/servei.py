@@ -3,7 +3,7 @@ import importlib
 from pathlib import Path
 import streamlit as st
 from nivell1 import troballes
-from nivell1.dades import connexio
+from nivell1.dades import connexio, AULES_DISPONIBLES
 
 
 def versio_registre():
@@ -29,3 +29,14 @@ def setmanes(semestre):
     return [str(fila[0]) for fila in connexio().execute(
         'SELECT DISTINCT setmana FROM sessions WHERE sem = $semestre ORDER BY setmana',
         {'semestre': semestre}).fetchall()]
+
+# Regla 8: es reserven dues de les aules docents disponibles a l'inventari.
+AULES_RESERVA = 2
+# Places de l'escenari del repte anomenat grau-nou-40.
+PLACES_GRAU_NOU = 40
+
+
+@st.cache_data(show_spinner=False)
+def inventari():
+    """Única lectura d'inventari autoritzada; no calcula ocupació."""
+    return connexio().execute('SELECT aula, edifici, tipus, capacitat FROM aules').df()

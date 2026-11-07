@@ -1,36 +1,23 @@
 import streamlit as st
 from nivell1.troballes import PORTADA
-from components.vistes import carrega, detall, targeta
+from components.vistes import carrega, detall_obert, heroi, targeta
 
 
 def mostra():
-    id_ = st.session_state.get('detall_id')
-    if id_:
-        if st.button('← Torna a les troballes'):
-            st.session_state.detall_id = None
-            st.rerun()
-        detall(carrega(id_))
+    if detall_obert():
         return
-    st.title('Troballes')
-    st.write('On van plens els espais i hi cap el model nou?')
-    st.caption('Escola d’Enginyeria · UAB · Planificació del curs 2027–28')
-    troballes = [carrega(id_) for id_ in PORTADA]
-    abasts = []
-    for t in troballes:
-        if t is None:
-            continue
-        if (t.extra or {}).get('mostra'):
-            abast = 'MOSTRA, sense setmana real'
-        elif t.id in ('fora-torn', 'hores-aula'):
-            abast = 'tot el semestre'
-        else:
-            setmana = (t.extra or {}).get('setmana')
-            abast = f'setmana {setmana}' if setmana is not None else 'setmana no indicada pel resultat'
-        abasts.append(f'{t.titol}: {abast}')
-    st.caption('Abast de cada xifra · ' + ' · '.join(abasts))
-    with st.container(key='targetes-portada'):
-        columnes = st.columns(len(PORTADA), gap='large')
-        for posicio, (columna, t) in enumerate(zip(columnes, troballes)):
+    st.title('Com estem avui')
+    semestre = '2n' if st.session_state.semestre == 2 else '1r'
+    st.write(f'{semestre} semestre · ✓ Verd: tot bé. ! Groc: vigilar. ✕ Vermell: cal actuar.')
+    st.caption('Classes fora de torn, sense aula i altres problemes: tot el semestre. El matí i el grau nou: la setmana indicada a cada detall. Pots canviar-la a «Opcions».')
+    t = carrega('hi-cap-mati')
+    if t is not None:
+        heroi(t)
+    altres = [id_ for id_ in PORTADA if id_ != 'hi-cap-mati']
+    with st.container(key='targetes'):
+        columnes = st.columns(len(altres))
+        for posicio,(columna,id_) in enumerate(zip(columnes,altres)):
             with columna:
+                t = carrega(id_)
                 if t is not None:
-                    targeta(t, posicio)
+                    targeta(t,posicio)

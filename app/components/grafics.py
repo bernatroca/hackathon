@@ -1,144 +1,132 @@
-"""Presentació del contracte sense calcular mètriques de negoci."""
-import numbers
+"""Un gràfic senzill per resposta; només dades de troballes i inventari."""
+from html import escape
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-
-COLORS = ['#28666E', '#8AA5AD', '#B17555']
-
-
-def numero(valor):
-    if isinstance(valor, numbers.Real) and not isinstance(valor, bool):
-        decimals = 0 if float(valor).is_integer() else 2
-        return f'{valor:,.{decimals}f}'.translate(str.maketrans({',': '.', '.': ','}))
-    return str(valor)
+from components.format import numero
+from servei import AULES_DISPONIBLES, AULES_RESERVA, inventari
+from presentacio import DIES, context, valor
+from textos import PROBLEMES
 
 
-def taula(df):
-    formats = {c: numero for c in df.select_dtypes(include='number').columns}
-    st.dataframe(df.style.format(formats, na_rep='—'), hide_index=True, width='stretch')
+def quadrets(t):
+    c = context(t)
+    ocupades = c.get('pic_n')
+    if ocupades is None:
+        st.info('El resultat no indica quantes aules es necessiten alhora.')
+        return
+    icones = ''.join('<i class="' + ('' if n < ocupades else 'l') + '"></i>' for n in range(AULES_DISPONIBLES))
+    icones += '<i class="r"></i>' * AULES_RESERVA
+    peu = f'{numero(ocupades)} ocupades · {numero(max(0, AULES_DISPONIBLES - ocupades))} lliures · {numero(AULES_RESERVA)} de reserva'
+    st.markdown(f'<div class="aules" role="img" aria-label="{escape(peu)}">{icones}</div><p class="aules-peu">{escape(peu)}</p>', unsafe_allow_html=True)
 
 
-def figura(fig, petit, clau):
-    fig.update_layout(template='plotly_white', height=180 if petit else 400, margin=dict(l=12, r=12, t=30, b=25),
+def figura(fig, clau):
+    fig.update_layout(template='plotly_white', height=350, margin=dict(l=12,r=65,t=35,b=25),
         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-        colorway=COLORS, separators=',.', font=dict(color='#24383D'),
-        legend=dict(orientation='h', y=-0.25, font=dict(color='#24383D')), barmode='group')
-    fig.update_xaxes(tickfont=dict(color='#24383D'), title_font=dict(color='#24383D'), gridcolor='#E2EAEA', linecolor='#D3DFDF', automargin=True)
-    fig.update_yaxes(tickfont=dict(color='#24383D'), title_font=dict(color='#24383D'), gridcolor='#E2EAEA', linecolor='#D3DFDF', automargin=True)
-    fig.update_annotations(font_color='#24383D')
-    st.plotly_chart(fig, width='stretch', key=clau, theme=None, config={'displayModeBar': not petit, 'locale': 'ca'})
+        font=dict(family='-apple-system, Segoe UI, system-ui, sans-serif',color='#0b0b0b',size=15),
+        separators=',.', showlegend=False)
+    fig.update_xaxes(showgrid=False,zeroline=False,automargin=True)
+    fig.update_yaxes(showgrid=False,zeroline=False,automargin=True)
+    st.plotly_chart(fig, key=clau, width='stretch', theme=None, config={'displayModeBar':False,'locale':'ca'})
 
 
-def avis(df, text):
-    st.warning(text)
-    taula(df)
+def barres(labels, values, clau, unitat=''):
+    df = pd.DataFrame({'nom':list(labels),'valor':list(values)}).dropna(subset=['valor'])
+    df = df.sort_values('valor',ascending=False).head(8)
+    if df.empty:
+        st.info('No hi ha casos per mostrar en aquesta setmana.')
+        return
+    fig = go.Figure(go.Bar(x=df.valor,y=df.nom,orientation='h',marker_color='#2a78d6',
+        text=[f'{numero(v)}{unitat}' for v in df.valor],textposition='outside',cliponaxis=False,
+        hovertemplate='%{y}: %{text}<extra></extra>'))
+    fig.update_xaxes(visible=False)
+    fig.update_yaxes(autorange='reversed',ticks='')
+    figura(fig,clau)
 
 
-def eix_bloc(df):
-    bloc = 'etiqueta' if 'etiqueta' in df else 'bloc' if 'bloc' in df else None
-    if bloc is None:
-        return None
-    return df['dia'].astype(str) + ' · ' + df[bloc].astype(str) if 'dia' in df else df[bloc].astype(str)
+def planol(t):
+    df = t.taula
+    if not {'aula','percent_ocupacio'}.issubset(df.columns):
+        st.info('No hi ha percentatges per aula disponibles.')
+        return
+    ocupacio = df[['aula','percent_ocupacio']].drop_duplicates('aula').set_index('aula').percent_ocupacio.to_dict()
+    aules = inventari()
+    aules = aules[aules.tipus == 'Aules docents'].copy()
+    aules['espina'] = aules.aula.str.split('/').str[0]
+    aules['planta'] = aules.aula.str.split('/').str[-1].str[0]
+    html = '<div class="espines">'
+    for espina, grup in aules.groupby('espina',sort=True):
+        html += f'<section class="espina"><h3>{escape(espina)}</h3>'
+        for planta, sales in grup.groupby('planta',sort=True):
+            nom = 'Planta baixa' if planta == '0' else 'Primera planta' if planta == '1' else f'Planta {planta}'
+            html += f'<div class="planta">{escape(nom)}</div><div class="rajoles">'
+            for r in sales.sort_values('aula').itertuples():
+                pct = ocupacio.get(r.aula)
+                # Escala absoluta de percentatge: cap ocupació inventada per a les dades absents.
+                intensitat = min(1,max(0,float(pct)/100)) if pct is not None else None
+                color = '#f1f0ec' if intensitat is None else 'rgb(' + ','.join(str(round(a+(b-a)*intensitat)) for a,b in zip((205,226,251),(24,79,149))) + ')'
+                tinta = '#fff' if intensitat is not None and intensitat > .65 else '#0b0b0b'
+                tip = f'{r.aula} · {numero(r.capacitat)} places · ' + (f'{numero(pct)} % ocupada' if pct is not None else 'ocupació no disponible')
+                html += f'<div class="rajola" tabindex="0" title="{escape(tip)}" aria-label="{escape(tip)}" style="background:{color};color:{tinta}"><b>{escape(r.aula)}</b>{escape(numero(r.capacitat))} places</div>'
+            html += '</div>'
+        html += '</section>'
+    st.markdown(html+'</div><p class="escala">Poc ocupada <i></i> Molt ocupada</p>',unsafe_allow_html=True)
 
 
-def dibuixa(df, tipus, petit=False, clau='grafic', limit=False):
-    if not isinstance(df, pd.DataFrame):
-        st.warning('Les dades del gràfic no tenen format de taula.')
+def grafics(t, clau='detall', altres=None):
+    df = t.taula
+    if t.id == 'hi-cap-mati':
+        pic = pd.DataFrame((t.extra or {}).get('pic', df))
+        quadrets(t)
+        if not {'dia','classes'}.issubset(pic.columns):
+            st.info('No hi ha dades diàries disponibles.')
+            return
+        dies = pic.groupby('dia',sort=False).classes.max().reindex(list(DIES),fill_value=0)
+        fig = go.Figure(go.Bar(x=[DIES[d] for d in dies.index],y=dies.values,marker_color='#2a78d6',
+            text=[numero(v) for v in dies.values],textposition='outside',cliponaxis=False,
+            hovertemplate='%{x}: %{y} aules<extra></extra>'))
+        fig.add_hline(y=AULES_DISPONIBLES,line_dash='dash',line_color='#d03b3b',annotation_text=f'{numero(AULES_DISPONIBLES)} aules disponibles')
+        fig.update_yaxes(visible=False,range=[0,max(AULES_DISPONIBLES,float(dies.max()))*1.25])
+        figura(fig,clau)
+        st.caption('Aules necessàries al moment més ple de cada dia. La línia discontínua indica les aules disponibles.')
+        return
+    if t.id == 'ocupacio':
+        planol(t)
+        cobertura = (altres or {}).get('hores-aula')
+        if cobertura is not None:
+            c = context(cobertura)
+            st.info(f"Moltes aules semblen buides perquè aproximadament {c['proporcio']} classes no tenen aula assignada a les dades. Cal assignar-les abans de donar l’espai per lliure.")
         return
     if df.empty:
-        st.info('No hi ha dades per a aquesta selecció.')
+        st.info('No hi ha casos per mostrar en aquesta setmana.')
         return
-    if tipus == 'taula':
-        taula(df)
+    if t.id == 'marge-grau-nou':
+        c = context(t)
+        barres(['Hores que necessita el grau nou','Hores lliures al matí'],[c.get('hores_noves_n'),c.get('marge_n')],clau,' h')
         return
-    if tipus == 'heatmap':
-        x = eix_bloc(df)
-        if not {'aula', 'dia', 'valor'}.issubset(df.columns) or x is None:
-            avis(df, 'El mapa necessita aula, dia, etiqueta o bloc, i valor. Es mostren les dades disponibles.')
-            return
-        dades = df.copy()
-        dades['_columna'] = x
-        if dades.duplicated(['aula', '_columna']).any():
-            avis(df, 'Hi ha cel·les repetides; cal que el mòdul de dades les resolgui per dibuixar el mapa.')
-            return
-        sense = dades['aula'].fillna('sense aula').astype(str).str.lower().eq('sense aula')
-        dades.loc[sense, 'aula'] = 'sense aula'
-        for nom, grup in [('Aules', dades[~sense]), ('Sense aula', dades[sense])]:
-            if grup.empty:
-                continue
-            if nom == 'Sense aula':
-                st.caption('Sense aula · sessions pendents d’assignació')
-            matriu = grup.pivot(index='aula', columns='_columna', values='valor')
-            matriu = matriu.reindex(columns=grup['_columna'].drop_duplicates())
-            fig = go.Figure(go.Heatmap(z=matriu.values, x=matriu.columns, y=matriu.index,
-                colorscale=[[0, '#F0F4F4'], [1, COLORS[0]]], colorbar=dict(title='Valor'),
-                hovertemplate='%{y}<br>%{x}<br>Valor: %{z}<extra></extra>'))
-            figura(fig, petit, clau + nom)
+    if t.id == 'hores-aula' and {'dia','demanda'}.issubset(df.columns):
+        dies = df.groupby('dia',sort=False).demanda.max()
+        barres([DIES.get(d,d) for d in dies.index],dies.values,clau,' aules')
+        st.caption('Demanda màxima d’aules de cada dia de la setmana seleccionada.')
         return
-    if tipus not in ('barres', 'linia'):
-        avis(df, f'Tipus de gràfic desconegut: {tipus}. Es mostra la taula.')
+    etiquetes = {'fora-torn':('cohort','sessions',' classes'), 'aforament':('aula','exces',' alumnes de més'),
+        'hores-mortes':('cohort','hores',' h'), 'canvis-aula':('cohort','fora_passadis',' canvis'),
+        'dobles-mati':('cohort','sessions',' classes'), 'docents-cavall':('docent','dies_mati_tarda',' dies'),
+        'problemes-millores':('problema','xifra',' casos')}
+    if t.id not in etiquetes:
+        st.info('No hi ha cap comparació disponible per a aquesta resposta.')
         return
-    numeriques = list(df.select_dtypes(include='number').columns)
-    categories = [c for c in df.columns if c not in numeriques]
-    xcol = categories[0] if categories else df.columns[0]
-    x = eix_bloc(df) if limit else None
-    if x is None:
-        x = df[xcol]
-        numeriques = [c for c in numeriques if c != xcol]
-    if not numeriques:
-        avis(df, 'Falten columnes numèriques per dibuixar el gràfic. Es mostra la taula.')
+    etiqueta,col,unitat = etiquetes[t.id]
+    if not {etiqueta,col}.issubset(df.columns):
+        st.info('No hi ha dades suficients per dibuixar aquesta comparació.')
         return
-    hover = x
-    if limit:
-        x = list(range(len(df)))
-    fig = go.Figure()
-    for col in numeriques:
-        if limit and col != 'classes':
-            continue
-        trace = go.Bar if tipus == 'barres' else go.Scatter
-        fig.add_trace(trace(x=x, y=df[col], name=col.replace('_', ' '),
-            **({'customdata': hover, 'hovertemplate': '%{customdata}<br>%{y} classes<extra></extra>'} if limit else {})))
-    if limit:
-        if 'dia' in df:
-            dies = df['dia'].astype(str).reset_index(drop=True)
-            fig.update_xaxes(tickmode='array',
-                tickvals=[(dies[dies == dia].index[0] + dies[dies == dia].index[-1]) / 2 for dia in dies.drop_duplicates()],
-                ticktext=list(dies.drop_duplicates()), title_text='Dia', tickangle=0)
-        fig.update_yaxes(title_text='Classes simultànies')
-        fig.add_hline(y=19, line_dash='dash', line_color=COLORS[2], annotation_text='19 aules disponibles')
-    figura(fig, petit, clau)
-
-
-def grafics(t, petit=False, clau='troballa'):
-    extra = t.extra or {}
-    if t.id != 'hi-cap-mati' or ('pic' not in extra and 'per_mida' not in extra):
-        dibuixa(t.taula, t.grafic, petit, clau)
-        return
-    for camp in ('pic', 'per_mida'):
-        if camp not in extra or (petit and camp == 'per_mida' and 'pic' in extra):
-            continue
-        try:
-            df = pd.DataFrame(extra[camp])
-        except (ValueError, TypeError):
-            st.warning(f'No es pot representar «{camp}»: s’esperava una taula o llista de registres.')
-            continue
-        st.caption('Pic de classes simultànies' if camp == 'pic' else 'Demanda i oferta per mida · hores-aula')
-        if camp == 'pic':
-            if 'classes' not in df or eix_bloc(df) is None:
-                avis(df, 'El pic necessita classes i etiqueta o bloc. Es mostren les dades disponibles.')
-            else:
-                dibuixa(df, 'linia', petit, clau + camp, limit=True)
-        elif {'llindar', 'demanda_h', 'oferta_h', 'oferta_h_amb_seminaris', 'falla'}.issubset(df.columns):
-            fig = go.Figure()
-            etiquetes = df['llindar'].map(lambda k: f'> {numero(k)} places')
-            for i, (col, nom) in enumerate([('demanda_h', 'Demanda'), ('oferta_h', 'Oferta'),
-                                           ('oferta_h_amb_seminaris', 'Oferta amb seminaris')]):
-                fig.add_bar(x=etiquetes, y=df[col], name=nom, marker_color=COLORS[i])
-            for etiqueta, falla in zip(etiquetes, df['falla']):
-                if falla is True or str(falla).lower() in ('true', '1'):
-                    fig.add_annotation(x=etiqueta, y=1.08, yref='paper', text='Falla', showarrow=False, font_color=COLORS[2])
-            fig.update_layout(showlegend=True, legend_title_text='Hores-aula')
-            figura(fig, petit, clau + camp)
-        else:
-            avis(df, 'La comparació per mida necessita llindar, demanda_h, oferta_h, oferta_h_amb_seminaris i falla.')
+    labels = df[etiqueta].astype(str).str.replace(':',' · ',regex=False).str.replace('|',' / ',regex=False)
+    if t.id == 'problemes-millores':
+        labels = labels.map(lambda nom: PROBLEMES.get(nom, nom))
+    values = df[col].map(valor) if col == 'xifra' else pd.to_numeric(df[col],errors='coerce')
+    if t.id == 'canvis-aula':
+        labels = labels + ' · grup ' + df.subgrup.astype(str)
+    if t.id == 'aforament':
+        labels = labels + ' · ' + df.dia.map(lambda d:DIES.get(d,d)) + ' ' + df.h_ini.astype(str)
+    barres(labels,values,clau,unitat)
