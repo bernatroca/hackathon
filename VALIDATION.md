@@ -166,3 +166,5 @@ Engegar l'app amb la IA de prova: `IA_PROVA=1 .venv/bin/streamlit run app/app.py
 3. [cap @ /] Pregunta «Què passa si moc la sessió <un id_sessio de la resposta 1> a les 16:00?» → diu què xoca segons el verificador i que no ha aplicat cap canvi.
 4. [cap @ /] Pregunta «Em recomanes un restaurant?» → diu en una frase que només ajuda amb l'horari i proposa una pregunta.
 5. [cap @ /] Pregunta «¿Qué aulas hay libres el lunes a las 9?» → respon en castellà.
+6. [cap @ /] Mira sota la resposta del pas 1 → hi ha un bloc «Com es comprova · 1 consultes» amb `horari_grup`, els arguments i els id_sessio en codi.
+7. [cap @ /] Pregunta «Quantes sessions de GED 3r comencen després de les 15:00 dimecres?» → respon 42 i el bloc de sota mostra la consulta SQL sencera.

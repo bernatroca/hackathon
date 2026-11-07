@@ -30,6 +30,7 @@ Fora d'abast: aplicar canvis, enviar avisos, respondre coses que no siguin de l'
 - Surt del menú l'entrada «Pregunta-ho · aviat» (secció «Ajuda»).
 - Colors amb les variables `--xatia-*`, iguals que l'app.
 - Cada resposta acaba amb un bloc **«Com es comprova»**: els `id_sessio` en `codi` i la consulta SQL que s'ha fet, perquè el jurat ho busqui al CSV en un segon.
+- A sota de cada resposta, el **servidor** afegeix un bloc «Com es comprova · N consultes» amb cada eina cridada, els arguments, la consulta (l'SQL sencer si n'hi ha) i fins a 10 `id_sessio` (i quants més). No depèn del model: surt sempre que s'ha fet servir una eina (decisió d'en Bernat, ds 7-11 nit).
 
 ## Com funciona
 
