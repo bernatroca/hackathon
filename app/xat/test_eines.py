@@ -398,3 +398,40 @@ def test_descripcio_setmana_i_error_inesperat(monkeypatch):
     monkeypatch.setitem(e._HANDLERS, 'horari_grup', falla)
     r = e.executa('horari_grup', {'grup': '81'})
     assert not r['ok'] and 'No s’ha pogut completar' in r['error']
+
+
+@pytest.mark.parametrize('literal', ['típica', 'tipica', 'typical', 'setmana típica', 'TÍPICA', 'TYPICAL', 'SETMANA TIPICA'])
+def test_sql_setmana_tipica_literal(paquet, literal):
+    con = e.dades.connexio()
+    con.execute("ALTER TABLE sessions ADD COLUMN setmana VARCHAR DEFAULT '2027-W06'")
+    con.execute("UPDATE sessions SET setmana = '2027-W07' WHERE id_sessio = 'S0'")
+    sql = "SELECT count(*) AS n FROM sessions WHERE setmana = '2027-W06'"
+    esperat = e.executa('consulta_sql', {'sql': sql})
+    r = e.executa('consulta_sql', {'sql': sql.replace("'2027-W06'", f"'{literal}'")})
+    assert r['ok'] and esperat['ok'], r
+    assert r['resultat'] == esperat['resultat']
+    assert r['resultat']['files'][0]['n'] == 64
+    assert r['consulta'] == sql
+    assert e._setmana(paquet[0], None).strftime('%G-W%V') in r['consulta']
+
+
+def test_normalitzacio_setmana_mandrosa_i_exacta(paquet, monkeypatch):
+    carrega = e.nb.carrega_oficial
+    crides = []
+    def compta():
+        crides.append(True)
+        return carrega()
+    monkeypatch.setattr(e.nb, 'carrega_oficial', compta)
+    sql = '''SELECT 'setmana típica extra', ' típica', 'típica ', "'típica'", $$'typical'$$
+        /* 'típica' */ -- 'tipica'
+    '''
+    assert e._normalitza_dies_sql(sql) == sql
+    assert crides == []
+    assert e._normalitza_dies_sql("SELECT 'típica', 'setmana típica', 'dimecres'") == "SELECT '2027-W06', '2027-W06', 'X'"
+    assert len(crides) == 1
+
+
+def test_descripcio_sql_setmana_tipica():
+    desc = next(d['function']['description'] for d in e.EINES if d['function']['name'] == 'consulta_sql')
+    assert "per a la setmana típica, filtra setmana = 'típica' (es tradueix sol)" in desc
+    assert 'Sense filtre de setmana es compta tot el semestre' in desc
