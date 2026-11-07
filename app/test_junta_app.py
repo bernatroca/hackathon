@@ -177,7 +177,7 @@ def test_textos_principals_sense_codis_i_detall_tancat():
             continue
         for cadena in ('R8', 'R1-', 'PLAB', ' J ', 'TE/', 'PAUL', 'SEM', 'llindar', 'cota'):
             assert cadena not in text
-    assert any('R1-TORN PLAB TE/ PAUL SEM J R8' in m.value for m in detall.markdown)
+    assert any('regla de torn laboratori' in m.value for m in detall.markdown)
 
 
 def test_quatre_fitxes_i_colors():
@@ -328,7 +328,8 @@ def test_impacte_canvi_aula_visible_i_ordenat():
     app = obre(d, ['5.2'])
     assert app.dataframe[0].value.iloc[0]['Titulació i curs'] == 'Canvi aula'
     assert app.dataframe[0].value.iloc[0]['Canvi d’aula'] == 4
-    assert '40 %' in junta.fitxes(d)
+    assert '40 %' not in junta.fitxes(d)
+    assert '>Cap</div>' in junta.fitxes(d)
 
 
 @pytest.mark.parametrize('font', ['proposta.csv', 'relaxacions.csv'])
@@ -375,3 +376,23 @@ def test_totes_opcions_i_torns(nom):
         for torn in ['Matí', 'Tarda']:
             app.radio[0].set_value(torn).run()
             assert not app.exception and not app.error
+
+
+def test_motiu_intern_no_surt_al_detall():
+    d = dades()
+    d['excepcions'] = [dict(id_sessio='S04526', cohorts=['GXX:1r'],
+        motiu='impossibilitat demostrada amb R1 dura; vegeu diagnostic.md',
+        torn_requerit='tarda', prova='2027-03-08 10:30')]
+    app = obre(d, ['5.2'])
+    detall = next(e for e in app.expander if e.label == 'Detall tècnic')
+    assert all('diagnostic.md' not in m.value for m in detall.markdown)
+    assert 'diagnostic.md' not in detall.dataframe[-1].value.to_string()
+
+
+def test_curs_mes_afectat_només_horari():
+    d = dades()
+    d['sessions_mogudes'] = [dict(d['sessions_mogudes'][0], nom='Aules', afectades_pct=90),
+                            dict(d['sessions_mogudes'][0], nom='Horari', franja_pct=20)]
+    html = junta.fitxes(d)
+    assert '20 %' in html and '90 %' not in html
+    assert '<small>Horari</small>' in html

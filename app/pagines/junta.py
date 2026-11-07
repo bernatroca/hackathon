@@ -147,9 +147,11 @@ def fitxes(d):
                      + ('<small>Estimació de les aules necessàries.</small>' if p['estimacio'] else '')
                      + '</section>')
     cursos = files_cursos(d['sessions_mogudes'])
-    pitjor = cursos[0] if cursos and cursos[0].get('afectades_pct', cursos[0]['franja_pct']) > 0 else None
+    pitjor = max(cursos, key=lambda r: r['franja_pct'], default=None)
+    if pitjor and pitjor['franja_pct'] == 0:
+        pitjor = None
     peces.append('<section class="junta-fitxa"><h3>Curs més afectat</h3>'
-                 + (f'<div class="junta-xifra">{junta.percentatge(pitjor.get("afectades_pct", pitjor["franja_pct"]))}</div>'
+                 + (f'<div class="junta-xifra">{junta.percentatge(pitjor["franja_pct"])}</div>'
                     f'<small>{escape(pitjor["nom"])}</small>' if pitjor else '<div class="junta-xifra">Cap</div><small>Cap curs canvia de dia ni d&#39;hora.</small>')
                  + '</section>')
     n = len(d['excepcions'])
@@ -203,10 +205,12 @@ def mostra():
             hora = datetime.fromisoformat(d['data']).strftime('%H:%M')
             st.warning(f"Resum de les {hora}; no s'ha pogut actualitzar")
         st.markdown(fitxes(d), unsafe_allow_html=True)
+        st.caption(junta.resum_canvis_aula(d))
         for torn, etiqueta in [('mati', 'Matí'), ('tarda', 'Tarda')]:
             pic = d['pics'][torn].get('simultani')
             if pic:
                 st.write(f"{etiqueta}: màxim de classes alhora: {pic['classes']} ({pic['hora']}).")
+        st.caption(junta.EXPLICACIO_PICS)
         st.caption("Aules ocupades a l’hora punta (per a la reserva): les dues primeres fitxes.")
         if d['excepcions']:
             st.subheader('Excepcions als torns')
@@ -261,9 +265,9 @@ def mostra():
                 st.write(f"{d['torn_no_avaluable']} {junta.classe(d['torn_no_avaluable'])} sense torn definit.")
             mostra_taula(pd.DataFrame([{'Titulació i curs': r['nom'], 'Canvien de dia o hora': junta.percentatge(r['franja_pct']), 'Canvis d’aula': r['aula'], 'Aules assignades': r['aules_assignades']} for r in d['sessions_mogudes']]))
             for motiu in dict.fromkeys(r['motiu'] for r in d['excepcions']):
-                st.write(motiu)
+                st.write(junta.motiu_planer(motiu))
             if d['excepcions']:
-                mostra_taula(pd.DataFrame(d['excepcions']))
+                mostra_taula(pd.DataFrame([dict(e, motiu=junta.motiu_planer(e['motiu'])) for e in d['excepcions']]))
         if format_actual:
             _, html = junta.documents(d)
             st.download_button('Descarrega el resum A4', html, file_name='junta.html', mime='text/html')
