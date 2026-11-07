@@ -190,6 +190,7 @@ def estil_respostes():
 /* El filtre d'estat fa servir els colors i les icones de les pastilles de les targetes. */
 .st-key-respostes-estat [role=toolbar] > button::before {content:'';width:16px;height:16px;flex:none;margin-right:6px;background:center/16px no-repeat;}
 .st-key-respostes-estat [role=toolbar] > button {display:inline-flex;align-items:center;font-weight:600;}
+.st-key-respostes-estat [role=toolbar] {flex-wrap:wrap;overflow:visible;row-gap:8px;}
 .st-key-respostes-estat [role=toolbar] > button[aria-pressed=false] {background:#fff;color:#52514e;border-color:#e6e5e0;}
 .st-key-respostes-estat [role=toolbar] > button[aria-pressed=false]::before {filter:grayscale(1);opacity:.55;}
 .st-key-respostes-estat [role=toolbar] > button:nth-of-type(1)::before {background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23a12c2c'/%3E%3Cg fill='none' stroke='white' stroke-width='2'%3E%3Cpath d='m5 5 6 6m0-6-6 6'/%3E%3C/g%3E%3C/svg%3E");}
