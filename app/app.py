@@ -11,6 +11,7 @@ from pagines import portada, preguntes, part2, junta
 from servei import setmanes, versio_registre
 from components.vistes import franja_context
 from errors import mostra_error
+from xat.widget import posa_widget, pantalla_actual
 
 st.set_page_config(page_title="Espais de l’Escola",page_icon='▦',layout='wide')
 st.markdown('<style>'+ (ARREL/'estil.css').read_text() +'</style>',unsafe_allow_html=True)
@@ -18,10 +19,6 @@ st.markdown('<style>'+ (ARREL/'estil.css').read_text() +'</style>',unsafe_allow_
 
 def proposta():
     st.info('Aviat · Una proposta per repartir les classes i assignar les aules.')
-
-
-def pregunta():
-    st.info('Aviat · Fes preguntes sobre les aules i els horaris amb les teves paraules.')
 
 
 # La navegació i la capçalera s'envien abans de qualsevol lectura de dades.
@@ -35,7 +32,6 @@ pagina = st.navigation({
         st.Page(junta.mostra,title='Resum per a la Junta',url_path='junta',icon=':material/description:'),
         st.Page('pagines/imprevistos.py',title='Imprevistos',url_path='imprevistos',icon=':material/event_busy:'),
     ],
-    'Ajuda': [st.Page(pregunta,title='Pregunta-ho · aviat',icon=':material/chat:')],
 })
 with st.sidebar:
     st.markdown('<div class="marca-escola">Espais de l’Escola</div>', unsafe_allow_html=True)
@@ -76,3 +72,5 @@ with zona.container():
             referencia = st.session_state.resultats.get('hores-aula') or st.session_state.resultats.get('ocupacio')
             tipica = (referencia.extra or {}).get('setmana') if referencia else None
             franja.markdown(franja_context(semestre, setmana, tipica), unsafe_allow_html=True)
+
+posa_widget(pantalla_actual(pagina.title, st.session_state))

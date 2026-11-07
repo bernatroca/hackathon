@@ -3,15 +3,15 @@
    Segueix el tema clar/fosc del sistema; amb <html data-theme="light|dark"> el tria el programa. */
 
 :root {
-  --xatia-fons: #f5f2ec;
+  --xatia-fons: #f4f3ef;
   --xatia-paper: #ffffff;
-  --xatia-paper-alt: #ece7de;
-  --xatia-vora: #e0d9cc;
-  --xatia-text: #1d1a16;
-  --xatia-text-fluix: #5f584e;
-  --xatia-accent: #ba3d17;
+  --xatia-paper-alt: #f4f3ef;
+  --xatia-vora: #e6e5e0;
+  --xatia-text: #0b0b0b;
+  --xatia-text-fluix: #52514e;
+  --xatia-accent: #2a78d6;
   --xatia-sobre-accent: #ffffff;
-  --xatia-error: #b42318;
+  --xatia-error: #a12c2c;
   --xatia-ombra: 0 12px 40px rgba(60, 45, 20, 0.14);
   --xatia-radi: 12px;
   --xatia-amplada: 420px;
@@ -24,7 +24,7 @@
     --xatia-vora: #2a2e34;
     --xatia-text: #e8e9ea;
     --xatia-text-fluix: #9aa0a7;
-    --xatia-accent: #e65e35;
+    --xatia-accent: #2a78d6;
     --xatia-sobre-accent: #0f1113;
     --xatia-error: #ff8a7a;
     --xatia-ombra: 0 12px 40px rgba(0, 0, 0, 0.45);
@@ -37,7 +37,7 @@
   --xatia-vora: #2a2e34;
   --xatia-text: #e8e9ea;
   --xatia-text-fluix: #9aa0a7;
-  --xatia-accent: #e65e35;
+  --xatia-accent: #2a78d6;
   --xatia-sobre-accent: #0f1113;
   --xatia-error: #ff8a7a;
   --xatia-ombra: 0 12px 40px rgba(0, 0, 0, 0.45);
@@ -175,3 +175,20 @@
   .xatia--gran .xatia-cos { padding: 24px; }
   .xatia--gran .xatia-missatge { font-size: 15px; }
 }
+
+/* Streamlit transmet el tema actiu amb aquestes variables. Això preval
+   sobre la preferència del sistema quan l'usuari tria un tema a l'app. */
+.xatia {
+  --xatia-fons: var(--background-color, var(--fons, #f4f3ef));
+  --xatia-paper: var(--secondary-background-color, var(--targeta, #ffffff));
+  --xatia-paper-alt: var(--background-color, #f4f3ef);
+  --xatia-text: var(--text-color, #0b0b0b);
+  --xatia-text-fluix: color-mix(in srgb, var(--xatia-text) 70%, var(--xatia-paper));
+  --xatia-vora: color-mix(in srgb, var(--xatia-text) 12%, var(--xatia-paper));
+  --xatia-accent: var(--primary-color, #2a78d6);
+  --xatia-sobre-accent: #ffffff;
+}
+/* La barra de Streamlit i el gestor de connexió poden ocupar el peu dret.
+   Reservem també espai al contingut per arribar als darrers controls. */
+.xatia-boto { bottom: max(64px, calc(env(safe-area-inset-bottom) + 48px)); }
+[data-testid="stMainBlockContainer"] { padding-bottom: 132px; }
