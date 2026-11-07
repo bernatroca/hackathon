@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import hashlib
+import os
+import tempfile
 from collections import Counter, defaultdict
 from datetime import datetime
 from html import escape
@@ -53,7 +56,45 @@ DETALL_TECNIC += (
     'no garantia d’encaix. No se sumen els marges.')
 
 
+VERSIO_RESUM = 3
+VERSIO_CALCUL = 1
+MOTIU_S04526 = ("A la setmana d’avaluació no hi ha cap franja de tarda lliure "
+                "per a aquesta classe; ho demostra el càlcul.")
+
+
+def classe(n):
+    return 'classe' if n == 1 else 'classes'
+
+
+def empremtes(proposta=None):
+    if proposta is None:
+        return {'proposta': 'Avui', 'relaxacions': None}
+    proposta = Path(proposta)
+    relax = proposta.with_name('relaxacions.csv')
+    return {'proposta': hashlib.sha256(proposta.read_bytes()).hexdigest(),
+            'relaxacions': hashlib.sha256(relax.read_bytes()).hexdigest() if relax.exists() else None}
+
+
+def escriu_atomic(path, text):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporal = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=path.parent,
+                                         delete=False) as f:
+            temporal = Path(f.name)
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temporal, path)
+    finally:
+        if temporal is not None:
+            temporal.unlink(missing_ok=True)
+
+
 def motiu_planer(text):
+    if 'diagnostic.md' in text or 'S04526' in text:
+        return MOTIU_S04526
     for tecnic, planer in [('R1-TORN', 'regla de torn'), ('PLAB', 'laboratori'),
                            ('TE/', 'grup '), ('PAUL', 'problemes'), ('SEM', 'seminari'),
                            (' J ', ' d’un altre edifici '), ('R8', 'reserva d’aules'),
@@ -96,7 +137,7 @@ def explicacio_marge(d):
 
 def nom(cohort):
     tit, _, curs = cohort.partition(':')
-    sufix = ', curs desconegut' if curs == '?' else f', {curs}' if curs not in ('', 'M') else ''
+    sufix = ', sense curs a les dades' if curs == '?' else f', {curs}' if curs not in ('', 'M') else ''
     return NOMS.get(tit, f'Titulació {tit}') + sufix
 
 
@@ -257,7 +298,7 @@ def calcula(proposta, base, model, col, relaxacions=None):
                  mogudes_pct=100 * mogudes[r['cohort']] / r['sessions'])
     cohorts.sort(key=lambda r: (-r['afectades_pct'], -r['afectades'], r['cohort']))
     pitjor = max((r['afectades_pct'] for r in cohorts), default=0)
-    return {'versio_resum': 2, 'data': datetime.now().astimezone().isoformat(timespec='seconds'),
+    return {'versio_resum': VERSIO_RESUM, 'versio_calcul': VERSIO_CALCUL, 'data': datetime.now().astimezone().isoformat(timespec='seconds'),
             'aulari': aulari(base),
             'pics': pics_i_mides(base, model, col), 'sessions_mogudes': cohorts,
             'pitjor_cohort': [r['cohort'] for r in cohorts if r['afectades_pct'] == pitjor],
@@ -284,7 +325,7 @@ def documents(d):
     for torn, etiqueta in [('mati', 'Matí'), ('tarda', 'Tarda')]:
         p = d['pics'][torn].get('simultani')
         if p:
-            md.append(f"{etiqueta}: {p['classes']} classes · {p['hora']}. Comptem per instant les classes que necessiten aula ordinària, amb les compartides un cop.")
+            md.append(f"{etiqueta}: {p['classes']} {classe(p['classes'])} · {p['hora']}. Comptem per instant les classes que necessiten aula ordinària, amb les compartides un cop.")
     md += ['## Aules per nombre de places (estimació si falta aula)',
            f"La mida indica les places de l’aula; si encara no en té, indica els alumnes previstos. Les aules ocupades per mida sumen el màxim de cada torn. Comparem també les classes i les aules prou grans: + vol dir que sobren aules; − vol dir que en falten. Una aula gran pot acollir un grup petit. Cal guardar {d['aulari']['reserva']} aules de reserva. No s’han de sumar els resultats de les files. Aquest recompte no garanteix que tot l’horari encaixi.",
            '| Places · mínim per comparar | Aules d’aquesta mida | Ocupades al màxim: matí / tarda | Matí: classes/aules prou grans (sobren o falten) | Tarda: classes/aules prou grans (sobren o falten) |', '|---|---|---|---|---|']
@@ -306,20 +347,20 @@ def documents(d):
     if not d['excepcions']:
         md.append('No hi ha excepcions noves als torns.')
     else:
-        md.append(f"{len(d['excepcions'])} classes amb una excepció declarada al torn que els toca. Sabem a quina hora es fan, però això no demostra que sigui impossible canviar-les. Els motius consten al detall tècnic.")
+        md.append(f"{len(d['excepcions'])} {classe(len(d['excepcions']))} amb una excepció declarada al torn que els toca. Sabem a quina hora es fan, però això no demostra que sigui impossible canviar-les. Els motius consten al detall tècnic.")
         motius = defaultdict(list)
         for r in d['excepcions_resum']:
             motius[r['motiu']].append(f"{r['nom']}: {percentatge(r['percentatge'])} ({r['sessions']})")
         for motiu, files in motius.items():
             n = sum(e.get('motiu') == motiu for e in d['excepcions'])
-            md.append(motiu_planer(motiu) + f' ({n} classes): ' + '; '.join(files) + '.')
+            md.append(motiu_planer(motiu) + f' ({n} {classe(n)}): ' + '; '.join(files) + '.')
     for e in d['excepcions']:
         if e.get('id_sessio') == 'S04526':
-            md.append('Cas S04526: ' + motiu_planer(e['motiu']))
+            md.append('Cas S04526: ' + MOTIU_S04526)
     if d['fora_torn_ja_avui']:
-        md.append(f"{d['fora_torn_ja_avui']} classes ja es fan avui fora del seu torn i no es toquen.")
+        md.append(f"{d['fora_torn_ja_avui']} {classe(d['fora_torn_ja_avui'])} ja es {'fa' if d['fora_torn_ja_avui'] == 1 else 'fan'} avui fora del seu torn i no es {'toca' if d['fora_torn_ja_avui'] == 1 else 'toquen'}.")
     if d['torn_no_avaluable']:
-        md.append(f"No podem comprovar el torn de {d['torn_no_avaluable']} classes perquè no tenen un torn definit.")
+        md.append(f"No podem comprovar el torn de {d['torn_no_avaluable']} {classe(d['torn_no_avaluable'])} perquè no tenen un torn definit.")
     md += ['## Com ho hem calculat', COM_HO_HEM_CALCULAT,
            '## Detall tècnic', '<small>',
            '## ' + titol_marge(d), explicacio_marge(d),
@@ -372,14 +413,18 @@ def main(argv=None):
     try:
         escenari = escenari_proposta(args.proposta.parent.name)
         base, model = carrega_oficial(escenari), carrega_model(escenari)
+        abans = empremtes(args.proposta)
         proposta, col = carrega_proposta(args.proposta, base, escenari)
         relax = args.proposta.parent / 'relaxacions.csv'
         dades = calcula(proposta, base, model, col, relax if relax.exists() else None)
+        if empremtes(args.proposta) != abans:
+            raise ValueError('Les fonts han canviat durant el càlcul')
+        dades['empremtes'] = abans
         md, html = documents(dades)
         args.sortida.mkdir(parents=True, exist_ok=True)
         for nom_fitxer, text in [('junta.json', json.dumps(dades, ensure_ascii=False, indent=2)),
                                  ('junta.md', md), ('junta.html', html)]:
-            (args.sortida / nom_fitxer).write_text(text, encoding='utf-8')
+            escriu_atomic(args.sortida / nom_fitxer, text)
         for torn in ('mati', 'tarda'):
             resum = dades['pics'][torn]
             etiqueta = ' (estimació)' if resum['pitjor']['estimacio'] else ''
