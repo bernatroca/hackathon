@@ -122,6 +122,23 @@ def test_cli_csv_referencia_relaxacions_i_nomes_aules():
     assert 'Veredicte oficial' in out.getvalue()
 
 
+def test_assignacions_i_exclusions_com_verificador():
+    from horaris.check import _objectius, _col_loca, Informe as InformeIntern
+    b = base_petita()
+    b.sessions['0'].aula = ''
+    b.sessions['1'].aula = 'J/001'
+    b.sessions['2'].sense_espai = True
+    p = Proposta.de_base(b)
+    for a in p.files.values():
+        a.aula = 'B'
+    x, cohorts = calcula(p, b, INFORME)
+    oficial = _objectius(b, _col_loca(b, p.a_files(), InformeIntern()))
+    assert oficial['canvis_aula'] == 0
+    assert x['aules_assignades'] == 1
+    assert all(r['aula'] == r['aula_pct'] == 0 for r in cohorts)
+    assert all(r['aules_assignades'] == 1 for r in cohorts)
+
+
 class TestXifres(unittest.TestCase):
     """Adaptador perquè les mateixes proves funcionin sense dependències."""
 

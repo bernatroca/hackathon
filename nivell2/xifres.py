@@ -13,7 +13,7 @@ from tempfile import TemporaryDirectory
 
 from nivell2.base import Base, Informe, Proposta, carrega_oficial, verifica
 from horaris.check import Informe as InformeIntern, _col_loca
-from horaris.model import llegeix_relaxacions
+from horaris.model import llegeix_relaxacions, a_traslladar
 
 
 @dataclass
@@ -44,7 +44,7 @@ def calcula(proposta: Proposta, base: Base, informe: Informe,
     for s in base.sessions.values():
         for coh in set(s.cohorts):
             cohorts[coh]['sessions'] += 1
-    torns = sense_regla = 0
+    torns = sense_regla = assignades = 0
     for sid, c in col.items():
         s = c.s
         patrons[s.activitat or sid][(c.data.weekday(), c.ini, c.aula)] += 1
@@ -53,6 +53,8 @@ def calcula(proposta: Proposta, base: Base, informe: Informe,
         torns += canvi_torn
         sense_regla += canvi_torn and not (
             s.torn in ('mati', 'tarda') and torn == (s.torn == 'tarda'))
+        aula_assignada = bool(not s.aula and c.aula and not s.sense_espai)
+        assignades += aula_assignada
         for coh in set(s.cohorts):
             k = (coh, s.linia, c.data.isocalendar()[:2])
             aules[k]  # inclou grups/setmanes sense cap aula assignada
@@ -61,11 +63,14 @@ def calcula(proposta: Proposta, base: Base, informe: Informe,
             r = cohorts[coh]
             r['avaluables'] += 1
             r['franja'] += (c.data, c.ini) != (s.data, s.ini)
-            r['aula'] += c.aula != s.aula
+            r['aula'] += bool(s.aula and not a_traslladar(s.aula) and not s.sense_espai
+                              and c.aula != s.aula)
+            r['aules_assignades'] += aula_assignada
             r['torn'] += canvi_torn
     x['activitats_rutinaries_pct'] = (
         100 * sum(len(p) == 1 for p in patrons.values()) / len(patrons) if patrons else None)
     x['excepcions_rutina'] = sum(sum(p.values()) - max(p.values()) for p in patrons.values())
+    x['aules_assignades'] = assignades
     x['canvis_torn'] = torns
     x['canvis_torn_sense_regla1'] = sense_regla
     x['aules_grup_setmana_mitjana'] = sum(map(len, aules.values())) / len(aules) if aules else 0
@@ -81,6 +86,7 @@ def calcula(proposta: Proposta, base: Base, informe: Informe,
             fila[canvi] = r[canvi]
             fila[f'{canvi}_pct'] = (100 * r[canvi] / r['sessions']
                                        if r['avaluables'] == r['sessions'] else None)
+        fila['aules_assignades'] = r['aules_assignades']
         files.append(fila)
     for canvi in ('franja', 'aula', 'torn'):
         candidats = [r for r in files if r[f'{canvi}_pct'] is not None]
