@@ -15,10 +15,11 @@ def configuracio(monkeypatch):
         for camp in ('URL', 'CLAU', 'MODEL'):
             monkeypatch.delenv(f'{prefix}_{camp}', raising=False)
     monkeypatch.delenv('IA_PROVA', raising=False)
+    monkeypatch.delenv('IA_API', raising=False)
     monkeypatch.setenv('IA_URL', 'http://ia.invalid/v1')
     monkeypatch.setenv('IA_CLAU', 'secret-de-prova')
     monkeypatch.setenv('IA_MODEL', 'model-fals')
-    monkeypatch.setattr(s, '_eines', lambda: SimpleNamespace(EINES=[{'type': 'function'}], executa=lambda n, a: {'ok': True, 'resultat': a}))
+    monkeypatch.setattr(s, '_eines', lambda: SimpleNamespace(EINES=[{'type': 'function', 'function': {'name': 'consulta', 'description': 'Inventada', 'parameters': {'type': 'object'}}}], executa=lambda n, a: {'ok': True, 'resultat': a}))
 
 
 def crida(nom='consulta', args='{}', id='call_1'):
@@ -135,6 +136,7 @@ def test_error_durant_flux(monkeypatch):
 
 
 def test_stream_fragments(monkeypatch):
+    monkeypatch.setenv('IA_API', 'chat')
     blocs = [
         {'choices': [{'delta': {'tool_calls': [{'index': 0, 'id': 'c1', 'function': {'name': 'cons', 'arguments': '{"a":'}}]}}]},
         {'choices': [{'delta': {'tool_calls': [{'index': 0, 'function': {'name': 'ulta', 'arguments': '1}'}}]}}]},
@@ -148,7 +150,7 @@ def test_stream_fragments(monkeypatch):
     resultat = list(s._trossos_api(s.proveidors()[0], conversa()))
     assert resultat[0] == ('tools', [crida(args='{"a":1}', id='c1')])
     assert peticions[0]['tool_choice'] == 'auto'
-    assert peticions[0]['tools'] == [{'type': 'function'}]
+    assert peticions[0]['tools'] == s._eines().EINES
 
 
 def handler(metode, cos=b'', origen='http://localhost:8501', longitud=None):
@@ -315,3 +317,115 @@ def test_motiu_connexio(monkeypatch):
     assert 'connexió refusada [clau oculta] [clau oculta]' in exc.value.missatge
     assert 'secret-de-prova' not in exc.value.missatge
     assert 'secret-reserva' not in exc.value.missatge
+
+
+def resposta_sse(blocs):
+    return io.BytesIO(b''.join(('data: ' + json.dumps(b) + '\n\n').encode() for b in blocs)
+                      + b'data: [DONE]\n')
+
+
+def text_responses(text='Resposta inventada', status='completed'):
+    return [
+        {'type': 'response.created', 'response': {'status': 'in_progress'}},
+        {'type': 'response.in_progress'},
+        {'type': 'response.output_item.added', 'output_index': 0,
+         'item': {'type': 'message', 'id': 'msg_1', 'role': 'assistant', 'content': []}},
+        {'type': 'response.output_text.delta', 'item_id': 'msg_1', 'output_index': 0, 'delta': text},
+        {'type': 'response.output_item.done', 'output_index': 0,
+         'item': {'type': 'message', 'id': 'msg_1', 'role': 'assistant',
+                  'content': [{'type': 'output_text', 'text': text}]}},
+        {'type': 'response.completed', 'response': {'status': status,
+         'incomplete_details': {'reason': 'max_output_tokens'} if status == 'incomplete' else None,
+         'usage': {'output_tokens': 20}}},
+    ]
+
+
+@pytest.mark.parametrize('status', ['completed', 'incomplete'])
+def test_responses_text_i_peticio(monkeypatch, status):
+    peticions = []
+    def obre(req, **kwargs):
+        peticions.append(req)
+        return resposta_sse(text_responses(status=status))
+    monkeypatch.setattr(s.urllib.request, 'urlopen', obre)
+    resultat = events()
+    assert ''.join(e.get('tros', '') for e in resultat) == 'Resposta inventada'
+    assert resultat[-1]['fi']
+    assert resultat[-1]['tallada'] == (status == 'incomplete')
+    req = peticions[0]
+    cos = json.loads(req.data)
+    assert req.full_url == 'http://ia.invalid/v1/responses'
+    assert req.get_header('User-agent') == 'espais-escola/1.0'
+    assert cos['instructions'] == s.instruccions()
+    assert cos['input'] == [{'role': 'user', 'content': 'Pregunta inventada'}]
+    assert cos['tools'] == [{'type': 'function', 'name': 'consulta', 'description': 'Inventada', 'parameters': {'type': 'object'}}]
+    assert cos['max_output_tokens'] == 4000
+    assert cos['stream'] is True
+    assert cos['tool_choice'] == 'auto'
+    assert 'messages' not in cos
+
+
+def test_responses_eina_i_despres_text(monkeypatch):
+    item = {'type': 'function_call', 'id': 'fc_123', 'call_id': 'call_456',
+            'name': 'consulta', 'arguments': '{"inventat":true}', 'status': 'completed'}
+    primer = [
+        {'type': 'response.created'},
+        {'type': 'response.output_item.added', 'output_index': 0,
+         'item': {**item, 'arguments': '', 'status': 'in_progress'}},
+        {'type': 'response.function_call_arguments.delta', 'item_id': 'fc_123', 'output_index': 0, 'delta': '{"inventat":'},
+        {'type': 'response.function_call_arguments.delta', 'item_id': 'fc_123', 'output_index': 0, 'delta': 'true}'},
+        {'type': 'response.output_item.done', 'output_index': 0, 'item': item},
+        {'type': 'response.completed', 'response': {'status': 'completed', 'incomplete_details': None, 'usage': {}}},
+    ]
+    peticions = []
+    def obre(req, **kwargs):
+        peticions.append(json.loads(req.data))
+        return resposta_sse(primer if len(peticions) == 1 else text_responses())
+    monkeypatch.setattr(s.urllib.request, 'urlopen', obre)
+    executa = Mock(return_value={'ok': True, 'resultat': [], 'id_sessio': [], 'consulta': 'inventada'})
+    monkeypatch.setattr(s, '_eines', lambda: SimpleNamespace(EINES=[], executa=executa))
+    resultat = events()
+    assert resultat[0] == {'eina': 'consulta'}
+    executa.assert_called_once_with('consulta', {'inventat': True})
+    entrada = peticions[1]['input']
+    assert entrada[1] == item  # Preserva l'item complet, inclosos id i status.
+    assert entrada[2]['type'] == 'function_call_output'
+    assert entrada[2]['call_id'] == 'call_456'
+    assert entrada[2]['output'] == '<dades>\n' + json.dumps(executa.return_value, ensure_ascii=False) + '\n</dades>'
+    assert resultat[-1]['fi']
+
+
+@pytest.mark.parametrize('error', [
+    {'type': 'error', 'message': 'Error inventat secret-de-prova'},
+    {'type': 'response.failed', 'response': {'status': 'failed', 'error': {'message': 'Error inventat secret-de-prova'}}},
+])
+def test_responses_error_mig_flux(monkeypatch, error):
+    monkeypatch.setattr(s.urllib.request, 'urlopen', lambda *a, **kw: resposta_sse([
+        {'type': 'response.output_text.delta', 'item_id': 'msg_1', 'output_index': 0, 'delta': 'Inici'}, error]))
+    resultat = events()
+    assert resultat[0] == {'tros': 'Inici'}
+    assert 'Error inventat [clau oculta]' in resultat[-1]['error']
+    assert 'secret-de-prova' not in json.dumps(resultat)
+    assert not any(e.get('fi') for e in resultat)
+
+
+def test_responses_captures(monkeypatch):
+    obre = Mock(return_value=resposta_sse(text_responses()))
+    monkeypatch.setattr(s.urllib.request, 'urlopen', obre)
+    missatges = s.valida({'missatges': [{'role': 'user', 'content': [
+        {'type': 'text', 'text': 'Pantalla inventada'},
+        {'type': 'image_url', 'image_url': {'url': 'data:image/jpeg;base64,AAAA'}}]}]})
+    list(s._trossos_api(s.proveidors()[0], missatges))
+    assert json.loads(obre.call_args.args[0].data)['input'] == [
+        {'role': 'user', 'content': [{'type': 'input_text', 'text': 'Pantalla inventada'},
+                                   {'type': 'input_image', 'image_url': 'data:image/jpeg;base64,AAAA'}]}]
+
+
+@pytest.mark.parametrize('url, clau', [('', ''), ('http://reserva.invalid/v1', ''), ('', 'altra-clau')])
+def test_reserva_hereta_configuracio(monkeypatch, url, clau):
+    monkeypatch.setenv('IA_RESERVA_MODEL', 'arrow-2')
+    monkeypatch.setenv('IA_RESERVA_URL', url)
+    monkeypatch.setenv('IA_RESERVA_CLAU', clau)
+    reserva = s.proveidors()[1]
+    assert reserva['model'] == 'arrow-2'
+    assert reserva['url'] == (url or 'http://ia.invalid/v1')
+    assert reserva['clau'] == (clau or 'secret-de-prova')
