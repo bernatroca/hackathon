@@ -17,6 +17,8 @@ python -m nivell1.comprova        # ha d'acabar amb «25/25 comprovacions correc
 streamlit run app/app.py          # http://localhost:8501, només des d'aquest ordinador
 ```
 
+**Assistent (part 3).** El botó «Assistent» surt baix a la dreta de totes les pàgines. Per connectar-lo a la IA de l'event, posa al `.env` de l'arrel `IA_URL=https://api.quiver.ai/v1`, `IA_CLAU=<la clau>`, `IA_MODEL=arrow-2-telos` i, si vols reserva, `IA_RESERVA_MODEL=arrow-2` (vegeu `app/xat/env.exemple`). Sense clau, `IA_PROVA=1 streamlit run app/app.py` respon un text de prova. El servidor del xat arrenca sol dins de Streamlit, al port 8502.
+
 L'esquema de les dades, amb files inventades, és a [docs/esquema-dades.md](docs/esquema-dades.md). Els passos per validar l'app són a [VALIDATION.md](VALIDATION.md).
 
 ## Què hi ha
@@ -40,6 +42,7 @@ L'esquema de les dades, amb files inventades, és a [docs/esquema-dades.md](docs
 | --- | --- | --- |
 | Claude Code (app d'escriptori de Claude) | Claude Opus 5.5 (`claude-opus-5-5`) | Dues sessions d'orquestració, una per a la part 1 i una per a la part 2. Preguntar a l'equip, escriure especificacions, repartir tasques, revisar, unir branques, fer commits, provar l'app al navegador i escriure documents i el diari. |
 | Codex (compte ChatGPT de l'equip) | `gpt-6.1-sol`, esforç *medium* (alguns reintents i revisions, *high*) | Subagents que programen per rols (dades, backend, frontend), cadascun a la seva branca. També una revisió com a jurat i mentor (només lectura). |
+| quiver.ai, el LLM de l'event (API Responses, `https://api.quiver.ai/v1`) | `arrow-2-telos` (principal) i `arrow-2` (reserva) | L'assistent de la part 3: respon les preguntes de Gestió Acadèmica cridant eines nostres (horari d'un grup, aules lliures, xifres de la part 1, resultats 5.1–5.4, SQL de lectura i prova de canvis amb el verificador). Sota cada resposta, el servidor mostra les consultes fetes i els `id_sessio`. |
 
 Les sessions de Codex s'executen sense xarxa dins de l'ordinador. Aquest límit és del sandbox local: el que Codex llegeix o executa sí que s'envia als servidors d'OpenAI perquè el model ho processi. El mateix passa amb Claude Code i els servidors d'Anthropic.
 
