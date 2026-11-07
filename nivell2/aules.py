@@ -4,16 +4,59 @@ import time
 
 from ortools.sat.python import cp_model
 from nivell2.base import Proposta
-from horaris.check import _espai_ok, passadis, FRANGES, RESERVA_MIN
+from horaris.check import _espai_ok, avalua, passadis, FRANGES, RESERVA_MIN
 from horaris.model import a_traslladar
 
 PES_CANVI = 3
 PES_PASSADIS = 2
-PES_AULA_BASE = 10000
-PES_TE_FORA_BASE = 1000
-PES_PAUL_FORA_BASE = 200
-PES_MATEIXA_AULA = 1
-PES_TRANSICIO_TE_PAUL = 1000
+
+
+def parells_seguits(units, times):
+    """Parells físics per cohort, línia i subgrup; compartits pel cost i el solver."""
+    agenda = defaultdict(set)
+    subgroups = defaultdict(set)
+    for u, ss in units.items():
+        for s in ss:
+            for coh in s.cohorts:
+                key = coh, s.linia, times[u][0]
+                sub = '*' if s.tipus == 'TE' else s.num_grup
+                agenda[*key, sub].add(u)
+                subgroups[key].add(sub)
+    pairs = Counter()
+    for key, seen in sorted(subgroups.items()):
+        subs = sorted(seen - {'*'}) or ['*']
+        for sub in subs:
+            us = agenda.get((*key, '*'), set()) | agenda.get((*key, sub), set())
+            us = sorted(us, key=lambda u: (times[u][1], units[u][0].id))
+            pairs.update(zip(us, us[1:]))
+    return pairs
+
+
+def qualitat_aules(base, rooms, franges=None, referencia=None):
+    """Criteri únic: rutina, aula base TE, cost 3·canvis + 2·passadís.
+
+    Les dobles no necessiten espai. Els pesos 3 i 2 són els de l'especificació;
+    la prioritat de rutina i aula base és lexicogràfica, sense llindars absoluts.
+    """
+    ref = (referencia or Proposta.de_base(base)).files
+    units, patterns, te = defaultdict(list), defaultdict(Counter), defaultdict(set)
+    changes = 0
+    for sid, s in base.sessions.items():
+        if s.sense_espai:
+            continue
+        units[s.unitat].append(s)
+        patterns[s.activitat or sid][rooms[sid]] += 1
+        changes += bool(ref[sid].aula and not a_traslladar(ref[sid].aula) and rooms[sid] != ref[sid].aula)
+        if s.tipus == 'TE':
+            for coh in s.cohorts:
+                te[coh, s.linia].add(rooms[sid])
+    times = {u: (franges or {}).get(ss[0].id, (ss[0].data, ss[0].ini)) for u, ss in units.items()}
+    walks = sum(n for (a, b), n in parells_seguits(units, times).items()
+                if rooms[units[a][0].id] and rooms[units[b][0].id]
+                and passadis(rooms[units[a][0].id]) != passadis(rooms[units[b][0].id]))
+    exceptions = sum(sum(c.values()) - max(c.values()) for c in patterns.values())
+    extra = sum(max(0, len(rs) - 1) for rs in te.values())
+    return exceptions, extra, PES_CANVI * changes + PES_PASSADIS * walks
 
 
 def assigna_aules(base, franges, *, referencia=None, fixes=frozenset(), temps_s=300, llavor=0,
@@ -21,7 +64,7 @@ def assigna_aules(base, franges, *, referencia=None, fixes=frozenset(), temps_s=
     """Retorna (id_sessio -> aula, estat CP-SAT).
 
     agrupa_te: prova de concentració TE; uneix grups compatibles amb les
-    finestres, dominis i fixacions. Si no troba solució aviat, reintenta sense unions.
+    finestres, dominis i fixacions. Després prova també sense unions i compara amb el mateix criteri.
     millora_local: activa LNS amb pista vàlida; False manté cerca general
     (p. ex. quan el 5.2 ha canviat les franges de la pista).
     pista: Proposta opcional per AddHint, independent de referencia (costos).
@@ -90,22 +133,14 @@ def assigna_aules(base, franges, *, referencia=None, fixes=frozenset(), temps_s=
             return {}, 'INFEASIBLE'
         domains[u] = sorted(rid[a] for a in candidates)
 
-    # Student agendas use precisely the verifier's cohort/line/subgroup definition.
-    agenda = defaultdict(list)
-    for u, ss in units.items():
-        for s in ss:
-            for coh in s.cohorts:
-                agenda[coh, s.linia, times[u][0], '*' if s.tipus == 'TE' else s.num_grup].append(u)
-    pairs = defaultdict(int)
-    keys = {k[:3] for k in agenda}
-    for key in sorted(keys):
-        subs = sorted(k[3] for k in agenda if k[:3] == key and k[3] != '*') or ['*']
-        for sub in subs:
-            us = agenda.get((*key, '*'), []) + (agenda.get((*key, sub), []) if sub != '*' else [])
-            us = sorted(set(us), key=lambda u: (times[u][1], units[u][0].id))
-            for a, b in zip(us, us[1:]):
-                pairs[a, b] += 1
+    pairs = parells_seguits(units, times)
+    inherited = {
+        tuple(sorted(base.sessions[sid].unitat for sid in v.sessions))
+        for v in avalua(base, Proposta.de_base(base).a_files(), nomes_aules=True).violacions
+        if v.regla == 'R4-AULA' and v.heretada
+    }
     elapsed = 0
+    best, best_key, best_status = {}, None, 'UNKNOWN'
     attempts = [(True, True), (True, False), (False, False)] if agrupa_te else [(True, False), (False, False)]
     for strict, merge_te in attempts:
         model = cp_model.CpModel()
@@ -179,7 +214,7 @@ def assigna_aules(base, franges, *, referencia=None, fixes=frozenset(), temps_s=
                 model.add(var[u] != r).only_enforce_if(v.Not())
                 equal_cache[key] = v
             return equal_cache[key]
-        secondary, routine = [], []
+        secondary, routine, home_cost = [], [], []
         for act, us in acts.items():
             us = sorted(us)
             if not strict:
@@ -188,7 +223,7 @@ def assigna_aules(base, franges, *, referencia=None, fixes=frozenset(), temps_s=
                     different = model.new_bool_var('exception')
                     model.add(var[u] == center).only_enforce_if(different.Not())
                     model.add(var[u] != center).only_enforce_if(different)
-                    routine.append(different)
+                    routine.append(sum((s.activitat or s.id) == act for s in units[u]) * different)
         dates = defaultdict(list)
         for u, (d, start, end) in times.items():
             dates[d].append(u)
@@ -201,7 +236,13 @@ def assigna_aules(base, franges, *, referencia=None, fixes=frozenset(), temps_s=
                 for b in us[i+1:]:
                     if times[b][1] >= times[a][2]:
                         break
-                    if domains[a] != [rid['']] and domains[b] != [rid['']]:
+                    # Match the verifier's inherited room conflicts exactly; a
+                    # new pair or a moved fixed class must still be constrained.
+                    unchanged = all(franges[s.id] == (s.data, s.ini)
+                                    and domains[u] == [rid.get(s.aula)]
+                                    for u in (a, b) for s in units[u])
+                    exempt = unchanged and tuple(sorted((a, b))) in inherited
+                    if not exempt and domains[a] != [rid['']] and domains[b] != [rid['']]:
                         pair = tuple(sorted((root(a), root(b))))
                         if pair not in conflicts:
                             model.add(var[a] != var[b])
@@ -234,25 +275,17 @@ def assigna_aules(base, franges, *, referencia=None, fixes=frozenset(), temps_s=
             for u in us:
                 corridor_var[u] = c
         grouped_pairs = defaultdict(int)
-        te_paul_pairs = defaultdict(int)
         for (a, b), count in pairs.items():
             if root(a) != root(b):
                 key = tuple(sorted((root(a), root(b))))
                 grouped_pairs[key] += count
-                if {units[a][0].tipus, units[b][0].tipus} == {'TE', 'PAUL'}:
-                    te_paul_pairs[key] += count
         for (a, b), count in grouped_pairs.items():
             if domains[a] == [rid['']] or domains[b] == [rid['']]:
                 continue
-            move = model.new_bool_var('move')
-            model.add(var[a] != var[b]).only_enforce_if(move)
-            model.add(var[a] == var[b]).only_enforce_if(move.Not())
-            secondary.append(PES_MATEIXA_AULA * count * move)
             diff = model.new_bool_var('walk')
             model.add(corridor_var[a] != corridor_var[b]).only_enforce_if(diff)
             model.add(corridor_var[a] == corridor_var[b]).only_enforce_if(diff.Not())
             secondary.append(PES_PASSADIS * count * diff)
-            secondary.append(PES_TRANSICIO_TE_PAUL * te_paul_pairs[a, b] * diff)
         te = defaultdict(set)
         for u, ss in units.items():
             for s in ss:
@@ -263,32 +296,12 @@ def assigna_aules(base, franges, *, referencia=None, fixes=frozenset(), temps_s=
             for r in sorted({r for u in us for r in domains[u]}):
                 used = model.new_bool_var('base_room')
                 model.add_max_equality(used, [isroom(u, r) for u in us])
-                secondary.append(PES_AULA_BASE * used)
-        # One base room per student group, shared across all its activities.
-        for key, us in te.items():
-            choices = sorted({r for u in us for r in domains[u]})
-            home = model.new_int_var_from_domain(cp_model.Domain.from_values(choices), 'home')
-            home_corridor = model.new_int_var(0, len(corridors)-1, 'home_corridor')
-            model.add_allowed_assignments([home, home_corridor], [(r, corridors[passadis(rooms[r])]) for r in choices])
-            for u, us in grouped.items():
-                ss = [s for unit in us for s in units[unit]]
-                matching = [s for s in ss if key[0] in s.cohorts and s.linia == key[1] and s.tipus in ('TE', 'PAUL', 'SEM')]
-                if not matching:
-                    continue
-                diff = model.new_bool_var('outside_home')
-                if matching[0].tipus == 'TE':
-                    model.add(var[u] != home).only_enforce_if(diff)
-                    model.add(var[u] == home).only_enforce_if(diff.Not())
-                    weight = PES_TE_FORA_BASE
-                else:
-                    model.add(corridor_var[u] != home_corridor).only_enforce_if(diff)
-                    model.add(corridor_var[u] == home_corridor).only_enforce_if(diff.Not())
-                    weight = PES_PAUL_FORA_BASE
-                secondary.append(weight * len(matching) * diff)
-        bound = (PES_AULA_BASE * len(rooms) * len(te)
-                 + (PES_TE_FORA_BASE + PES_PAUL_FORA_BASE) * len(base.sessions) * max(1, len(te))
-                 + PES_CANVI * len(base.sessions) + (PES_PASSADIS + PES_MATEIXA_AULA + PES_TRANSICIO_TE_PAUL) * sum(pairs.values()) + 1)
-        model.minimize(sum(secondary) + bound*sum(routine))
+                home_cost.append(used)
+        # Encode the very same lexicographic tuple as qualitat_aules.
+        secondary_bound = PES_CANVI * len(base.sessions) + PES_PASSADIS * sum(pairs.values()) + 1
+        home_bound = len(rooms) * len(te) + 1
+        model.minimize(sum(secondary) + secondary_bound * sum(home_cost)
+                       + secondary_bound * home_bound * sum(routine))
         solver = cp_model.CpSolver()
         solver.parameters.max_time_in_seconds = max(.01, min(15, (temps_s-elapsed)*.2) if merge_te else temps_s-elapsed)
         solver.parameters.num_search_workers = 2
@@ -314,12 +327,21 @@ def assigna_aules(base, franges, *, referencia=None, fixes=frozenset(), temps_s=
         elapsed += time.monotonic()-begin
         name = solver.status_name(status)
         if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            assignment = dict(result)
             for u, ss in units.items():
                 for s in ss:
-                    result[s.id] = rooms[solver.value(var[u])]
-            return result, name
+                    assignment[s.id] = rooms[solver.value(var[u])]
+            key = qualitat_aules(base, assignment, franges, referencia)
+            if best_key is None or key < best_key:
+                best, best_key, best_status = assignment, key, name
+                pista = Proposta.de_base(base)
+                for sid, room in best.items():
+                    pista.files[sid].aula = room
+            if merge_te and elapsed < temps_s:
+                continue
+            return best, best_status
         if merge_te and status == cp_model.UNKNOWN and elapsed < temps_s:
             continue
         if status != cp_model.INFEASIBLE or not strict or elapsed >= temps_s:
-            return {}, name
-    return {}, 'UNKNOWN'
+            return (best, best_status) if best else ({}, name)
+    return best, best_status
