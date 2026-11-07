@@ -185,3 +185,9 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - Abans de canviar res: etiqueta part1-v1 per poder tornar enrere.
 - Coordinació: la sessió Part 2 havia esborrat els worktrees de la part 1. S'ha refet ../hack-frontend i s'ha acordat qui toca què a app/. La part 2 continua els seus fitxers ara que la passada és a main.
 - Skills noves trobades, per instal·lar a mà: jakubkrehel better-colors, better-layout i better-interface, i pbakaus impeccable.
+
+### [ds 18:19] IA · n2-frontend-2 unit: la graella es llegeix millor
+- Cada classe és un sol bloc, surt per defecte la proposta més avançada, hi ha una línia de resum per grup (canvis de franja, d'aula i de torn, i aules diferents a la setmana) i es marquen les excepcions de calendari. Té 27 proves verdes i l'he comprovat al navegador.
+- Es veu a ull nu que el 5.1 fa servir massa aules diferents per grup: la millora de l'aula base passa per davant.
+- Pendent de la graella: quan coincideixen subgrups, les columnes queden massa estretes.
+- La pàgina de la Junta espera el format de n2-dades-2, que ha preguntat dues coses i l'equip ha respost (excepcions agrupades a la pàgina; «No s'ha explicat per què» si no hi ha motiu).

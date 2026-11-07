@@ -7,7 +7,7 @@
 - Dades: el paquet real del repte a `repte/repte-horaris-escola/paquet/`, 2n semestre per defecte. No s'ha creat cap dada nova.
 - Xifres de l'enunciat que han de sortir: 2.008 classes al torn equivocat, 5.722 sense aula (74 %), 15 de 19 aules al pic, 68 % del matí i 43 amb més alumnes que places.
 - Comprovació automàtica feta: `python -m nivell1.comprova` dona 18/18 i `python app/test_app.py` dona OK.
-- Part 2: la proposta 5.1 és a `resultats/nivell2/5.1/` (només al Mac, fora de git). Comprovació automàtica feta: el verificador oficial amb `--nomes-aules` diu VALIDA; `python -m nivell2.comprova <proposta>` treu la taula d'abans i després; `pytest app/test_part2.py` (7), `nivell2/test_xifres.py` (6) i `nivell2/test_aules.py` (8) passen. El 5.2 encara no hi és.
+- Part 2: la proposta 5.1 és a `resultats/nivell2/5.1/` (només al Mac, fora de git). Comprovació automàtica feta: el verificador oficial amb `--nomes-aules` diu VALIDA; `python -m nivell2.comprova <proposta>` treu la taula d'abans i després; `pytest app/test_part2.py` (7), `nivell2/test_xifres.py` (6) i `nivell2/test_aules.py` (8) passen. El 5.2 encara no hi és. Si l'app del port 8501 ja estava oberta abans, s'ha de reiniciar per veure la part 2 nova (o fer servir http://localhost:8503, configuració «app-part2»).
 
 ## Portada «Com estem avui»
 
@@ -77,13 +77,14 @@
 ## Part 2 · Proposta d'horari
 
 1. [cap @ /part2] Obre «Part 2 · Proposta d'horari» al menú → surt la pàgina amb el selector «Proposta», el de «Setmana de la graella» i cap error vermell.
-2. [cap @ /part2] Obre el selector «Proposta» → hi ha «Avui» i «5.1» (5.2, 5.3 i 5.4 encara no hi són).
-3. [cap @ /part2] Tria «Avui» → surt l'avís blau «Dades de mostra: es fa servir l'horari d'avui».
+2. [cap @ /part2] Mira el selector «Proposta» sense tocar-lo → ja surt triada la «5.1» (la més avançada), i si l'obres hi ha «Avui» i «5.1». (reprova)
+3. [cap @ /part2] Tria «Avui» → les dues graelles són iguals i no surt cap classe en groc. (reprova)
 4. [cap @ /part2] A «La setmana de l'estudiant» tria Gestió de Ciutats Intel·ligents, curs 1r i grup 61 → surten dues graelles costat per costat, avui i proposta, de dilluns a divendres.
 5. [cap @ /part2] Tria la proposta «5.1» amb el mateix grup → les classes que avui diuen «Sense aula assignada» ara tenen aula, i cap no canvia de dia ni d'hora.
-6. [cap @ /part2] Mira el títol «… classes amb canvis al grup» → només compta canvis d'aula, perquè el 5.1 no mou cap hora; les classes canviades surten en groc.
-7. [cap @ /part2] Llegeix una classe de 2 hores a la graella → surt repetida a cada fila de 30 minuts; anota si costa de llegir (millora prevista: un sol bloc).
-8. [cap @ /part2] Baixa a «La setmana per aula» i tria l'aula Q9/5006 → surt la seva graella setmanal, sense dues classes a la mateixa hora.
-9. [cap @ /part2] Clica «Descarrega l'horari de l'aula per al jurat» → es baixa un fitxer HTML que s'obre sol al navegador amb la mateixa graella.
-10. [cap @ /part2] Canvia «Setmana de la graella» a la setmana del 15 de març → les dues graelles es tornen a dibuixar sense error.
-11. [cap @ /part2] Llegeix tots els textos de la pàgina → no hi surten sigles tècniques sense explicar, com «R1-TORN», «PAUL» o «TE».
+6. [cap @ /part2] Llegeix la línia de resum sota «… classes amb canvis al grup» → diu 0 canvis de dia o d'hora, els canvis d'aula, 0 canvis de torn i quantes aules diferents fa servir el grup (avui contra la proposta). (reprova)
+7. [cap @ /part2] Mira una classe de 2 hores a la graella → és un sol bloc que ocupa 4 files de 30 minuts, amb l'assignatura, el tipus en paraules, les hores i l'aula; anota si el text queda massa estret quan coincideixen subgrups. (reprova)
+8. [cap @ /part2] Amb la proposta «5.1» i el grup 61, llegeix «Aules diferents aquesta setmana» → anota quantes aules fa servir el grup; com més poques, millor (millora prevista de l'aula base).
+9. [cap @ /part2] Baixa a «La setmana per aula» i tria l'aula Q9/5006 → surt la seva graella setmanal, sense dues classes a la mateixa hora.
+10. [cap @ /part2] Clica «Descarrega l'horari de l'aula per al jurat» → es baixa un fitxer HTML que s'obre sol al navegador amb la mateixa graella.
+11. [cap @ /part2] Canvia «Setmana de la graella» a la setmana del 15 de març → les dues graelles es tornen a dibuixar sense error.
+12. [cap @ /part2] Llegeix tots els textos de la pàgina → no hi surten sigles tècniques sense explicar, com «R1-TORN», «PAUL» o «TE».
