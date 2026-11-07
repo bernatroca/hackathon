@@ -211,3 +211,39 @@
 }
 .xatia-consulta-codi button:focus-visible { outline: 2px solid var(--xatia-accent); outline-offset: 2px; }
 .xatia-consulta-error { color: var(--xatia-error); }
+
+/* Plafó acoblat: el main és un element flex i cedeix 420 px sense moure
+   el menú lateral. La classe només és activa en mida normal d'ordinador. */
+@media (min-width: 700px) {
+  [data-testid="stMain"] {
+    min-width: 0;
+    transition: margin-right 0.22s ease;
+  }
+  html.xatia-obert [data-testid="stMain"] {
+    margin-right: var(--xatia-amplada);
+    min-width: 0;
+  }
+  /* Deixem accessible la barra de controls superior de Streamlit. */
+  .xatia:not(.xatia--gran) .xatia-plafo { top: 48px; }
+  .xatia:not(.xatia--gran) .xatia-fons { pointer-events: none; }
+  .xatia--gran .xatia-fons { pointer-events: auto; }
+}
+@media (min-width: 700px) and (max-width: 1099px) {
+  html.xatia-obert [data-testid="stMainBlockContainer"] {
+    min-width: 0; max-width: 100%; padding-left: 16px; padding-right: 16px;
+    overflow-wrap: anywhere;
+  }
+  html.xatia-obert [data-testid="stMain"] [data-testid="stHorizontalBlock"] {
+    flex-wrap: wrap;
+  }
+  html.xatia-obert [data-testid="stMain"] [data-testid="stColumn"] {
+    min-width: 0; flex: 1 1 240px;
+  }
+  html.xatia-obert .espines,
+  html.xatia-obert .st-key-targetes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-testid="stMain"] { transition: none; }
+}
