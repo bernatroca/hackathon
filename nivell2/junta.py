@@ -42,14 +42,18 @@ DETALL_TECNIC = (
                 'a la mediana, desempat per la primera. Pitjor setmana: pic màxim de cada torn. '
                 'Torns de la base oficial, segons l’hora d’inici. Alumnes de la base del model. '
                 'Sessió moguda: canvi de dia o hora; canvi d’aula només si ja en tenia, sense J ni dobles sense espai; denominador: totes les sessions de cada titulació i curs. '
-                'Les compartides compten en cada titulació. Excepcions: totes les sessions fora de torn, '
-                'incloses les heretades que el verificador pot no penalitzar. No és una validació de l’horari.')
+                'Les compartides compten en cada titulació. Excepcions noves: sessions mogudes fora de torn. '
+                'Les que ja es fan avui fora de torn es compten a part. No és una validació de l’horari.')
 DETALL_TECNIC += (
     ' R1-TORN identifica la regla de torn; PLAB identifica els laboratoris. '
     'Les aules J són aules d’un altre edifici que s’han de portar a l’Escola. '
     'Llindars acumulats: demanda i oferta de totes les mides a partir del mínim indicat. '
     'Oferta limitada a 19, amb reserva flexible de dues aules: cota optimista, '
     'no garantia d’encaix. No se sumen els marges.')
+
+
+def percentatge(valor):
+    return f'{valor:.1f}'.rstrip('0').rstrip('.').replace('.', ',') + ' %'
 
 
 def nom(cohort):
@@ -153,6 +157,7 @@ def calcula(proposta, base, model, col, relaxacions=None):
     totals = {r['cohort']: r['sessions'] for r in cohorts}
     mogudes, canvis_aula, assignades = Counter(), Counter(), Counter()
     excepcions, grups = [], Counter()
+    fora_torn_ja_avui = 0
     relax = llegeix_relaxacions(relaxacions)
     for sid, c in col.items():
         s = c.s
@@ -163,6 +168,9 @@ def calcula(proposta, base, model, col, relaxacions=None):
         if not s.aula and c.aula and not s.sense_espai:
             assignades.update(set(s.cohorts))
         if _torn_ok(s.torn, c.ini, c.fi) is False:
+            if (c.data, c.ini) == (s.data, s.ini):
+                fora_torn_ja_avui += 1
+                continue
             motius = list(dict.fromkeys(r.justificacio for r in relax
                           if r.restriccio == 'R1-TORN' and (not r.sessions or sid in r.sessions)
                           and r.justificacio))
@@ -183,7 +191,7 @@ def calcula(proposta, base, model, col, relaxacions=None):
     return {'data': datetime.now().astimezone().isoformat(timespec='seconds'),
             'pics': pics_i_mides(base, model, col), 'sessions_mogudes': cohorts,
             'pitjor_cohort': [r['cohort'] for r in cohorts if r['mogudes_pct'] == pitjor],
-            'excepcions': excepcions,
+            'excepcions': excepcions, 'fora_torn_ja_avui': fora_torn_ja_avui,
             'excepcions_resum': [{'motiu': m, 'cohort': c, 'nom': nom(c), 'sessions': n,
                                   'percentatge': 100 * n / totals[c]}
                                  for (m, c), n in sorted(grups.items())],
@@ -214,27 +222,29 @@ def documents(d):
            'Comptem les classes que canvien de dia o d’hora. Les aules assignades són per a classes que abans no en tenien. Els percentatges es calculen sobre totes les classes de cada titulació i curs.',
            '| Titulació i curs | Canvien de dia o hora | Canvien d’aula | Canvien de torn | Aules assignades |', '|---|---|---|---|---|']
     for r in d['sessions_mogudes']:
-        md.append(f"| {r['nom']} | {r['mogudes_pct']:.1f}% ({r['mogudes']}/{r['sessions']}) | " +
-                  ' | '.join(f"{r[c+'_pct']:.1f}% ({r[c]})" for c in ('aula', 'torn')) + f" | {r['aules_assignades']} |")
+        md.append(f"| {r['nom']} | {percentatge(r['mogudes_pct'])} ({r['mogudes']}/{r['sessions']}) | " +
+                  ' | '.join(f"{percentatge(r[c+'_pct'])} ({r[c]})" for c in ('aula', 'torn')) + f" | {r['aules_assignades']} |")
     pitjors = [r for r in d['sessions_mogudes'] if r['cohort'] in d['pitjor_cohort']]
-    md.append('Cap classe canvia de dia ni d’hora; totes les titulacions i cursos empaten al 0%.' if all(r['mogudes'] == 0 for r in pitjors)
-              else 'Percentatge més alt: ' + '; '.join(f"{r['nom']}: {r['mogudes_pct']:.1f}% ({r['mogudes']})" for r in pitjors) + '.')
-    md += ['## Classes fora del torn que els toca']
+    md.append("Cap curs canvia de dia ni d'hora." if all(r['mogudes'] == 0 for r in pitjors)
+              else 'Percentatge més alt: ' + '; '.join(f"{r['nom']}: {percentatge(r['mogudes_pct'])} ({r['mogudes']})" for r in pitjors) + '.')
+    md += ['## Excepcions noves als torns']
     if not d['excepcions']:
-        md.append('No hi ha cap classe fora del torn que li toca.')
+        md.append('No hi ha excepcions noves als torns.')
     else:
-        md.append(f"{len(d['excepcions'])} classes fora del torn que els toca. Sabem a quina hora es fan, però això no demostra que sigui impossible canviar-les. Els motius consten al detall tècnic.")
+        md.append(f"{len(d['excepcions'])} classes mogudes fora del torn que els toca. Sabem a quina hora es fan, però això no demostra que sigui impossible canviar-les. Els motius consten al detall tècnic.")
         motius = defaultdict(list)
         for r in d['excepcions_resum']:
-            motius[r['motiu']].append(f"{r['nom']}: {r['percentatge']:.1f}% ({r['sessions']})")
+            motius[r['motiu']].append(f"{r['nom']}: {percentatge(r['percentatge'])} ({r['sessions']})")
         for motiu, files in motius.items():
             md.append('; '.join(files) + '.')
+    if d['fora_torn_ja_avui']:
+        md.append(f"{d['fora_torn_ja_avui']} classes ja es fan avui fora del seu torn i no es toquen.")
     if d['torn_no_avaluable']:
         md.append(f"No podem comprovar el torn de {d['torn_no_avaluable']} classes perquè no tenen un torn definit.")
     md += ['## Com ho hem calculat', COM_HO_HEM_CALCULAT,
            '## Detall tècnic', '<small>', d.get('detall_tecnic', DETALL_TECNIC)]
     for r in d['excepcions_resum']:
-        md.append(r['motiu'] + ': ' + r['nom'] + f": {r['percentatge']:.1f}% ({r['sessions']}).")
+        md.append(r['motiu'] + ': ' + r['nom'] + f": {percentatge(r['percentatge'])} ({r['sessions']}).")
     md.append('</small>')
     # Petit renderitzador segur: tot text de la proposta s’escapa abans d’anar a HTML.
     html, taula = [], False
