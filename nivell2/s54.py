@@ -4,7 +4,6 @@ Les dades només les llegeix aquest solver. La consola només mostra recomptes.
 Un INFEASIBLE amb el 5.2 congelat és resposta 2, mai resposta 4.
 """
 from __future__ import annotations
-from nivell2.readmes import actualitza
 
 import argparse
 import copy
@@ -12,17 +11,20 @@ import datetime as dt
 import itertools
 import json
 import shutil
+import tempfile
 import time
 from collections import Counter, defaultdict
 from pathlib import Path
 
 from ortools.sat.python import cp_model
 
-from nivell2.base import (ARREL, GRAU_NOU, PYTHON, RESULTATS, RESULTATS_PRINCIPAL,
+from nivell2.base import (ARREL, GRAU_NOU, PYTHON, RESULTATS,
                           Proposta, carrega_model, carrega_oficial, verifica)
 from nivell2.franges import _candidats, _referencia, _regles, _setmana
+from nivell2.franges import _hores_mortes
+from nivell2.alumnat import ReglaAlumnat
 from nivell2.s52 import escriu_csv
-from nivell2.comprova_persones import (colloca_avui, comprova_dobles, conflictes,
+from nivell2.comprova_persones import (colloca_avui, comprova_dobles, conflictes, conflictes_docents,
                                       parelles_dobles)
 from horaris.check import (FRANGES, RESERVA_MIN, Informe as InformeIntern,
                            _col_loca, _espai_ok, avalua)
@@ -77,6 +79,74 @@ def _solapa(a, b, c, d):
     return a < d and c < b
 
 
+def _objectiu(model, base, acts, slots, roomvars, options, regla):
+    """Ordre lexicogràfic exacte: canvis de franja, minuts morts, aules.
+
+    El 5.2 té cost zero provat perquè està congelat. Les cotes de cada
+    nivell fan que cap millora inferior compensi una sessió nova moguda.
+    Les agendes de subgrup inclouen l'única teoria de tota la cohort,
+    també quan la seva numeració no coincideix amb la de problemes.
+    """
+    moves = []
+    for a, rows in enumerate(acts):
+        for s in rows:
+            moved = model.new_bool_var('nova_fora_franja')
+            original = DIES.index(s.dia)*1440+s.ini
+            model.add(slots[a] != original).only_enforce_if(moved)
+            model.add(slots[a] == original).only_enforce_if(moved.Not())
+            moves.append(moved)
+    units, starts, weeks = defaultdict(list), {}, defaultdict(list)
+    for a, rows in enumerate(acts):
+        for s in rows:
+            row = copy.copy(s)
+            if any(len(regla.teories[c]) == 1 for c in s.cohorts):
+                # Només per a l'agenda del cost: no alterem dades ni grups
+                # de la proposta/verificador. Cada subgrup conserva agenda.
+                row.grup = 'TE/99' if s.tipus == 'TE' else 'PAUL/99'+s.num_grup
+            units[s.unitat].append(row)
+            starts[s.unitat] = slots[a]
+    for u, rows in units.items():
+        weeks[_setmana(rows[0])].append(u)
+    gaps = _hores_mortes(model, base, units, starts, weeks)
+    # Aula base per cohort/línia: nombre d'aules diferents al llarg de tot
+    # el semestre. També penalitzem parelles d'activitats del grup que
+    # comparteixen dia però no aula (inclou les classes consecutives).
+    groups = defaultdict(set)
+    for a, rows in enumerate(acts):
+        for s in rows:
+            for c in s.cohorts:
+                groups[c, '*' if len(regla.teories[c]) == 1 else s.linia].add(a)
+    room_cost = []
+    for members in groups.values():
+        for r in sorted({r for a in members for _, r in options[a]}):
+            uses = []
+            for a in sorted(members):
+                use = model.new_bool_var('aula_base')
+                model.add(roomvars[a] == r).only_enforce_if(use)
+                model.add(roomvars[a] != r).only_enforce_if(use.Not())
+                uses.append(use)
+            used = model.new_bool_var('aula_del_grup')
+            model.add_max_equality(used, uses)
+            room_cost.append(used)
+        for a, b in itertools.combinations(sorted(members), 2):
+            days = [model.new_int_var(0, 4, 'dia_canvi_aula') for _ in range(2)]
+            for day, slot in zip(days, (slots[a], slots[b])):
+                model.add_division_equality(day, slot, 1440)
+            same = model.new_bool_var('mateix_dia_aula')
+            model.add(days[0] == days[1]).only_enforce_if(same)
+            model.add(days[0] != days[1]).only_enforce_if(same.Not())
+            diff = model.new_bool_var('canvi_aula_grup')
+            model.add(roomvars[a] != roomvars[b]).only_enforce_if(diff)
+            model.add(roomvars[a] == roomvars[b]).only_enforce_if(diff.Not())
+            cost = model.new_bool_var('penalitzacio_aula')
+            model.add_min_equality(cost, [same, diff])
+            room_cost.append(cost)
+    room_bound = len(room_cost)
+    lower_bound = len(gaps)*1440*(room_bound+1)+room_bound
+    model.minimize(sum(moves)*(lower_bound+1) + sum(gaps)*(room_bound+1) + sum(room_cost))
+    return moves, gaps, room_cost
+
+
 def resol_congelat(base, referencia, *, temps_s=60, llavor=0):
     """Model conjunt exacte dins les condicions: rutina dura i 5.2 congelat.
 
@@ -96,6 +166,10 @@ def resol_congelat(base, referencia, *, temps_s=60, llavor=0):
            base.sessions[s].sense_espai or base.sessions[s].torn != 'mati' for s in noves):
         raise ValueError('Les sessions noves han de ser movibles, de matí i sense aula')
     acts = _activitats(base, noves)
+    regla = ReglaAlumnat(base.sessions.values())
+
+    def regles(a, b):
+        return _regles(a, b) or regla(a, b)
     fixed = defaultdict(list)
     occupied = defaultdict(set)
     ordinary = {a for a, room in base.aules.items() if room.ordinaria}
@@ -132,7 +206,7 @@ def resol_congelat(base, referencia, *, temps_s=60, llavor=0):
         for slot in sorted(domain):
             dates = [(_setmana(s)+dt.timedelta(days=slot//1440), s) for s in rows]
             start = slot % 1440
-            if any(s.unitat != other.unitat and _regles(s, other)
+            if any(s.unitat != other.unitat and regles(s, other)
                    and _solapa(start, start+s.durada, t, end)
                    for date, s in dates for other, t, end, _ in fixed[date]):
                 rejected['persones_o_plab'] += 1
@@ -182,7 +256,8 @@ def resol_congelat(base, referencia, *, temps_s=60, llavor=0):
         for s in acts[a]:
             for t in acts[b]:
                 if _setmana(s) == _setmana(t):
-                    durations.add((s.durada, t.durada, bool(_regles(s, t))))
+                    if s.unitat != t.unitat:
+                        durations.add((s.durada, t.durada, bool(regles(s, t))))
         for da, db, people in durations:
             before = model.new_bool_var('abans')
             after = model.new_bool_var('despres')
@@ -248,17 +323,42 @@ def resol_congelat(base, referencia, *, temps_s=60, llavor=0):
         if signature not in seen:
             model.add(sum(literals) <= available)
             seen.add(signature)
-    # El nombre de canvis al 5.2 té la cota inferior assolida de zero.
+    moves, gaps, room_cost = _objectiu(model, base, acts, slots, roomvars, options, regla)
+    # Primer cerquem una assignació d'aula a les franges originals. Si és
+    # viable, fixar-les assoleix la cota inferior de zero sessions mogudes.
+    original_model = model.clone()
+    for a, rows in enumerate(acts):
+        for s in rows:
+            original_model.add(slots[a] == DIES.index(s.dia)*1440+s.ini)
+    first = cp_model.CpSolver()
+    first.parameters.max_time_in_seconds = max(.001, min(10, (temps_s-(time.monotonic()-begin))*.2))
+    first.parameters.num_search_workers = 2
+    first.parameters.random_seed = llavor
+    first.parameters.stop_after_first_solution = True
+    initial_status = first.solve(original_model)
+    original_ok = initial_status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
+    stats['franja_original_viable'] = original_ok
+    stats['estat_franja_original'] = first.status_name(initial_status)
+    if original_ok:
+        model = original_model
+        for v in slots + roomvars:
+            model.add_hint(v, first.value(v))
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = max(.001, temps_s-(time.monotonic()-begin))
     solver.parameters.num_search_workers = 2
     solver.parameters.random_seed = llavor
     stats['temps_construccio_s'] = time.monotonic()-begin
     status = solver.solve(model)
+    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE) and original_ok:
+        solver, status = first, initial_status
     stats.update(estat=solver.status_name(status), temps_s=time.monotonic()-begin,
                  branques=solver.num_branches, conflictes_solver=solver.num_conflicts)
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         return None, stats
+    stats.update(sessions_noves_fora_franja=sum(solver.value(v) for v in moves),
+                 objectiu_hores_mortes_min=sum(solver.value(v) for v in gaps),
+                 objectiu_aules=sum(solver.value(v) for v in room_cost),
+                 objectiu=solver.objective_value, cota_objectiu=solver.best_objective_bound)
     for a, rows in enumerate(acts):
         slot, r = solver.value(slots[a]), solver.value(roomvars[a])
         for s in rows:
@@ -271,8 +371,11 @@ def resol_congelat(base, referencia, *, temps_s=60, llavor=0):
 def comprova_proposta(base, proposta, referencia):
     """Comprovació addicional de persones, vincles, torn i rutina del grau nou."""
     col = _col_loca(base, proposta.a_files(), InformeIntern())
-    inherited = conflictes(colloca_avui(base))
-    new_conflicts = set(conflictes(col))-set(inherited)
+    regla = ReglaAlumnat(base.sessions.values())
+    today = {s: c for s, c in colloca_avui(base).items() if s in referencia.files}
+    inherited = conflictes(today, regla)
+    new_conflicts = set(conflictes(col, regla))-set(inherited)
+    new_teachers = set(conflictes_docents(col))-set(conflictes_docents(today))
     pairs, _ = parelles_dobles(base)
     doubles = comprova_dobles(base, col, pairs)
     noves = set(base.sessions)-set(referencia.files)
@@ -280,90 +383,143 @@ def comprova_proposta(base, proposta, referencia):
                          for rows in _activitats(base, noves))
     shift_changes = sum((col[sid].ini < MATI[1]) != (_referencia(base.sessions[sid], referencia)[1] < MATI[1])
                         for sid in referencia.files)
-    return {'conflictes_persones_nous': len(new_conflicts),
+    return {'conflictes_persones_nous': len(new_conflicts | new_teachers),
+            'conflictes_alumnat_nous': len(new_conflicts),
+            'conflictes_docents_nous': len(new_teachers),
             'dobles_separades': len(doubles['separades']),
             'dobles_amb_aula_propia': sum(bool(col[s.id].aula) for s in base.sessions.values() if s.sense_espai),
             'canvis_torn_52': shift_changes, 'activitats_noves_sense_rutina': routine_errors}
+
+
+def relaxacions_necessaries(official, proposal, relaxations):
+    """Reté només declaracions heretades per a violacions que realment compten.
+
+    Avalua sense relaxar: els conflictes heretats que el jurat ja eximeix
+    (inclosos els dobles) no necessiten cap declaració nostra.
+    """
+    needed = defaultdict(set)
+    for v in avalua(official, proposal.a_files()).violacions:
+        if v.compta:
+            needed[v.regla].update(v.sessions)
+    rows = []
+    for r in relaxations:
+        ids = needed[r.restriccio] & (set(r.sessions) if r.sessions else set(official.sessions))
+        if ids:
+            rows.append({'restriccio': r.restriccio, 'sessions': '|'.join(sorted(ids)),
+                         'justificacio': r.justificacio})
+    return rows
+
+
+def publica(stage, out):
+    """Substitueix el directori complet, amb rollback si falla el segon rename."""
+    backup = stage.parent/'anterior'
+    exists = out.exists()
+    if exists:
+        out.rename(backup)
+    try:
+        stage.rename(out)
+    except BaseException:
+        if exists:
+            backup.rename(out)
+        raise
+    if exists:
+        shutil.rmtree(backup)
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--temps', type=float, default=300)
     parser.add_argument('--llavor', type=int, default=0)
+    parser.add_argument('--referencia', type=Path, default=RESULTATS/'5.2'/'proposta.csv')
     args = parser.parse_args(argv)
     out = RESULTATS/'5.4'
-    out.mkdir(parents=True, exist_ok=True)
-    path52 = RESULTATS_PRINCIPAL/'5.2'/'proposta.csv'
+    path52 = args.referencia.resolve()
     relax52 = path52.with_name('relaxacions.csv')
     ref = Proposta.llegeix(path52)
     base = carrega_model(GRAU_NOU)
     official = carrega_oficial(GRAU_NOU)
-    if set(ref.files) != set(carrega_oficial().sessions):
+    official52 = carrega_oficial()
+    if set(ref.files) != set(official52.sessions):
         raise ValueError('La referència no conté exactament el 5.2 complet')
     relaxations = llegeix_relaxacions(relax52 if relax52.exists() else None)
-    relax_path = out/'relaxacions.csv'
-    if relax52.exists():
-        shutil.copyfile(relax52, relax_path)
-    elif relax_path.exists():
-        relax_path.unlink()
     proposal, stats = resol_congelat(base, ref, temps_s=args.temps, llavor=args.llavor)
-    (out/'execucio.json').write_text(json.dumps(stats, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
-    summary = {'resposta': 2 if stats['estat'] == 'INFEASIBLE' else 3,
-               'sessions_grau_nou': stats['sessions_noves'], 'sessions_grau_nou_collocades': 0,
-               'sessions_52_mogudes': 0, 'canvis_franja_52': 0, 'canvis_aula': 0,
-               'relaxacions_per_motiu': dict(Counter({r.justificacio: sum(len(t.sessions) for t in relaxations if t.justificacio == r.justificacio) for r in relaxations})),
-               'incompliments_no_declarats': None, 'estat_solver': stats['estat']}
-    if proposal is not None:
+    if proposal is None:
+        print('Resposta:', 2 if stats['estat'] == 'INFEASIBLE' else 3, '; solver:', stats['estat'])
+        print('No hi ha proposta nova; lliurament anterior conservat íntegrament.')
+        return 1
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='.s54-', dir=out.parent) as tmp:
+        stage = Path(tmp)/'nou'
+        stage.mkdir()
+        relax_path = stage/'relaxacions.csv'
+        rows = relaxacions_necessaries(official, proposal, relaxations)
+        escriu_csv(relax_path, rows, ['restriccio', 'sessions', 'justificacio'])
+        relaxations = llegeix_relaxacions(relax_path)
         checks = comprova_proposta(base, proposal, ref)
         report = avalua(official, proposal.a_files(), relaxacions=relaxations)
         if report.veredicte not in VALIDES or any(checks.values()):
-            (out/'errors-validacio.json').write_text(json.dumps({'comprovacions': checks, 'restriccions': report.recompte()}, ensure_ascii=False, indent=2)+'\n')
             raise ValueError('La proposta candidata no supera les comprovacions')
-        path = proposal.escriu(out/'proposta.csv')
+        path = proposal.escriu(stage/'proposta.csv')
         report = verifica(path, escenari=GRAU_NOU, referencia=path52,
-                          relaxacions=relax_path if relax_path.exists() else None,
-                          json_path=out/'informe.json', violacions_path=out/'violacions.csv')
-        summary.update(resposta=1 if report.veredicte in VALIDES else 3,
+                          relaxacions=relax_path,
+                          json_path=stage/'informe.json', violacions_path=stage/'violacions.csv')
+        if report.veredicte not in VALIDES or report.compten():
+            raise ValueError('El verificador oficial rebutja la proposta; anterior conservada')
+        summary = dict(resposta=1, sessions_grau_nou=stats['sessions_noves'],
                        sessions_grau_nou_collocades=stats['sessions_noves'],
+                       sessions_grau_nou_fora_franja=stats['sessions_noves_fora_franja'],
+                       estat_solver=stats['estat'],
+                       relaxacions_per_motiu=dict(Counter({r.justificacio: sum(len(t.sessions) for t in relaxations if t.justificacio == r.justificacio) for r in relaxations})),
                        veredicte=report.veredicte, incompliments_no_declarats=sum(report.compten().values()),
                        **checks)
         summary['canvis_franja_52'] = sum(_referencia(base.sessions[s], ref) != _referencia(base.sessions[s], proposal) for s in ref.files)
         summary['canvis_aula'] = sum(ref.files[s].aula != proposal.files[s].aula for s in ref.files)
         summary['sessions_52_mogudes'] = sum(ref.files[s] != proposal.files[s] for s in ref.files)
         summary['minim_sessions_52_mogudes_demostrat'] = summary['sessions_52_mogudes'] == 0
-        before = avalua(official, referencia_completa(base, ref).a_files(), relaxacions=relaxations)
-        escriu_csv(out/'xifres.csv', [{'xifra': k, 'abans': before.objectius.get(k, 0), 'despres': v}
-                                     for k, v in report.objectius.items()], ['xifra', 'abans', 'despres'])
-    else:
-        # No es presenta una proposta parcial ni es conserva un èxit antic.
-        for name in ('proposta.csv', 'violacions.csv', 'xifres.csv'):
-            (out/name).unlink(missing_ok=True)
-        (out/'informe.json').write_text(json.dumps({'veredicte': 'SENSE PROPOSTA', 'resposta': summary['resposta'],
-            'estat_solver': stats['estat'], 'condicions': stats['condicions'],
-            'impossibilitat_global_demostrada': False}, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
-    (out/'resum.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
-    command = f'{PYTHON} -m nivell2.s54 --temps {args.temps:g} --llavor {args.llavor}'
-    (out/'README.md').write_text(
+        summary['minim_sessions_noves_fora_franja_demostrat'] = stats['estat'] == 'OPTIMAL'
+        # El costat «abans» és exactament el 5.2, sense sessions extra buides.
+        before = avalua(official52, ref.a_files(), relaxacions=relaxations)
+        summary['hores_mortes_52_min'] = before.objectius['hores_mortes_min']
+        summary['hores_mortes_min'] = report.objectius['hores_mortes_min']
+        summary['hores_mortes_grau_nou_min'] = stats['objectiu_hores_mortes_min']
+        escriu_csv(stage/'xifres.csv', [{'xifra': k, 'abans': before.objectius.get(k, 0), 'despres': v}
+                                      for k, v in report.objectius.items()] + [
+                    {'xifra': 'sessions_grau_nou_fora_franja', 'abans': 0,
+                     'despres': summary['sessions_grau_nou_fora_franja']},
+                    {'xifra': 'sessions_52_mogudes', 'abans': 0, 'despres': summary['sessions_52_mogudes']}],
+                   ['xifra', 'abans', 'despres'])
+        for name, obj in [('resum.json', summary), ('execucio.json', stats)]:
+            (stage/name).write_text(json.dumps(obj, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
+        command = f'{PYTHON} -m nivell2.s54 --temps {args.temps:g} --llavor {args.llavor} --referencia {path52}'
+        (stage/'README.md').write_text(
         '# 5.4 Grau nou\n\n'
         f"Resposta **{summary['resposta']}**. Estat del solver: {stats['estat']}.\n\n"
         'Model conjunt de dia, hora i aula per activitat, rutina setmanal, mateix torn i sense desdoblaments. '
-        'El 5.2 queda congelat; les seves relaxacions es copien sense afegir-ne. '
+        'El 5.2 queda congelat; només es conserven les seves relaxacions necessàries. '
+        'Objectiu lexicogràfic: franges originals de les sessions noves, hores mortes i aula base/canvis d’aula. '
+        'La regla addicional d’alumnat és a `nivell2/alumnat.py`: teoria de cohort completa i subgrups prudents. '
+        'Només admet PAUL simultanis quan són germans per prefix complet del TE, sufix de la mateixa longitud '
+        'i suma d’aforaments compatible. Els altres subgrups es separen perquè les dades no proven que siguin disjunts. '
+        f"Sessions noves fora de franja original: {summary['sessions_grau_nou_fora_franja']}; "
+        f"classes del 5.2 mogudes: {summary['sessions_52_mogudes']}. "
         'INFEASIBLE en aquestes condicions és resposta 2, no una prova d’impossibilitat global. '
         'UNKNOWN és resposta 3. El detall dels dominis i rebuigs és a `execucio.json`.\n\n'
         f'Des del worktree `{ARREL}`:\n```sh\n{command}\n```\n\n'
         'Comprovació oficial de la proposta (si hi ha solució):\n```sh\n'
         f'{PYTHON} -c "from pathlib import Path; from nivell2.base import verifica, GRAU_NOU; '
         f"r=verifica(Path('resultats/nivell2/5.4/proposta.csv'), escenari=GRAU_NOU, "
-        f"relaxacions=Path('resultats/nivell2/5.4/relaxacions.csv') if Path('resultats/nivell2/5.4/relaxacions.csv').exists() else None); print(r.veredicte, sum(r.compten().values()))\"\n"
+        f"referencia=Path('{path52}'), relaxacions=Path('resultats/nivell2/5.4/relaxacions.csv')); print(r.veredicte, sum(r.compten().values()))\"\n"
         '```\n\nProves i comprovació de persones:\n```sh\n'
         f'{PYTHON} -m pytest -q nivell2 app\n'
         f'RESULTATS_DIR=$PWD/resultats/nivell2 {PYTHON} -m nivell2.comprova_persones\n```\n', encoding='utf-8')
-    actualitza(out, '5.4')
+        publica(stage, out)
     print('Resposta:', summary['resposta'], '; solver:', stats['estat'])
     print('Activitats noves:', stats['activitats_noves'], '; opcions:', sum(stats['opcions_per_activitat']))
     print('Temps de construcció:', round(stats.get('temps_construccio_s', stats['temps_s']), 3),
           '; temps total:', round(stats['temps_s'], 3))
-    for key in ('sessions_grau_nou_collocades', 'sessions_52_mogudes', 'canvis_aula', 'incompliments_no_declarats'):
+    for key in ('sessions_grau_nou_collocades', 'sessions_grau_nou_fora_franja', 'sessions_52_mogudes',
+                'canvis_aula', 'hores_mortes_52_min', 'hores_mortes_min',
+                'conflictes_persones_nous', 'conflictes_docents_nous', 'incompliments_no_declarats'):
         print(key, ':', summary[key])
     if 'veredicte' in summary:
         print(summary['veredicte'])
@@ -375,9 +531,5 @@ if __name__ == '__main__':
     try:
         raise SystemExit(main())
     except Exception:
-        import traceback
-        target = RESULTATS/'5.4'
-        target.mkdir(parents=True, exist_ok=True)
-        (target/'error-s54.txt').write_text(traceback.format_exc(), encoding='utf-8')
-        print('Errors d’execució: 1; detall desat fora de git')
+        print('Errors d’execució: 1; lliurament anterior conservat íntegrament')
         raise SystemExit(2)

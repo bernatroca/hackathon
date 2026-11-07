@@ -6,7 +6,7 @@ El detall (amb identificadors) només s'escriu si es demana amb --detall, a un f
 
 Què es mira:
 1. Persones amb dues classes alhora: dues sessions que se solapen i que comparteixen alumnat segons la
-   regla oficial (mateix estudi, mateixa línia o mateix número de grup). Les sessions d'una mateixa
+   regla documentada a nivell2/alumnat.py. També es comprova cada docent comú. Les sessions d'una mateixa
    classe física (compartida) no compten. Si les dues són de la mateixa assignatura i tipus, és una
    classe repetida.
 2. Dobles titulacions: les sessions «sense espai» són classes que el doble fa amb un altre grup.
@@ -26,15 +26,17 @@ from collections import defaultdict
 from pathlib import Path
 
 from nivell2.base import CONTINGENCIES, GRAU_NOU, RESULTATS_PRINCIPAL, Proposta, carrega_oficial
-from horaris.check import Informe as InformeIntern, _alumnat_comparteix, _col_loca
+from nivell2.alumnat import ReglaAlumnat
+from horaris.check import Informe as InformeIntern, _col_loca
 
 
 def colloca_avui(base):
     return _col_loca(base, Proposta.de_base(base).a_files(), InformeIntern())
 
 
-def conflictes(col) -> dict[tuple[str, str], str]:
+def conflictes(col, regla=None) -> dict[tuple[str, str], str]:
     """Parells de sessions que posen una mateixa persona a dues classes alhora -> 'repetida' o 'diferents'."""
+    regla = regla or ReglaAlumnat(c.s for c in col.values())
     per_dia = defaultdict(list)
     for sid, c in col.items():
         for coh in c.s.cohorts:
@@ -49,10 +51,28 @@ def conflictes(col) -> dict[tuple[str, str], str]:
                 if cb.ini >= ca.fi:
                     break
                 sa, sb = ca.s, cb.s
-                if sa.unitat == sb.unitat or not _alumnat_comparteix(sa, sb):
+                if sa.unitat == sb.unitat or not regla(sa, sb):
                     continue
                 parell = tuple(sorted((a, b)))
                 out[parell] = 'repetida' if (sa.codi, sa.tipus) == (sb.codi, sb.tipus) else 'diferents'
+    return out
+
+
+def conflictes_docents(col) -> dict[tuple[str, str], str]:
+    """Una parella per docent compartit, deduplicada entre docents i unitats."""
+    per_dia = defaultdict(list)
+    for sid, c in col.items():
+        for docent in c.s.docents:
+            per_dia[c.data, docent].append(sid)
+    out = {}
+    for sids in per_dia.values():
+        sids.sort(key=lambda sid: (col[sid].ini, sid))
+        for i, a in enumerate(sids):
+            for b in sids[i + 1:]:
+                if col[b].ini >= col[a].fi:
+                    break
+                if col[a].s.unitat != col[b].s.unitat:
+                    out[tuple(sorted((a, b)))] = 'docent'
     return out
 
 
@@ -143,13 +163,20 @@ def escenaris(resultats=None):
 def comprova(detall: Path | None = None, *, resultats=None) -> bool:
     from nivell2.junta import carrega_proposta
 
-    bases, avui, dobles_base = {}, {}, {}
+    bases, avui, docents_avui, regles, dobles_base = {}, {}, {}, {}, {}
     correcte, informe = True, {}
     for nom, path, escenari in escenaris(resultats):
         clau = str(escenari)
         if clau not in bases:
             bases[clau] = carrega_oficial(escenari)
-            avui[clau] = conflictes(colloca_avui(bases[clau]))
+            regles[clau] = ReglaAlumnat(bases[clau].sessions.values())
+            original = colloca_avui(bases[clau])
+            if escenari == GRAU_NOU:
+                # Les classes del grau nou no són conflictes heretats d'avui.
+                existents = carrega_oficial().sessions
+                original = {sid: c for sid, c in original.items() if sid in existents}
+            avui[clau] = conflictes(original, regles[clau])
+            docents_avui[clau] = conflictes_docents(original)
             dobles_base[clau] = parelles_dobles(bases[clau])
         base = bases[clau]
         parelles, sense_parella = dobles_base[clau]
@@ -162,8 +189,10 @@ def comprova(detall: Path | None = None, *, resultats=None) -> bool:
                 print(f'\n== {nom}: no s\'ha pogut llegir la proposta (format o sessions d\'un altre escenari).')
                 correcte = False
                 continue
-            conf = conflictes(col)
+            conf = conflictes(col, regles[clau])
         nous = {k: v for k, v in conf.items() if k not in avui[clau]}
+        professorat = conflictes_docents(col)
+        docents_nous = set(professorat) - set(docents_avui[clau])
         d = comprova_dobles(base, col, parelles)
         n_dobles = sum(s.sense_espai for s in base.sessions.values())
 
@@ -173,6 +202,10 @@ def comprova(detall: Path | None = None, *, resultats=None) -> bool:
         if path is not None:
             print(f'    - noves respecte d\'avui: {resum_conflictes(nous)}')
             print(f'    - que ja hi eren avui: {len(conf) - len(nous)}')
+        print(f'  Professorat amb dues classes alhora: {len(professorat)}')
+        if path is not None:
+            print(f'    - nous respecte d’avui: {len(docents_nous)}')
+            print(f'    - que ja hi eren avui: {len(professorat) - len(docents_nous)}')
         print(f'  Dobles: {n_dobles} classes que fan amb un altre grup; {len(parelles)} coincideixen avui amb la classe '
               f'd\'aquell grup i {sense_parella} no en tenen cap a la mateixa hora.')
         if path is None:
@@ -181,10 +214,12 @@ def comprova(detall: Path | None = None, *, resultats=None) -> bool:
                 print(f'      · {nom_clau}: {n}')
         print(f'    - separades de la classe on van: {len(d["separades"])}')
         print(f'    - amb aula pròpia nova (classe duplicada): {len(d["duplicades"])}')
-        if path is not None and (nous or d['separades'] or d['duplicades']):
+        if path is not None and (nous or docents_nous or d['separades'] or d['duplicades']):
             correcte = False
         informe[nom] = {'conflictes': [list(k) + [v] for k, v in conf.items()],
-                        'nous': [list(k) + [v] for k, v in nous.items()], **d}
+                        'nous': [list(k) + [v] for k, v in nous.items()],
+                        'docents': [list(k) for k in professorat],
+                        'docents_nous': [list(k) for k in sorted(docents_nous)], **d}
 
     print('\nVEREDICTE: ' + ('CORRECTE. Cap proposta posa ningú a dues classes alhora ni separa o duplica '
                              'classes dels dobles.' if correcte else
