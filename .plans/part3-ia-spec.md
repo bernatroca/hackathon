@@ -29,8 +29,8 @@ Fora d'abast: aplicar canvis, enviar avisos, respondre coses que no siguin de l'
 - El **widget del zip** (`xat-ia-base/web/xat-ia.js` i `xat-ia.css`) tal qual: botó ✦ «Assistent» baix a la dreta, **a totes les pàgines**. S'obre a la dreta com un plafó de 420 px, es pot fer gran, té preguntes proposades que canvien amb la pantalla, admet fins a 3 captures, la resposta surt en directe, recorda la conversa i té «Conversa nova».
 - Surt del menú l'entrada «Pregunta-ho · aviat» (secció «Ajuda»).
 - Colors amb les variables `--xatia-*`, iguals que l'app.
-- Cada resposta acaba amb un bloc **«Com es comprova»**: els `id_sessio` en `codi` i la consulta SQL que s'ha fet, perquè el jurat ho busqui al CSV en un segon.
-- A sota de cada resposta, el **servidor** afegeix un bloc «Com es comprova · N consultes» amb cada eina cridada, els arguments, la consulta (l'SQL sencer si n'hi ha) i fins a 10 `id_sessio` (i quants més). No depèn del model: surt sempre que s'ha fet servir una eina (decisió d'en Bernat, ds 7-11 nit).
+- **Respostes curtes i en text planer** (decisió d'en Bernat, dg 8-11 matinada): una o dues frases, sense «Com es comprova», SQL ni llistes d'`id_sessio`, tret que la persona ho demani («com ho saps?»).
+- A sota de cada resposta, el servidor hi deixa una línia petita i **plegada**, «Com ho he comprovat», amb cada eina, els arguments, la consulta i fins a 10 `id_sessio`. No depèn del model.
 
 ## Com funciona
 
