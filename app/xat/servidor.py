@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import html
+import http.client
 import errno
 import importlib
 import subprocess
@@ -214,79 +215,106 @@ def _trossos_api(p: dict, missatges: list[dict]) -> Iterator[tuple[str, object]]
         headers={"Authorization": f"Bearer {p['clau']}", "Content-Type": "application/json", "Accept": "text/event-stream", "User-Agent": "espais-escola/1.0"},
         method="POST",
     )
-    try:
-        resposta = urllib.request.urlopen(peticio, timeout=TEMPS_MAXIM)
-    except urllib.error.HTTPError as e:
-        detall = ""
+    for intent in range(2):
         try:
-            dada = json.loads(e.read().decode("utf-8", "replace"))
-            error = dada.get("error") if isinstance(dada, dict) else None
-            missatge = error.get("message") if isinstance(error, dict) else None
-            if isinstance(missatge, str):
-                detall = _sense_claus(missatge)[:300]
-        except (OSError, ValueError):
-            pass
-        finally:
-            e.close()
-        raise ErrorIA(_sense_claus(
-            f"La IA ha respost HTTP {e.code}" + (f": {detall}" if detall else ".")
-        )) from None
-    except (OSError, urllib.error.URLError, TimeoutError) as e:
-        motiu = _sense_claus(str(getattr(e, "reason", e)))
-        raise ErrorIA(f"No s’ha pogut parlar amb la IA ({motiu}).") from None
+            resposta = urllib.request.urlopen(peticio, timeout=TEMPS_MAXIM)
+            break
+        except urllib.error.HTTPError as e:
+            saturada = e.code == 429 or 500 <= e.code <= 599
+            detall = ""
+            try:
+                dada = json.loads(e.read().decode("utf-8", "replace"))
+                error = dada.get("error") if isinstance(dada, dict) else None
+                missatge = error.get("message") if isinstance(error, dict) else None
+                if isinstance(missatge, str):
+                    detall = _sense_claus(missatge)[:300]
+            except (OSError, ValueError, http.client.HTTPException):
+                pass
+            finally:
+                e.close()
+            if saturada:
+                if intent == 0:
+                    time.sleep(2)
+                    continue
+                raise ErrorIA("La IA està saturada; torna-ho a provar d’aquí a uns segons.") from None
+            raise ErrorIA(_sense_claus(
+                f"La IA ha respost HTTP {e.code}" + (f": {detall}" if detall else ".")
+            )) from None
+        except (OSError, urllib.error.URLError, http.client.HTTPException) as e:
+            motiu = _sense_claus(str(getattr(e, "reason", e)))
+            raise ErrorIA(f"No s’ha pogut parlar amb la IA ({motiu}).") from None
 
     tallada, model = False, p["model"]
     crides = {}
-    with resposta:
-        for cru in resposta:
-            linia = cru.decode("utf-8", "replace").strip()
-            if not linia.startswith("data:"):
-                continue
-            dada = linia[5:].strip()
-            if dada == "[DONE]":
-                break
-            try:
+    acabat = False
+    try:
+        with resposta:
+            for cru in resposta:
+                linia = cru.decode("utf-8", "replace").strip()
+                if not linia.startswith("data:"):
+                    continue
+                dada = linia[5:].strip()
+                if dada == "[DONE]":
+                    acabat = True
+                    break
                 e = json.loads(dada)
-            except ValueError:
-                continue
-            if e.get("error") or e.get("type") in ("error", "response.failed"):
-                error = e.get("error") or (e.get("response") or {}).get("error") or e
-                detall = error.get("message", "") if isinstance(error, dict) else str(error)
-                raise ErrorIA("La IA ha retornat un error durant la resposta" +
-                              (": " + _sense_claus(detall)[:300] if detall else "."))
-            if responses:
-                tipus = e.get("type")
-                if tipus == "response.output_text.delta" and e.get("delta"):
-                    yield "tros", e["delta"]
-                elif tipus == "response.output_item.done":
-                    item = e.get("item") or {}
-                    if item.get("type") == "function_call":
-                        crides[e["output_index"]] = {
-                            "id": item["call_id"], "type": "function",
-                            "function": {"name": item["name"], "arguments": item["arguments"]},
-                            "_responses_item": item,
-                        }
-                elif tipus in ("response.completed", "response.incomplete"):
-                    resultat = e.get("response") or {}
-                    model = resultat.get("model") or model
-                    tallada = (resultat.get("status") == "incomplete" and
-                               (resultat.get("incomplete_details") or {}).get("reason") == "max_output_tokens")
-                continue
-            model = e.get("model") or model
-            eleccio = (e.get("choices") or [{}])[0]
-            delta = eleccio.get("delta") or {}
-            for fragment in delta.get("tool_calls") or []:
-                index = fragment.get("index", 0)
-                crida = crides.setdefault(index, {"id": "", "type": "function",
-                                                   "function": {"name": "", "arguments": ""}})
-                crida["id"] += fragment.get("id") or ""
-                for camp in ("name", "arguments"):
-                    crida["function"][camp] += (fragment.get("function") or {}).get(camp) or ""
-            tros = delta.get("content")
-            if tros:
-                yield "tros", tros
-            if eleccio.get("finish_reason") == "length":
-                tallada = True
+                if not isinstance(e, dict):
+                    raise ValueError("Esdeveniment SSE no vàlid")
+                if e.get("error") or e.get("type") in ("error", "response.failed"):
+                    error = e.get("error") or (e.get("response") or {}).get("error") or e
+                    detall = error.get("message", "") if isinstance(error, dict) else str(error)
+                    raise ErrorIA("La IA ha retornat un error durant la resposta" +
+                                  (": " + _sense_claus(detall)[:300] if detall else "."))
+                if responses:
+                    tipus = e.get("type")
+                    if tipus == "response.output_text.delta" and e.get("delta"):
+                        if not isinstance(e["delta"], str):
+                            raise ValueError("Text de resposta no vàlid")
+                        yield "tros", e["delta"]
+                    elif tipus == "response.output_item.done":
+                        item = e.get("item") or {}
+                        if item.get("type") == "function_call":
+                            index = e["output_index"]
+                            if type(index) is not int or not all(isinstance(item[k], str)
+                                    for k in ("call_id", "name", "arguments")):
+                                raise ValueError("Crida d’eina no vàlida")
+                            crides[index] = {
+                                "id": item["call_id"], "type": "function",
+                                "function": {"name": item["name"], "arguments": item["arguments"]},
+                                "_responses_item": item,
+                            }
+                    elif tipus in ("response.completed", "response.incomplete"):
+                        acabat = True
+                        resultat = e.get("response") or {}
+                        model = resultat.get("model") or model
+                        tallada = (resultat.get("status") == "incomplete" and
+                                   (resultat.get("incomplete_details") or {}).get("reason") == "max_output_tokens")
+                    continue
+                model = e.get("model") or model
+                eleccio = (e.get("choices") or [{}])[0]
+                delta = eleccio.get("delta") or {}
+                for fragment in delta.get("tool_calls") or []:
+                    index = fragment.get("index", 0)
+                    if type(index) is not int:
+                        raise ValueError("Índex de crida no vàlid")
+                    crida = crides.setdefault(index, {"id": "", "type": "function",
+                                                       "function": {"name": "", "arguments": ""}})
+                    crida["id"] += fragment.get("id") or ""
+                    for camp in ("name", "arguments"):
+                        crida["function"][camp] += (fragment.get("function") or {}).get(camp) or ""
+                tros = delta.get("content")
+                if tros:
+                    if not isinstance(tros, str):
+                        raise ValueError("Text de resposta no vàlid")
+                    yield "tros", tros
+                if eleccio.get("finish_reason"):
+                    acabat = True
+                if eleccio.get("finish_reason") == "length":
+                    tallada = True
+        if not acabat:
+            raise ErrorIA("S’ha perdut la connexió amb la IA a mig resposta. Torna-ho a provar.")
+    except (OSError, http.client.HTTPException, KeyError, TypeError, ValueError, AttributeError):
+        raise ErrorIA("S’ha perdut la connexió amb la IA a mig resposta. Torna-ho a provar.") from None
     if crides:
         yield "tools", [crides[i] for i in sorted(crides)]
     yield "fi", {"tallada": tallada, "model": model}
@@ -397,11 +425,30 @@ def _resum_consulta(nom, args, resultat):
     return _neteja_secrets(resum)
 
 
+def _llengua(missatges):
+    ultima = next((m["content"] for m in reversed(missatges) if m["role"] == "user"), "")
+    text = ultima if isinstance(ultima, str) else " ".join(
+        p.get("text", "") for p in ultima if p.get("type") == "text")
+    text = re.sub(r"<(pantalla|context)>.*?</\1>", "", text, flags=re.S).lower()
+    castella = len(re.findall(r"[¿¡ñ]|\b(?:qué|cuántas?|cuántos?|aulas|clases|dónde|horario|tiene|quiero|puedes)\b", text))
+    angles = len(re.findall(r"\b(?:what|which|where|when|how|rooms?|free|classes|schedule|please|available|can|the)\b", text))
+    return 'es' if castella > angles else 'en' if angles else 'ca'
+
+
+_IDIOMES = {'ca': 'Respon en català.', 'es': 'Respon en castellà.', 'en': 'Answer in English.'}
+_LIMIT_VOLTES = {
+    'ca': 'No he pogut acabar la consulta en sis voltes. Pots concretar la pregunta?',
+    'es': 'No he podido terminar la consulta en seis intentos. Prueba una pregunta más concreta.',
+    'en': 'I could not finish the query in six attempts. Try a more specific question.',
+}
+
+
 def _trossos(p: dict, missatges: list[dict]):
     if p["nom"] == "prova":
         yield from _trossos_prova(missatges)
         return
-    conversa = list(missatges)
+    llengua = _llengua(missatges)
+    conversa = [*missatges, {"role": "system", "content": _IDIOMES[llengua]}]
     for _ in range(6):
         crides, contingut = [], []
         final = {"tallada": False, "model": p["model"]}
@@ -429,7 +476,7 @@ def _trossos(p: dict, missatges: list[dict]):
             conversa.append({"role": "tool", "tool_call_id": crida["id"],
                              "content": "<dades>\n" + json.dumps(resultat, ensure_ascii=False)
                              + "\n</dades>"})
-    yield "tros", "No he pogut acabar la consulta en sis voltes. Pots concretar la pregunta?"
+    yield "tros", _LIMIT_VOLTES[llengua]
     yield "fi", {"tallada": False, "model": p["model"]}
 
 
@@ -518,7 +565,8 @@ def _segueix(primer, trossos) -> Iterator[str]:
                 consultes.append(valor)
             elif tipus == "fi":
                 if not escrit:
-                    yield _sse({"error": "La IA no ha tornat cap resposta."})
+                    yield _sse({"error": ("La resposta s’ha tallat abans d’escriure res. Prova una pregunta més concreta."
+                                          if valor.get("tallada") else "La IA no ha tornat cap resposta.")})
                     return
                 if consultes:
                     yield _sse({"consultes": _filtra_consultes(consultes)})
@@ -609,51 +657,35 @@ class Handler(BaseHTTPRequestHandler):
             pass
 
 
+class _ServidorLocal(ThreadingHTTPServer):
+    allow_reuse_address = False
+
+
 _servidor = None
-_url_reutilitzada = None
 _fil = None
 _pany = threading.Lock()
 
 
-def _respon_xat(url: str, timeout: float) -> bool:
-    """Comprova la salut d'un servidor local sense propagar errors de connexió."""
-    try:
-        with urllib.request.urlopen(url, timeout=timeout) as resposta:
-            dada = json.load(resposta)
-        return isinstance(dada, dict) and dada.get("ok") is True
-    except (OSError, ValueError):
-        return False
-
-
-def arrenca(port: int = 8502) -> str:
-    """Arrenca una sola instància local per procés, també amb crides concurrents."""
-    global _servidor, _fil, _url_reutilitzada
+def arrenca(port: int = 0) -> str:
+    """Un servidor propi per procés, amb port lliure per defecte i URL real."""
+    global _servidor, _fil
     with _pany:
         if _servidor is not None:
             if _fil is not None and _fil.is_alive():
                 return f"http://127.0.0.1:{_servidor.server_address[1]}/api/xat"
             _servidor.server_close()
             _servidor, _fil = None, None
-        if _url_reutilitzada is not None:
-            if _respon_xat(_url_reutilitzada, timeout=0.5):
-                return _url_reutilitzada
-            _url_reutilitzada = None
-        if _servidor is None:
-            carrega_env()
-            try:
-                servidor = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-            except OSError as exc:
-                if exc.errno != errno.EADDRINUSE:
-                    raise
-                url = f"http://127.0.0.1:{port}/api/xat"
-                if not _respon_xat(url, timeout=2):
-                    raise RuntimeError(
-                        f"El port {port} està ocupat i no respon com un servidor del xat. "
-                        "Allibera el port o tria’n un altre."
-                    ) from None
-                _url_reutilitzada = url
-                return url
-            fil = threading.Thread(target=servidor.serve_forever, daemon=True)
-            fil.start()
-            _servidor, _fil = servidor, fil
-        return f"http://127.0.0.1:{_servidor.server_address[1]}/api/xat"
+        carrega_env()
+        try:
+            servidor = _ServidorLocal(("127.0.0.1", port), Handler)
+        except OSError as exc:
+            if exc.errno != errno.EADDRINUSE:
+                raise
+            raise RuntimeError(
+                f"El port {port} està ocupat per un altre servei. "
+                "Tria un altre port o deixa que el sistema n’assigni un de lliure."
+            ) from None
+        fil = threading.Thread(target=servidor.serve_forever, daemon=True)
+        fil.start()
+        _servidor, _fil = servidor, fil
+        return f"http://127.0.0.1:{servidor.server_address[1]}/api/xat"
