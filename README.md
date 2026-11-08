@@ -8,29 +8,37 @@ Repositori de l'equip per al hackató (ds 7-11 8:00 → dg 8-11 15:00, Escola d'
 
 ## Com s'executa
 
-El paquet oficial del repte no es versiona: poseu-lo a `repte/repte-horaris-escola/` (o indiqueu-ne la carpeta amb la variable `REPTE_DIR`).
+Per provar la web i l'Assistent en un altre ordinador calen tres coses: aquest repositori, el paquet oficial del repte i `lliurament-nivell2.zip` (les propostes de la part 2; es lliura amb l'entrega, no és a GitHub). Cal **Python 3.11 o més nou** (entorn provat: Python 3.13).
 
-Cal **Python 3.11 o més nou** (entorn provat: Python 3.13). `requirements.txt` indica les versions mínimes provades de les dependències.
+1. Poseu el paquet oficial a `repte/repte-horaris-escola/` (o indiqueu-ne la carpeta amb la variable `REPTE_DIR`).
+2. Descomprimiu el ZIP a l'arrel del repositori: crea `resultats/nivell2/`, que fan servir «Horari proposat», «Imprevistos», «Resum per a la Junta» i l'Assistent.
+3. Per a l'Assistent: `cp app/xat/env.exemple .env` i poseu la clau de la IA de l'event (quiver.ai) a `IA_CLAU=`. La URL i el model ja hi són.
+4. Instal·leu i arrenqueu:
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 export REPTE_DIR="$PWD/repte/repte-horaris-escola"
-python -m nivell1.comprova        # ha d'acabar amb «29/29 comprovacions correctes»
-python -m pytest app nivell2 -q -p no:cacheprovider  # cal REPTE_DIR i resultats/; uns 90 s
-streamlit run app/app.py          # http://localhost:8501, només des d'aquest ordinador
+streamlit run app/app.py          # obre http://localhost:8501
 ```
 
-Resultat de referència de les proves conjuntes: 747 correctes i 1 omesa.
+Per comprovar-ho tot:
 
-**Assistent (part 3).** El botó «Assistent» surt baix a la dreta de totes les pàgines. Per connectar-lo a la IA de l'event, posa al `.env` de l'arrel `IA_URL=https://api.quiver.ai/v1`, `IA_CLAU=<la clau>`, `IA_MODEL=arrow-2-telos` i, si vols reserva, `IA_RESERVA_MODEL=arrow-2` (vegeu `app/xat/env.exemple`). Sense clau, `IA_PROVA=1 streamlit run app/app.py` respon un text de prova. El servidor del xat arrenca sol dins de Streamlit, en un port local lliure que tria el sistema (només accepta peticions de localhost).
+```bash
+python -m nivell1.comprova        # ha d'acabar amb «33/33 comprovacions correctes»
+python -m pytest app nivell1 nivell2 -q -p no:cacheprovider  # cal REPTE_DIR i resultats/; uns 2 minuts
+```
+
+Resultat de referència de les proves: 873 correctes i 1 omesa.
+
+**Assistent (part 3).** El botó «Assistent» surt baix a la dreta de totes les pàgines. Sense clau, `IA_PROVA=1 streamlit run app/app.py` respon un text de prova. El servidor del xat arrenca sol dins de Streamlit, en un port local lliure que tria el sistema (només accepta peticions de localhost). També es pot preguntar des de la terminal: `python -m app.xat.pregunta "Quantes aules queden lliures dimarts a les 10?" --proposta 5.2` (vegeu [lliurament/com-es-comprova-l-assistent.md](lliurament/com-es-comprova-l-assistent.md)).
 
 L'esquema de les dades, amb files inventades, és a [docs/esquema-dades.md](docs/esquema-dades.md). Els passos per validar l'app són a [VALIDATION.md](VALIDATION.md).
 
 ## Part 2 · Lliurament i reproducció
 
 Descomprimiu `lliurament-nivell2.zip` a l’arrel del repositori: crea `resultats/nivell2/5.1/`–`5.4/`,
-el resum de la Junta a `resultats/nivell2/junta/5.2/` i les graelles a `graelles/`.
+els resums de la Junta a `resultats/nivell2/junta/<proposta>/` i les graelles a `graelles/`.
 `LLEGEIX-ME.md`, dins el ZIP, recull els veredictes. Cada pregunta inclou el README amb l’ordre exacta
 de reproducció o republicació, temps, llavor, pistes necessàries i ordre oficial del jurat. Les pistes i comparacions
 citades també s’inclouen al ZIP. Generar una proposta executa el solver; regenerar els documents

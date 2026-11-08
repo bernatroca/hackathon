@@ -6,7 +6,7 @@
 - L'app no té usuaris: a tots els passos l'usuari és `cap`.
 - Dades: el paquet real del repte a `repte/repte-horaris-escola/paquet/`, 2n semestre per defecte. No s'ha creat cap dada nova.
 - Xifres de l'enunciat que han de sortir: 2.008 classes al torn equivocat, 5.722 sense aula (74 %), 15 de 19 aules al pic, 68 % del matí i 43 amb més alumnes que places.
-- Comprovació automàtica feta: `python -m nivell1.comprova` dona 18/18 i `python app/test_app.py` dona OK.
+- Comprovació automàtica feta: `python -m nivell1.comprova` dona 33/33 i `python -m pytest app nivell1 nivell2` dona 873 correctes i 1 omesa.
 - Part 2: la proposta 5.1 és a `resultats/nivell2/5.1/`. Comprovació automàtica feta: el verificador oficial amb `--nomes-aules` diu VALIDA; `python -m nivell2.comprova <proposta>` treu la taula d'abans i després; `.venv/bin/python -m pytest -q nivell2 app` dona 107 correctes i 2 omeses. El 5.2 encara no hi és. Si l'app del port 8501 ja estava oberta abans, s'ha de reiniciar per veure la part 2 nova (o fer servir http://localhost:8503, configuració «app-part2»).
 
 ## Portada «Com estem avui»
@@ -14,9 +14,9 @@
 1. [cap @ /] Obre l'app → surt «Com estem avui» amb fons clar, menú a l'esquerra i cap error vermell.
 2. [cap @ /] Mira el bloc gran de dalt → hi ha la pregunta «Si 1r i 2n fan classe al matí, hi cabem?», la resposta en gran i 19 quadrets (15 ocupats, 4 lliures i 2 amb vora discontínua).
 3. [cap @ /] Llegeix la resposta gran → no diu «Sí» a seques: parla de marge d'hores i diu que l'horari el valida la part 2 (si encara diu «Sí, però just», anota-ho: és una correcció pendent).
-4. [cap @ /] Mira les targetes de sota → n'hi ha 4, cada una amb un títol curt, una xifra gran, una sola frase curta, l'etiqueta d'estat i «Com ho sabem →»; cap text surt de la caixa ni es talla per dalt o per baix.
-5. [cap @ /] Busca la targeta «Classes al torn equivocat» → la xifra és 2.008 i la frase diu que és 1 de cada 4 classes.
-6. [cap @ /] Busca la targeta «Classes sense aula» → la xifra és 74 % (5.722) i diu quantes cal assignar de debò (4.541); si no ho diu, anota-ho com a pendent.
+4. [cap @ /] Mira les targetes de sota → cada una té una pregunta, una xifra amb unitat, «Avui X → Y amb la proposta» si n'hi ha, l'etiqueta d'estat i un botó «Mira … →»; cap text surt de la caixa ni es talla per dalt o per baix. (reprova)
+5. [cap @ /] Busca la targeta «Quantes classes són al torn equivocat?» → diu «2.008 classes» i «Avui 2.008 classes → 459 classes amb la proposta». (reprova)
+6. [cap @ /] Busca la targeta «Quantes classes no tenen aula?» → diu «4.541 classes» i «Avui 4.541 classes → 0 classes amb la proposta». (reprova)
 7. [cap @ /] Busca la targeta del grau nou de 40 places → diu si les hores són d'una setmana o del semestre, i no surt en verd fins que la part 2 ho validi; si no és així, anota-ho.
 8. [cap @ /] Llegeix totes les targetes com si fossis el coordinador → no hi surten paraules tècniques com «R1-TORN», «heretades», «cohort», «bloc» o «llindar».
 
@@ -31,8 +31,8 @@
 
 ## Detall de les altres targetes de la portada
 
-1. [cap @ /] Clica «Com ho sabem →» de «Classes al torn equivocat» → s'obre amb un gràfic de barres horitzontals amb el valor escrit, sense mapa de calor ni llegenda innecessària.
-2. [cap @ /] Torna i clica «Com ho sabem →» de «Classes sense aula» → s'obre amb un gràfic senzill i la mateixa xifra que la targeta.
+1. [cap @ /] Clica «Mira quines classes →» de «Quantes classes són al torn equivocat?» → s'obre el detall amb «Quines classes són?»: la llista de les classes al torn equivocat, amb filtres de titulació i curs i el recompte «N classes amb aquests filtres». (reprova)
+2. [cap @ /?resposta=hores-aula] Mira «Quines classes són?» → surt la llista de les classes sense aula; tria una titulació i un curs i el recompte baixa des de «4.541 classes en total al semestre». (reprova)
 3. [cap @ /] Torna i clica «Com ho sabem →» del grau nou → s'obre i explica quantes hores d'aula necessita contra les que queden lliures.
 4. [cap @ /] Torna i clica «Veure'ls →» o «Com ho sabem →» de «Altres problemes de l'horari» → surt una llista de problemes, cadascun amb xifra i proposta.
 
@@ -55,7 +55,7 @@
 1. [cap @ /] Obre el desplegable «Opcions» del menú → hi ha el selector de semestre (2n per defecte) i de setmana.
 2. [cap @ /] Canvia el semestre a 1r → la portada es torna a calcular sense error i les xifres canvien.
 3. [cap @ /] Torna a posar el 2n semestre → tornen a sortir 2.008 i 74 %.
-4. [cap @ /] Mira el menú → està agrupat en «Com està l'horari» i «La proposta», amb «Horari proposat», «Resum per a la Junta» i «Imprevistos» sense «aviat»; no hi ha secció «Ajuda»: l'assistent és el botó «Assistent» de baix a la dreta.
+4. [cap @ /] Mira el menú → està agrupat en «Com està l'horari» i «La proposta», amb «Horari proposat», «Imprevistos» i «Resum per a la Junta» en aquest ordre i sense «aviat»; no hi ha secció «Ajuda»: l'assistent és el botó «Assistent» de baix a la dreta. (reprova)
 
 ## Canvis visuals
 
@@ -140,20 +140,19 @@
 
 ## Resum per a la Junta
 
-1. [cap @ /junta] Obre «Resum per a la Junta» al menú → surt per defecte «Horari complet (5.2)», sense l'avís antic del 5.2, i cap error vermell.
-2. [cap @ /junta] Mira les fitxes de matí i tarda → «X de 19 aules» amb la frase «L'aulari té 21 aules ordinàries; en guardem 2 de reserva per a imprevistos.»; si és 19 de 19, etiqueta taronja «Sense marge» i «Si una aula falla, cal fer servir la reserva.».
-3. [cap @ /junta] Tria «Aules assignades (5.1)» i mira «Curs més afectat» → diu «Cap» i «Cap curs canvia de dia ni d'hora.», perquè la 5.1 no mou cap hora; els canvis d'aula surten a part, en un indicador propi.
-4. [cap @ /junta] Tria «Aules assignades (5.1)» i mira «Excepcions noves als torns» → 0 classes amb pastilla verda «Cap», i a sota quantes classes ja es fan avui fora del seu torn i no es toquen.
-5. [cap @ /junta] Amb «Horari complet (5.2)», mira «Excepcions noves als torns» → «1 excepció nova, demostrada» (la de la setmana d'avaluació) separada de les 458 classes fixades que ja són a la tarda per la regla 1; a sota, cada motiu amb quantes classes i quines titulacions.
-6. [cap @ /junta] Llegeix sota les fitxes → «màxim de classes alhora» del matí i de la tarda (tarda 17 a les 15:00), separat de les aules ocupades a l'hora punta (18 a la tarda), amb una frase que explica per què difereixen (un laboratori en aula ordinària ocupa aula però no compta com a classe).
-7. [cap @ /junta] Tria «Aules assignades (5.1)» i mira «Classes que canvien d'horari o d'aula, per curs» → compta també els canvis d'aula, no només els de dia o hora.
-8. [cap @ /junta] Mira la taula «Aules per mida a l'hora més plena» amb «Matí» → compta les classes segons els alumnes que tenen (no l'aula on són) i marca «Falten» només si no hi ha cap aula prou gran lliure. (reprova)
-9. [cap @ /junta] Tria «Tarda» a sobre de la taula → la taula canvia a les xifres de la tarda.
-10. [cap @ /junta] Clica «Descarrega el resum A4» → es baixa un HTML; obre'l amb doble clic des de Baixades i imprimeix-lo en PDF: cap en un sol A4 i separa les excepcions noves de les d'avui.
-11. [cap @ /junta] Llegeix tota la pàgina com si fossis de la Junta → frases curtes i planeres, sense sigles tècniques; el detall tècnic queda tancat dins «Detall tècnic».
-12. [cap @ /junta] Obre «Detall tècnic» → el títol del paràgraf surt del pic real: amb «Horari complet (5.2)» diu que a la tarda queda 1 aula lliure a l'hora punta (18 de 19), i no «19 de 19»; el mateix text surt a l'A4 descarregat.
+1. [cap @ /junta] Obre «Resum per a la Junta» al menú → surt per defecte la 5.2, cap error vermell, i a dalt dues o tres frases que diuen què és la pàgina (el resum per decidir si s'aprova l'horari, descarregable en A4) i per a què serveix cada part. (reprova)
+2. [cap @ /junta] Llegeix la línia «Conclusió» → «La proposta està comprovada amb les excepcions indicades. A la tarda queda 1 aula lliure a l'hora punta.» (reprova)
+3. [cap @ /junta] Mira les targetes → cada una és una pregunta («Hi cabem a l'hora més plena?», «Quantes classes queden fora del seu torn?», «Quin curs canvia més?»), amb la resposta, una frase de per a què li serveix a la Junta i un botó «Mira … →». (reprova)
+4. [cap @ /junta] Mira «Hi cabem a l'hora més plena?» → «Sí» i «Matí 15 de 19 aules · Tarda 18 de 19 aules». (reprova)
+5. [cap @ /junta] Mira «Quantes classes queden fora del seu torn?» → «1 classe nova», «Avui 3.246 → 1.239 amb la proposta» i que 458 classes fixades es queden a la tarda perquè la regla diu que no es toquen. (reprova)
+6. [cap @ /junta] Mira «Quin curs canvia més?» → «Enginyeria Química, 3r» i «Amb la proposta, el 100 % de les seves classes canvien de dia o hora (163 de 163).» (reprova)
+7. [cap @ /junta] Tria la 5.4 a «Més opcions» → surt també la targeta «Hi cap el grau nou de 40 places?». (reprova)
+8. [cap @ /junta] Obre «Com ho hem calculat» → cada frase surt un sol cop (no es repeteixen «Canvien de dia o hora…» ni «Aquest marge…»), amb el màxim de classes alhora del matí (15) i de la tarda (18) i la taula «Aules per mida a l'hora més plena». (reprova)
+9. [cap @ /junta] Dins «Com ho hem calculat», tria «Tarda» a sobre de la taula → la taula canvia a les xifres de la tarda i compta les classes segons els alumnes que tenen. (reprova)
+10. [cap @ /junta] Obre «Detall per cursos» → surten les barres dels 8 cursos que més canvien i «Veure tots els cursos». (reprova)
+11. [cap @ /junta] Clica «Descarrega el resum A4» → es baixa un HTML; obre'l amb doble clic des de Baixades i imprimeix-lo en PDF: cap en un sol A4 i separa les excepcions noves de les d'avui.
+12. [cap @ /junta] Llegeix tota la pàgina com si fossis de la Junta → frases curtes i planeres, sense sigles tècniques; el detall tècnic queda tancat dins «Detall tècnic». (reprova)
 13. [cap @ /junta] Obre la Junta en dues pestanyes alhora i canvia de proposta a totes dues → cap mostra l'error genèric; si el resum s'ha de tornar a calcular, surt al cap d'uns segons amb les xifres de la proposta actual.
-14. [cap @ /junta] Amb «Horari complet (5.2)» llegeix les excepcions → «1 classe» (no «1 classes»), «sense curs a les dades» (no «curs desconegut») i el cas de la setmana d'avaluació en paraules planeres, sense «diagnostic.md». — també dins «Detall tècnic».
 
 ## Imprevistos
 
@@ -211,3 +210,12 @@ Engegar l'app amb la IA de prova: `IA_PROVA=1 .venv/bin/streamlit run app/app.py
 11. [cap @ /part2] Després de la resposta, toca «Com ho saps?» → explica d'on surt la mateixa xifra (proposta, dia, hora i què ha comptat) i no en dona una altra. (reprova)
 12. [cap @ /part2] Escriu «Quantes classes canvien de torn amb la proposta 5.2?» → respon en català amb la xifra de la 5.2 (2.007), no amb la d'avui. (reprova)
 13. [cap @ /] A la terminal, des de l'arrel, executa `python -m app.xat.pregunta "Quantes aules queden lliures dimarts a les 10?" --proposta 5.2 --setmana típica` → imprimeix la resposta i, a sota, la consulta feta amb les aules del resultat. (reprova)
+
+## Provar-ho com un jutge (repositori net)
+
+1. [cap @ terminal] Clona el repositori en una carpeta nova, posa-hi el paquet a `repte/repte-horaris-escola/` i descomprimeix `lliurament-nivell2.zip` a l'arrel → hi ha `resultats/nivell2/5.1`–`5.4` i `graelles/`. (reprova)
+2. [cap @ terminal] Executa `cp app/xat/env.exemple .env` i posa la clau a `IA_CLAU=` → el `.env` ja porta la URL i el model, i `git status` no el mostra. (reprova)
+3. [cap @ terminal] Crea l'entorn amb `python3 -m venv .venv`, `pip install -r requirements.txt` i arrenca `streamlit run app/app.py` amb `REPTE_DIR` exportat → s'obre la portada sense cap error. (reprova)
+4. [cap @ /part2] Obre l'Assistent i toca «Quantes aules queden lliures dimarts a les 10?» → respon amb les aules lliures de la 5.2 i surt «Comprova-ho» a sota. (reprova)
+5. [cap @ terminal] Executa `python -m app.xat.pregunta "Quantes aules queden lliures dimarts a les 10?" --proposta 5.2 --setmana típica` → imprimeix la resposta i, a sota, la consulta amb les aules. (reprova)
+6. [cap @ terminal] Torna-ho a provar sense descomprimir el ZIP → la web s'obre igualment i l'Assistent diu que la proposta 5.2 no està disponible, sense inventar xifres. (reprova)
