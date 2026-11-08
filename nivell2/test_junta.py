@@ -214,7 +214,7 @@ def test_fora_torn_heretades_i_noves(tmp_path):
     p.files['2'].dia = 'M'
     relax = tmp_path / 'relaxacions.csv'
     relax.write_text('restriccio,sessions,justificacio\nR1-TORN,1|2,Motiu inventat\n')
-    d = calcula(p, b, b, colloca(b, p), relax)
+    d = calcula(p, b, b, colloca(b, p), relax, '5.2')
     assert d['fora_torn_ja_avui'] == 1
     assert len(d['excepcions']) == 2
     for text in documents(d):
@@ -229,7 +229,7 @@ def test_tarda_i_percentatges_catalans():
     b = petita()
     p = Proposta.de_base(b)
     p.files['0'].h_ini = '15:30'
-    d = calcula(p, b, b, colloca(b, p))
+    d = calcula(p, b, b, colloca(b, p), nom_proposta='5.2')
     assert d['pics']['tarda']['pitjor']['classes'] == 1
     assert d['pics']['tarda']['total_mides'] == 1
     d['sessions_mogudes'][0]['mogudes_pct'] = 12.5
@@ -241,7 +241,7 @@ def test_tarda_i_percentatges_catalans():
 def test_documents_cap_curs():
     b = petita()
     p = Proposta.de_base(b)
-    for text in documents(calcula(p, b, b, colloca(b, p))):
+    for text in documents(calcula(p, b, b, colloca(b, p), nom_proposta='5.2')):
         assert "Cap curs canvia de dia ni d" in text
 
 
@@ -555,8 +555,10 @@ def test_imprevistos_usa_recompte_compartit_i_dates_explicites(tmp_path, monkeyp
                           'canvis_franja_vs_referencia': 1, 'imprevistos': 1,
                           'canvis_aula_recuperades': 1, 'canvis_aula_oficials': 1}
     for text in junta.documents(d):
-        assert '1 classe canvia de dia o hora i 1 d’aula per 1 imprevist' in text
-        assert '1 classe cancel·lada recuperada també canvia d’aula (2 canvis d’aula en total)' in text
+        assert 'La classe cancel·lada es recupera un altre dia (canvia de dia i d’aula)' in text
+        assert '1 classe més canvia d’aula' in text
+        assert 'vegeu Imprevistos' not in text
+        assert 'A més, 1 classe cancel·lada' not in text
 
 
 def test_motiu_demostrat_un_cop_al_document(tmp_path):
@@ -607,3 +609,186 @@ def test_cli_totes_regenera_cinc_propostes(tmp_path, monkeypatch):
         assert d['proposta'] == nom
         for ext, text in zip(('md', 'html'), junta.documents(d)):
             assert (carpeta / f'junta.{ext}').read_text() == text
+
+
+def test_demanda_per_alumnes_amb_aula_gran_i_falten_amb_aula_petita():
+    b = petita()
+    b.aules['A'] = Aula('A', '', 'Aules docents', 160)
+    p = Proposta.de_base(b)
+    r = pics_i_mides(b, b, colloca(b, p))['mati']
+    assert r['mides'][4]['ocupades_al_pic'] == 1
+    assert r['mides'][4]['demanda_acumulada'] == 0  # 40 alumnes, encara que l'aula sigui gran.
+    assert r['mides'][1]['demanda_acumulada'] == 1
+    b.aules['A'] = Aula('A', '', 'Aules docents', 30)
+    r = pics_i_mides(b, b, colloca(b, p))['mati']
+    assert r['mides'][1]['falten'] == 1  # La demanda pot superar l'oferta, amb aula assignada.
+
+
+def test_estimacio_sense_aula_no_suma_classes_successives():
+    b = petita()
+    b.sessions['0'].aula = ''
+    b.sessions['0'].durada = 30
+    extra = deepcopy(b.sessions['0'])
+    extra.id, extra.ini = 'successiva-inventada', 540
+    b.sessions[extra.id] = extra
+    b.ordre.append(extra.id)
+    p = Proposta.de_base(b)
+    r = pics_i_mides(b, b, colloca(b, p))['mati']
+    assert r['pitjor']['estimacio']
+    assert r['pitjor']['classes'] == r['simultani']['classes'] == 1
+    assert r['mides'][1]['demanda_acumulada'] == 1
+
+
+def test_avui_pics_51_nomes_si_conserva_hores(tmp_path, monkeypatch):
+    from nivell2 import junta
+    b = petita()
+    b.sessions['0'].aula = ''
+    p = Proposta.de_base(b)
+    p.files['0'].aula = 'A'
+    p.escriu(tmp_path / '5.1' / 'proposta.csv')
+    monkeypatch.setattr(junta, 'carrega_oficial', lambda e=None: b)
+    monkeypatch.setattr(junta, 'carrega_model', lambda e=None: b)
+    d = junta.genera('Avui', resultats=tmp_path)
+    assert 'assignació d’aules de la 5.1' in d['nota_pics']
+    assert d['empremtes_assignacio_aules'] == junta.empremtes(tmp_path / '5.1' / 'proposta.csv')
+    assert d['pics']['mati']['pitjor']['classes'] == 1
+    assert d['pics']['mati']['pitjor']['estimacio']
+    for text in junta.documents(d):
+        assert 'Classes que canvien' not in text
+        assert 'amb aquesta proposta' not in text
+        assert 'i no es toquen' not in text
+    p.files['0'].h_ini = '10:30'
+    p.escriu(tmp_path / '5.1' / 'proposta.csv')
+    d = junta.genera('Avui', resultats=tmp_path)
+    assert 'empremtes_assignacio_aules' not in d
+    assert 'per instant' in d['nota_pics']
+
+
+def test_conclusio_i_costos_oficials_abans_de_taules(tmp_path):
+    from nivell2 import junta
+    b = petita()
+    p = Proposta.de_base(b)
+    d = calcula(p, b, b, colloca(b, p), nom_proposta='5.2')
+    path = tmp_path / 'xifres.csv'
+    path.write_text('xifra,abans,despres\nveredicte,NO VALIDA,VALIDA\n'
+                    'canvis_franja,0,2\ncanvis_aula,0,1\naules_assignades,0,3\n'
+                    'incompliments:R3-AFORAMENT,4,0\nincompliments:R3-TIPUS,2,0\n'
+                    'incompliments:R2-FINESTRA,1,0\n'
+                    'hores_mortes_min,100,150\ndesplacaments_aula,2,5\n'
+                    'desplacaments_edifici,0,1\n')
+    junta.completa_xifres(d, path)
+    assert d['veredicte'] == 'VALIDA'
+    assert d['canvis_franja'] == 2
+    md, html = documents(d)
+    for text in (md, html):
+        assert text.index('Conclusió') < text.index('VALIDA') < text.index('Aules ocupades')
+        assert text.index('Què empitjora') < text.index('Aules ocupades')
+        assert 'Canvien de dia o hora: 2 classes' in text
+        assert 'Canvien d’aula: 1 classe' in text
+        assert '3 classes reben aula' in text
+        assert 'aforament: 4 → 0' in text
+        assert '100 a 150 min (+50 %)' in text
+        assert '2 a 5' in text and '0 a 1' in text
+        assert 'Màxim de classes alhora' not in text
+        assert text.index(junta.titol_marge(d)) < text.index('Aules ocupades')
+
+
+def test_desglossament_torns_ve_del_verificador():
+    from nivell2 import junta
+    b = petita()
+    for s in b.sessions.values():
+        s.torn = 'tarda'
+    b.sessions['0'].fixada = 'R1: GXX 1r'
+    p = Proposta.de_base(b)
+    d = calcula(p, b, b, colloca(b, p))
+    report = junta.avalua(b, p.a_files())
+    assert d['fora_torn_avui_compten'] == len({sid for v in report.violacions
+        if v.regla == 'R1-TORN' and not v.heretada for sid in v.sessions})
+    assert d['fora_torn_avui_heretades'] == len({sid for v in report.violacions
+        if v.regla == 'R1-TORN' and v.heretada for sid in v.sessions})
+    d.update(fora_torn_avui=3210, fora_torn_avui_compten=2000, fora_torn_avui_heretades=1210)
+    text = junta.resum_guany_torn(d)
+    assert '3.210' in text and '2.000 compten al verificador' in text
+    assert '1.210 són fixades heretades' in text
+    assert 'amb aquesta proposta' not in text
+    d['proposta'] = '5.1'
+    assert 'no aplica els torns nous' in junta.resum_guany_torn(d)
+
+
+def test_excepcions_aula_i_marge_real_tancament(tmp_path):
+    from horaris.model import Tancament
+    from nivell2 import junta
+    b = petita()
+    b.sessions['0'].fixada = 'R1: GXX 1r'
+    b.sessions['1'].tipus, b.sessions['1'].fixada = 'PLAB', 'R7: PLAB'
+    b.tancaments = [Tancament('A', s.data, s.data) for s in list(b.sessions.values())[:2]]
+    p = Proposta.de_base(b)
+    p.files['0'].aula = p.files['1'].aula = 'Reserva0'
+    relax = tmp_path / 'relaxacions.csv'
+    relax.write_text('restriccio,sessions,justificacio\nR1-FIXADA,0,Aula tancada\n'
+                     'R7-PLAB,1,Aula tancada\n')
+    d = calcula(p, b, b, colloca(b, p), relax, '5.3')
+    files = {r['restriccio']: r for r in d['excepcions_aula']}
+    assert files['R1-FIXADA']['sessions'] == ['0']
+    assert files['R7-PLAB']['nombre'] == 1
+    assert files['R1-FIXADA']['cohorts'] == ['GXX:1r']
+    assert '1 classe fixada i 1 laboratori' in junta.resum_excepcions(d)
+    m = d['marge_imprevistos']
+    assert m['utilitzables'] == 2 and m['ocupades'] == 1
+    assert m['marge'] == -1
+    assert 'cal 1 aula de la reserva' in junta.titol_marge(d)
+    assert '2 aules utilitzables, 1 ocupada' in junta.explicacio_marge(d)
+    b.aules['Extra'] = Aula('Extra', '', 'Aules docents', 30)
+    d = calcula(p, b, b, colloca(b, p), relax, '5.3')
+    assert d['marge_imprevistos']['marge'] == 0
+    assert 'no queda cap aula lliure fora de la reserva' in junta.titol_marge(d)
+    assert 'Aquest marge permet absorbir' not in junta.explicacio_marge(d)
+
+
+def test_curs_mes_afectat_51_parla_aules():
+    from nivell2 import junta
+    b = petita()
+    p = Proposta.de_base(b)
+    p.files['0'].aula = 'Reserva0'
+    d = calcula(p, b, b, colloca(b, p), nom_proposta='5.1')
+    assert '33,3 % de les classes canvien d’aula' in junta.resum_curs_afectat(d)
+    assert 'Cap curs' not in junta.resum_curs_afectat(d)
+
+
+def test_noms_propostes_i_master():
+    from nivell2 import junta
+    assert junta.NOMS_PROPOSTES == {'Avui': 'Avui', '5.1': 'Aules assignades (5.1)',
+        '5.2': 'Torns nous (5.2)', '5.3': 'Resoldre els imprevistos (5.3)',
+        '5.4': 'Incorporar el grau nou (5.4)'}
+    assert junta.nom('MRICSE:M') == 'Màster RICSE'
+
+
+def test_canvis_grau_nou_separats_del_total_oficial(tmp_path):
+    from nivell2 import junta
+    b = petita()
+    extra = deepcopy(b.sessions['0'])
+    extra.id, extra.cohorts = 'nova-inventada', ('GNOU:1r',)
+    b.sessions[extra.id] = extra
+    b.ordre.append(extra.id)
+    p = Proposta.de_base(b)
+    p.files['0'].h_ini = p.files[extra.id].h_ini = '09:30'
+    d = calcula(p, b, b, colloca(b, p), nom_proposta='5.4')
+    assert d['canvis_franja'] == 1  # Només cursos existents.
+    path = tmp_path / 'xifres.csv'
+    path.write_text('xifra,abans,despres\ncanvis_franja,0,2\nveredicte,NO VALIDA,VALIDA\n')
+    junta.completa_xifres(d, path)
+    assert d['canvis_franja'] == 2  # Total amb la mateixa definició que el verificador.
+    assert d['canvis_franja_existents'] == d['canvis_franja_grau_nou'] == 1
+    assert '1 són de cursos existents i 1 del grau nou' in ' '.join(junta.conclusio(d))
+
+
+def test_estimacio_no_afirma_que_falten_aules():
+    from nivell2 import junta
+    b = petita()
+    b.sessions['0'].aula = ''
+    p = Proposta.de_base(b)
+    d = calcula(p, b, b, colloca(b, p))
+    d['pics']['mati']['pitjor']['classes'] = d['aulari']['disponibles'] + 1
+    assert 's’estimen' in junta.titol_marge(d)
+    assert 'cal confirmar' in junta.titol_marge(d)
+    assert 'cal fer servir la reserva' not in junta.titol_marge(d)
