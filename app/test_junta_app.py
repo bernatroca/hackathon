@@ -243,6 +243,10 @@ junta.mostra()
         d = junta.carrega(nom)
         assert d['aulari'] == {'ordinaries': 3, 'reserva': 2, 'disponibles': 1}
         assert d['sessions_mogudes'][0]['franja'] == (1 if nom == '5.3' else 0)
+        desti = tmp_path / 'junta' / nom
+        assert all((desti / f'junta.{ext}').exists() for ext in ('json', 'md', 'html'))
+        assert d['empremta'] in (desti / 'junta.md').read_text()
+        assert d['empremta'] in (desti / 'junta.html').read_text()
 
 
 def test_regenera_resum_sense_aulari(tmp_path):
@@ -371,7 +375,7 @@ def test_fallada_actualitzacio_conserva_i_avisa(tmp_path):
 @pytest.mark.parametrize('nom', ['Avui', '5.1', '5.2', '5.3', '5.4'])
 def test_totes_opcions_i_torns(nom):
     with patch.object(junta, 'disponibles', return_value=['Avui', '5.1', '5.2', '5.3', '5.4']), patch.object(junta, 'carrega', return_value=dades()):
-        app = AppTest.from_string('from pagines import junta; junta.mostra()').run()
+        app = AppTest.from_string('from pagines import junta; junta.mostra()', default_timeout=90).run()
         app.selectbox[0].set_value(nom).run()
         for torn in ['Matí', 'Tarda']:
             app.radio[0].set_value(torn).run()
@@ -396,3 +400,26 @@ def test_curs_mes_afectat_només_horari():
     html = junta.fitxes(d)
     assert '20 %' in html and '90 %' not in html
     assert '<small>Horari</small>' in html
+
+
+def test_fitxa_excepcio_demostrada_i_fixades():
+    d = dades()
+    d['fixades_tarda'] = 458
+    d['excepcions'] = [dict(id_sessio='S04526', cohorts=['GXX:1r'],
+        motiu=junta.junta.MOTIU_S04526, torn_requerit='tarda', prova='2027-04-09')]
+    app = obre(d, ['5.2'])
+    text = ''.join(m.value for m in app.markdown)
+    assert '1 excepció nova, demostrada' in text
+    assert '458 classes fixades que ja són a la tarda (regla 1)' in text
+    assert 'això no demostra' not in text
+
+
+def test_genera_avui_publica_tres_formats(tmp_path):
+    s = Sessio('inventada', '100000', 'TE', '81', date(2027, 2, 15),
+               'L', 510, 60, 40, 'A', ('GXX:1r',), 'mati', '', frozenset())
+    b = Base({s.id: s}, {'A': Aula('A', '', 'Aules docents', 50)}, [s.id])
+    with patch.object(junta, 'RESULTATS', tmp_path), patch.object(junta, 'SORTIDA', tmp_path),          patch.object(junta.junta, 'carrega_oficial', return_value=b),          patch.object(junta.junta, 'carrega_model', return_value=b):
+        d = junta.genera('Avui')
+        for ext in ('json', 'md', 'html'):
+            assert (tmp_path / 'junta' / f'junta.{ext}').exists()
+        assert d['empremta'] in (tmp_path / 'junta' / 'junta.md').read_text()
