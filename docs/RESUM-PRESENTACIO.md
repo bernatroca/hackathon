@@ -1,6 +1,6 @@
 # Base per a la presentació · Horaris i espais
 
-Guió en català planer. Cada apartat proposa una diapositiva. Les fonts són documents del projecte; no s'han consultat dades reals ni fitxers de resultats per escriure aquest resum. Els camps de xifres pendents els ha de completar l'equip amb els recomptes finals.
+Guió en català planer. Cada apartat proposa una diapositiva. Les xifres de les propostes finals del nivell 2 estan contrastades amb els informes agregats de `resultats/nivell2/`. Els balanços d’hores i les comprovacions de la part 1 surten del diari (16:30 i 17:19); els grups sense nombre d’alumnes i les sessions afectades, de l’entrada de les 17:40. La història de la revisió surt del diari i de `docs/REVISIO-PUNT5.md`.
 
 ## El problema i les persones
 
@@ -18,26 +18,53 @@ Nota per a qui presenta: són recomptes del semestre, no d'una sola setmana. Fon
 - Amb els torns nous, el balanç del matí demana 397 hores d'aula davant de 570 disponibles; la tarda, 259 davant de 570.
 - Les 25 de 25 comprovacions de la diagnosi quadren; el balanç d'hores és una pista de cabuda, no una prova d'horari viable.
 
-Nota per a qui presenta: el pic inicial de 15 de 19 aules correspon a l'horari d'avui; no és el pic de la proposta. Font: diari, 13:24, 16:30 i 17:19. La part 1 comprova la diagnosi; les propostes de la part 2 passen pel verificador oficial.
+Nota per a qui presenta: el pic del matí queda igual, 15 de 19 aules, tant a l’horari inicial com al 5.2. El que canvia és la tarda: el 5.2 final queda a 18 de 19. Fonts: diari, 13:24, per al pic inicial; `resultats/nivell2/junta/5.2/junta.json`, per als pics finals. Els balanços 397/570 i 259/570 surten del diari, 16:30; les 25 de 25 comprovacions, de les 17:19. La part 1 comprova la diagnosi; les propostes de la part 2 passen pel verificador oficial.
 
 ## Part 2 · Propostes comprovades
 
 - **5.1 · Aules:** assignar espais sense canviar dies ni hores. Veredicte oficial: **VALIDA**, sense relaxacions, amb la comprovació d'aules.
 - **5.2 · Horari complet:** reorganitzar els torns, assignar aules i prioritzar la rutina. Veredicte: **VALIDA AMB RELAXACIONS DECLARADES**.
 - **5.3 · Imprevistos:** reparar l'horari del 5.2 canviant el mínim. Veredicte: **VALIDA AMB RELAXACIONS DECLARADES**.
-- **5.4 · Grau nou:** hi caben les 235 sessions d'un grau de 40 places sense moure cap sessió del 5.2 i amb rutina setmanal. Veredicte: **VALIDA AMB RELAXACIONS DECLARADES**.
+- **5.4 · Grau nou:** hi caben les 235 sessions d'un grau de 40 places sense moure cap sessió del 5.2 i amb rutina setmanal per a les activitats noves. Veredicte: **VALIDA AMB RELAXACIONS DECLARADES**.
 - Totes passen el verificador oficial; la comprovació complementària de persones dona **CORRECTE** al 5.2 i als escenaris del 5.3 i el 5.4.
 
-Nota per a qui presenta: una relaxació és una excepció declarada amb motiu, no una regla ignorada. No presentar totes les propostes com a vàlides sense excepcions. Font: diari, 18:02, 21:25 i 21:55. Aquests són els veredictes documentats, no una nova execució feta per preparar les diapositives.
+Nota per a qui presenta: una relaxació és una excepció declarada amb motiu, no una regla ignorada. No presentar totes les propostes com a vàlides sense excepcions. Font: diari, 18:02, 21:25 i 21:55. Els veredictes s'han contrastat amb els `informe.json` finals.
+
+## Xifres finals · Què guanyem i què costa
+
+- **5.1:** 369 canvis d'aula i cap canvi de franja. Les aules de teoria addicionals per grup passen de 14 a 9 segons el verificador. Sense els dobles que no necessiten espai propi, passen de 8 a 9: aquest indicador empitjora.
+- **5.2:** 459 excepcions de torn: 458 sessions fixades que ja eren a la tarda i que la regla 1 impedeix moure, més 1 sessió de la setmana d'avaluació amb impossibilitat demostrada.
+- Respecte de l'horari inicial, les hores mortes passen de 72.930 a 105.930 minuts. Els desplaçaments d'aula passen de 544 a 1.420. Reorganitzar torns i assignar les aules que faltaven té aquest cost.
+- Les aules de teoria addicionals per grup passen de 14 a 3 en el recompte oficial. El 94,05 % de les activitats manté dia, hora i aula cada setmana; hi ha 50 sessions fora del patró habitual.
+- **5.3:** 65 classes canvien d'aula al CSV respecte del 5.2; el verificador en compta 64 perquè exclou la cancel·lada. Hi ha 53 sessions afectades pels imprevistos i es mouen 12 classes més de suport. Hi ha 1 canvi de franja: només la cancel·lada canvia de dia. Cap classe canvia de torn. El resultat és òptim per al model de reparació.
+- **5.4:** hi caben les 235 sessions noves del grau de 40 places. Se'n mouen 41 de la franja original. Es mouen 0 classes del 5.2 i es creen 0 conflictes nous d'alumnat i 0 de professorat.
+
+Nota per a qui presenta: fonts finals: `5.1/README.md`, els `xifres.csv`, els `resum.json` i els `informe.json` de `resultats/nivell2/`. Al 5.1 no hi ha `resum.json`. Les 12 classes de suport del 5.3 s'han recomptat comparant les propostes amb les sessions afectades que identifica el codi de reparació. No confondre canvi d'una aula ja assignada amb assignació d'una aula que faltava.
 
 ## Marge d'aules · Encaixar no és suficient
 
-- A l'hora punta del matí s'ocupen totes les aules ordinàries disponibles: 19 de 19.
-- L'aulari té més aules, però se'n guarden 2 de reserva.
-- Sense marge ordinari, una avaria, una reserva o un grup que creix obliga a recórrer a la reserva o a moure classes.
-- Recomanem deixar **1–2 aules lliures a l'hora punta** per poder mantenir l'horari en el dia a dia.
+- Al 5.2, el pic del matí queda igual que a l’horari inicial: 15 de 19 aules ordinàries disponibles. A la tarda és de 18 de 19: queda una aula de marge en aquest recompte.
+- Aquest pic compta aules diferents ocupades dins d'una hora. El màxim de classes simultànies a la tarda és 17.
+- Es guarden 2 aules de reserva. La mida de les aules també limita el marge útil.
+- Recomanem deixar 1–2 aules lliures a l'hora punta per afrontar avaries i grups que creixen.
 
-Nota per a qui presenta: és una recomanació operativa pendent d'aconseguir, encara que la proposta passi el verificador. No sumar inventaris ni deduir un total d'aules: el recompte depèn dels espais que entren a cada comprovació. Font: diari, 19:18 i 22:00.
+Nota per a qui presenta: font: `resultats/nivell2/junta/5.2/junta.json`, camps `pics` i `aulari`. Ja no correspon dir que la tarda ocupa 19 de 19 ni que no té marge.
+
+## Com sabem que és correcte
+
+- 12 revisors de Codex van revisar el punt 5. Tres per apartat: un contrastava l'enunciat, un revisava el codi i un recalculava els resultats.
+- Van trobar errors que el verificador oficial no veu. El més greu eren 12 coincidències d'alumnat del grau nou: la teoria TE/91, de 40 alumnes, coincidia amb problemes PAUL/92, on va una part d'aquests mateixos alumnes.
+- El verificador compara números de grup i no detectava aquesta relació entre 91 i 92. Hem fet explícit que la teoria de tot el grup inclou els subgrups. Només permetem problemes simultanis quan hi ha prou informació per separar l'alumnat.
+- Hem tornat a calcular el 5.3 i el 5.4 sobre el 5.2 corregit. `comprova_persones` comprova l'alumnat, els dobles i ara també el professorat. Busca conflictes nous respecte de l'horari inicial; no afirma que hagin desaparegut tots els conflictes heretats.
+- També s'ha impedit reutilitzar informes antics si falla la verificació. El resum de la Junta comprova l'empremta de la proposta i es recalcula si ha canviat.
+
+Nota per a qui presenta: història documentada a [la revisió](REVISIO-PUNT5.md) i al [diari](DIARI.md), des de les 22:50. La comprovació pròpia complementa el verificador oficial. Els resultats finals del grau nou registren zero conflictes nous tant d'alumnat com de professorat.
+
+## Coses del verificador que expliquem
+
+- Compta com a desplaçament el pas entre dues classes que comencen alhora.
+- Compta com a «aula extra» classes de dobles que no necessiten aula pròpia.
+- No compta el canvi d'aula de la classe cancel·lada.
 
 ## Problema interessant · Els dobles graus
 
@@ -55,7 +82,7 @@ Nota per a qui presenta: l'equip executa aquesta comprovació; els agents només
 - Aquestes xifres ajuden el model a triar aules amb prou places; el verificador oficial continua veient la mancança original.
 - «Aula no indicada» vol dir que falta l'assignació als fitxers, no que la classe no es faci.
 
-Nota per a qui presenta: no atribuir al verificador una comprovació d'aforament que no pot fer quan li falta el nombre d'alumnes. Els complements es queden fora del repositori. Font: diari, 17:40 i 22:00; especificació, «Riscos tècnics».
+Nota per a qui presenta: no atribuir al verificador una comprovació d'aforament que no pot fer quan li falta el nombre d'alumnes. Els complements es queden fora del repositori. Font dels 14 grups i les 276 sessions: diari, 17:40. Context: diari, 22:00; especificació, «Riscos tècnics».
 
 ## Problema interessant · Torns, calendari i rutina
 
@@ -89,12 +116,12 @@ Nota per a qui presenta: les maquetes del migdia eren HTML locals; la graella fi
 ## Què queda per fer · Explicar els límits
 
 - Guanyar marge d'aules a l'hora punta: la validesa actual no resol la fragilitat operativa.
-- Completar la comparació final: hores mortes abans **[XIFRA]**, després **[XIFRA]**; activitats amb rutina setmanal **[XIFRA] %**.
+- **Fet:** comparació final del 5.2 contrastada: 72.930 → 105.930 minuts d’hores mortes i 94,05 % d’activitats amb rutina setmanal.
 - Revisar les excepcions amb Gestió Acadèmica i la Junta, i explicar també qualsevol indicador que empitjori.
 - Tornar a verificar els fitxers finals abans del lliurament i preparar la demo i el material de reserva.
 - Com a evolució: consulta personal de l'estudiant, peticions del professorat i assistent; les fonts no acrediten que aquestes ampliacions estiguin acabades.
 
-Nota per a qui presenta: els camps pendents s'han d'omplir amb recomptes finals, sense copiar identificadors. No prometre que s'ha trobat l'horari òptim: tenim propostes validades. Fonts: especificació, «Com sabem que està fet» i «Contracte de lliurament»; diari, 15:52, 16:01 i 22:00.
+Nota per a qui presenta: les xifres finals ja estan contrastades amb els informes agregats. No prometre que s'ha trobat l'horari òptim: tenim propostes validades. Fonts: especificació, «Com sabem que està fet» i «Contracte de lliurament»; diari, 15:52, 16:01 i 22:00.
 
 ## Idees descartades
 
