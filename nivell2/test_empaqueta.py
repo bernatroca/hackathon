@@ -462,6 +462,11 @@ def test_contracte_rebutja_relaxacions_canviades(tmp_path, capsys):
     metadata = json.loads(metadata_path.read_text())
     metadata['empremtes']['relaxacions'] = hashlib.sha256(relax.read_bytes()).hexdigest()
     metadata_path.write_text(json.dumps(metadata))
+    # El resum A4 porta l'empremta: es regenera com faria la Junta.
+    from nivell2.junta import documents
+    md, html = documents(metadata)
+    (tmp_path/'junta'/'5.2'/'junta.md').write_text(md, encoding='utf-8')
+    (tmp_path/'junta'/'5.2'/'junta.html').write_text(html, encoding='utf-8')
     readme = out/'README.md'
     readme.write_text(readme.read_text().replace(old_command, verificacio.ordre_oficial('5.2', tmp_path)))
     assert empaqueta.contracte(out, '5.2')
