@@ -574,7 +574,7 @@ class TestRedisseny(unittest.TestCase):
             assert '--mostra-nota:block;' in attrs['style']
             assert '--mostra-grup:none;' in attrs['style']
         assert html.count('<small class="nota"><span class="nota-ampla">Abans: dijous 12:30</span>') == 4
-        estret = CSS.split('@container p2-classe (width < 90px)', 1)[1]
+        estret = CSS.split('@container p2-classe (width < 180px)', 1)[1]
         assert '.nota{display:none;}' not in estret
 
     def test_detalls_natius_fora_del_scroll_i_amb_tot_el_text(self):
@@ -1002,10 +1002,11 @@ def test_setmana_densa_cap_en_escriptori_i_dies_iguals():
         assert 'grid-template-columns:56px ' + ' '.join(['minmax(0, 1fr)'] * 5) in html
         assert 'min-width:' not in html  # Cap mínim inline que forci scroll a escriptori.
     assert '.horari{min-width:0px;' in CSS
-    assert '@container p2-graella (width < 900px)' in CSS
+    assert '@media (width < 700px)' in CSS
+    assert '@container p2-graella (width < 900px)' not in CSS
     assert 'min-width:var(--ample-mobil)' in CSS
     assert 'container:p2-classe / inline-size' in CSS
-    assert '@container p2-classe (width < 90px)' in CSS
+    assert '@container p2-classe (width < 180px)' in CSS
 
 
 def test_xat_obert_anulla_minim_mobil_nomes_a_partir_de_700px():
@@ -1016,11 +1017,11 @@ def test_xat_obert_anulla_minim_mobil_nomes_a_partir_de_700px():
               'Problemes', 'PAUL/811', False, False)
     html = taula_html([c, replace(c, id_sessio='INVENTADA-XAT-2')])
     css = html.split('<style>', 1)[1].split('</style>', 1)[0]
-    mobil = re.search(r'@container p2-graella \(width < 900px\)\{\s*([^}]+})\s*}', css)[1]
+    mobil = re.search(r'@media \(width < 700px\)\{\s*([^}]+})\s*}', css)[1]
     assert '.horari{min-width:var(--ample-mobil);}' in mobil
     xat = re.search(r'@media \(min-width:700px\)\{(.*?)\n}', css, re.S)[1]
     assert 'html.xatia-obert .p2-horari .horari{min-width:0;' in xat
-    assert css.index('@media (min-width:700px)') > css.index('@container p2-graella')
+    assert css.index('@media (min-width:700px)') > css.index('@media (width < 700px)')
     assert 'column-gap:4px;padding-inline:8px;' in xat
     assert '.dia-horari{column-gap:2px;}' in xat
     assert '.classe{padding-inline:2px;}' in xat
@@ -1029,6 +1030,58 @@ def test_xat_obert_anulla_minim_mobil_nomes_a_partir_de_700px():
     # A 470px, dos carrils encara admeten HH:MM a 11px sense el·lipsi.
     carril = ((470 - 2 * 8 - 56 - 5 * 4) / 5 - 2) / 2
     assert carril - 2 * 2 >= 32
+
+
+def test_dies_iguals_amb_tres_carrils_i_contenidors_descriptori_estrets():
+    import re
+    from dataclasses import replace
+    from components.graella import Cella, DIES
+    c = Cella('INVENTADA-DIES-IGUALS', 'X', 870, 930, 'Q9/0001',
+              'Nom inventat llarg', 'Problemes', 'PAUL/811', True, False,
+              abans='Abans: dimecres 11:30 · Q9/0002')
+    cs = [replace(c, id_sessio=f'INVENTADA-CARRIL-{i}') for i in range(3)]
+    cs += [replace(c, dia=dia, id_sessio=f'INVENTADA-DIA-{dia}') for dia in DIES if dia != 'X']
+    html = taula_html(cs)
+    assert [int(d['data-carrils']) for d in estructura_graella(html).dies] == [1, 1, 3, 1, 1]
+    # Els set carrils no alteren els cinc pesos dels dies.
+    columnes = re.search(r'class="horari" style="[^"]*grid-template-columns:([^;]+);', html)[1]
+    assert columnes == '56px ' + ' '.join(['minmax(0, 1fr)'] * 5)
+    css = html.split('<style>', 1)[1].split('</style>', 1)[0]
+    # Cap regla de contenidor imposa un mínim pel simple fet de fer <900px.
+    minims = re.findall(r'([^{}]+)\{([^{}]*min-width:var\(--ample-mobil\)[^{}]*)}', css)
+    assert len(minims) == 1
+    mobil = re.search(r'@media \(width < 700px\)\{(.*?)\n}', css, re.S)[1]
+    assert minims[0][1] in mobil
+    # Amb el xat (575px), les caselles de dimecres fan uns 31px;
+    # sense el xat (887px), uns 46px. En ambdós casos s'activa el compacte.
+    for ample, padding, separacio, gap in ((575, 8, 4, 2), (887, 16, 10, 6)):
+        dia = (ample - 2 * padding - 56 - 5 * separacio) / 5
+        contingut = (dia - 2 * gap) / 3 - 2 * 2
+        assert 26 <= contingut < 180
+        assert (contingut < 32) == (ample == 575)
+
+
+def test_padding_i_hora_de_10px_per_carrils_de_30_a_45px():
+    import re
+    from components.graella import Cella, nom_assignatura_html
+    c = Cella('INVENTADA-MOLT-ESTRETA', 'X', 870, 930, 'Q9/0001',
+              'Electromagnetisme inventat', 'Problemes', 'PAUL/811',
+              True, False, abans='Abans: dimecres 11:30 · Q9/0002')
+    html = taula_html([c])
+    css = html.split('<style>', 1)[1].split('</style>', 1)[0]
+    assert 'padding-block:var(--padding-classe,8px);padding-inline:2px;' in css
+    compacte = re.search(r'@container p2-classe \(width < 180px\)\{(.*?)\n}', css, re.S)[1]
+    assert '.resum-classe{padding-inline:0;}' in compacte
+    curt = re.search(r'@container p2-classe \(width < 60px\)\{(.*?)\n}', css, re.S)[1]
+    assert '.abans-etiqueta{display:none;}' in curt
+    petit = re.search(r'@container p2-classe \(width < 32px\)\{(.*?)\n}', css, re.S)[1]
+    assert '.hora-inici,.p2-horari .classe .hora-fi,.p2-horari .classe .abans-hora{font-size:10px;letter-spacing:-.5px;}' in petit
+    assert '>dc<span class="abans-hora">11:30</span>' in html
+    assert '<b>' + nom_assignatura_html(c.assignatura) + '</b>' in html
+    assert '--mostra-nom-estret:-webkit-box;' in html
+    assert '--mostra-nota-estret:block;' in html
+    assert 'overflow:hidden;text-overflow:ellipsis' in css
+    assert 'max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis' in css
 
 
 def test_hores_i_abans_compactes_sencers_en_classes_simultanies_duna_hora():
@@ -1040,7 +1093,7 @@ def test_hores_i_abans_compactes_sencers_en_classes_simultanies_duna_hora():
               True, False, abans='Abans: dimecres 10:30 · Q9/0002')
     html = taula_html([c, replace(c, id_sessio='INVENTADA-COMPACTA-2')])
     css = html.split('<style>', 1)[1].split('</style>', 1)[0]
-    estret = re.search(r'@container p2-classe \(width < 90px\)\{(.*?)\n}', css, re.S)[1]
+    estret = re.search(r'@container p2-classe \(width < 180px\)\{(.*?)\n}', css, re.S)[1]
     assert '.hora-inici,.p2-horari .classe .hora-fi{display:block;}' in estret
     assert 'font-size:11px;line-height:12px;white-space:nowrap;overflow:visible;text-overflow:clip' in estret
     assert '.hora-separador,.p2-horari .classe .aula-classe{display:none;}' in estret
@@ -1050,7 +1103,7 @@ def test_hores_i_abans_compactes_sencers_en_classes_simultanies_duna_hora():
     assert '.abans-hora{white-space:nowrap;' in estret
     assert html.count('<span class="hora-inici">14:30</span>') == 2
     assert html.count('<span class="hora-fi">15:30</span>') == 2
-    assert html.count('aria-hidden="true">Abans dc<span class="abans-hora">10:30</span>') == 2
+    assert html.count('aria-hidden="true"><span class="abans-etiqueta">Abans </span>dc<span class="abans-hora">10:30</span>') == 2
     assert 'Abans: dimecres 10:30 · Q9/0002' in html  # Detall complet.
     for _, attrs in estructura_graella(html).classes:
         assert '--mostra-nota-estret:block;' in attrs['style']
@@ -1058,10 +1111,10 @@ def test_hores_i_abans_compactes_sencers_en_classes_simultanies_duna_hora():
     for durada in (30, 45, 60, 90, 120):
         for nota in (False, True):
             p = pressupost_classe(durada, nota=nota, estret=True)
-            # Dues hores de 12px; Abans pot ocupar tres línies de 12px.
+            # Dues línies de 12px per a l’interval i dues per a dia/hora anteriors.
             files = 1 + bool(p['nom']) + p['nota']
             visible = (2 * p['padding'] + 24 + p['nom'] * 17.5
-                       + p['nota'] * 36 + (files - 1) * 3)
+                       + p['nota'] * 24 + (files - 1) * 3)
             assert visible == p['visible'] <= durada * 1.6 - 6
             assert p['ubicacio'] and not p['grup']
             if durada >= 60:

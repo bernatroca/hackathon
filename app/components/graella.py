@@ -253,7 +253,7 @@ CSS = """
 .p2-horari .classe{container:p2-classe / inline-size;position:relative;z-index:1;color:#1a1a18;border:0;border-radius:10px;padding:8px 10px;margin:3px 0;min-width:0;min-height:0;box-sizing:border-box;word-break:normal;overflow-wrap:normal;hyphens:none;}
 .p2-horari .classe b{display:block;color:#1a1a18;font-size:14px;font-weight:600;line-height:1.25;white-space:normal;word-break:normal;overflow-wrap:normal;hyphens:none;font-family:system-ui,sans-serif;font-variant-ligatures:none;letter-spacing:normal;word-spacing:normal;text-transform:none;}
 .p2-horari .classe{appearance:none;display:block;text-align:left;font:inherit;cursor:pointer;}
-.p2-horari .classe .resum-classe{display:flex;flex-direction:column;gap:3px;min-width:0;}
+.p2-horari .classe .resum-classe{display:flex;flex-direction:column;gap:3px;min-width:0;padding-inline:8px;}
 .p2-horari .classe small{display:block;font-size:12px;color:#52514e;}
 .p2-horari .classe .ubicacio{color:#3d3c39;}
 .p2-horari .classe .nota{font-size:12px;font-weight:500;}
@@ -261,7 +261,7 @@ CSS = """
 .p2-horari .classe:focus-visible{outline:3px solid #2a78d6;outline-offset:2px;}
 /* El pressupost usa línies senceres: nom 17.5px, secundàries 16.2px i gap 3px.
    El detall viu en un popover independent: mai no estira el bloc. */
-.p2-horari .classe{padding-block:var(--padding-classe,8px);}
+.p2-horari .classe{padding-block:var(--padding-classe,8px);padding-inline:2px;}
 .p2-horari .classe{overflow:hidden;}
 .p2-horari .classe b{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:var(--linies-nom);max-height:calc(var(--linies-nom)*17.5px);overflow:hidden;text-overflow:ellipsis;}
 .p2-horari .classe small{line-height:16.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
@@ -278,8 +278,9 @@ CSS = """
 .p2-horari .detall-classe button{font:inherit;padding:6px 12px;border:1px solid #e6e5e0;border-radius:8px;background:#fff;color:#1a1a18;cursor:pointer;}
 .p2-horari .detall-classe button:focus-visible{outline:3px solid #2a78d6;outline-offset:2px;}
 
-/* El mínim de carril només s'aplica per sota de 900px de contenidor. */
-@container p2-graella (width < 900px){
+/* El mínim és exclusiu de finestres mòbils, no de contenidors estrets
+   dins d'una finestra d'escriptori (amb el xat o sense). */
+@media (width < 700px){
   .p2-horari .horari{min-width:var(--ample-mobil);}
 }
 /* Amb el xat lateral, els cinc dies caben també en el contenidor reduït.
@@ -289,9 +290,10 @@ CSS = """
   html.xatia-obert .p2-horari .dia-horari{column-gap:2px;}
   html.xatia-obert .p2-horari .classe{padding-inline:2px;}
 }
-/* Amplada real de la casella, també quan una classe ocupa tot el dia.
-   Amagar secundàries allibera espai sense excedir el pressupost vertical. */
-@container p2-classe (width < 90px){
+/* 180px de contingut deixen marge per l'interval, el separador i una aula
+   a 12px. Per sota, prioritzem hores senceres i nom sobre secundàries. */
+@container p2-classe (width < 180px){
+  .p2-horari .classe .resum-classe{padding-inline:0;}
   .p2-horari .classe .resum-classe>small:not([class]){display:none;}
   .p2-horari .classe b{display:var(--mostra-nom-estret);-webkit-line-clamp:var(--linies-nom-estret);max-height:calc(var(--linies-nom-estret)*17.5px);}
   .p2-horari .classe .ubicacio{display:block;font-size:11px;line-height:12px;white-space:nowrap;overflow:visible;text-overflow:clip;font-variant-numeric:tabular-nums;}
@@ -301,6 +303,14 @@ CSS = """
   .p2-horari .classe .nota-ampla{display:none;}
   .p2-horari .classe .nota-compacta,.p2-horari .classe .abans-hora{display:block;}
   .p2-horari .classe .abans-hora{white-space:nowrap;font-variant-numeric:tabular-nums;}
+}
+/* Sense l'etiqueta, dia curt i hora caben en dues línies fins a 30px
+   de carril (26px de contingut després dels 2px laterals). */
+@container p2-classe (width < 60px){
+  .p2-horari .classe .abans-etiqueta{display:none;}
+}
+@container p2-classe (width < 32px){
+  .p2-horari .classe .hora-inici,.p2-horari .classe .hora-fi,.p2-horari .classe .abans-hora{font-size:10px;letter-spacing:-.5px;}
 }
 
 .p2-llegenda{display:flex;flex-wrap:wrap;gap:8px;padding:0;list-style:none;font:13px/1.35 system-ui;color:#1a1a18;}
@@ -331,8 +341,9 @@ def pressupost_classe(durada, *, nota=False, estret=False):
 
     En ample normal, cada secundària ocupa una línia. Prioritzem una línia
     de nom, l'hora i «Abans»; després ampliem el nom i afegim el grup.
-    En estret, reservem dues línies de 12px per l'hora i fins a tres per
-    «Abans / dc / 10:30», abans d'ampliar el nom. Altres notes s'amaguen.
+    En estret, reservem dues línies de 12px per l'hora i dues per
+    «Abans dc / 10:30» (o «dc / 10:30»), abans d'ampliar el nom.
+    Altres notes s'amaguen.
     Els 6px de marge vertical es resten de l'àrea de la graella.
     """
     padding = 2 if durada <= 60 else 8
@@ -340,8 +351,8 @@ def pressupost_classe(durada, *, nota=False, estret=False):
     disponible = max(0, caixa - 2 * padding)
     if estret:
         visible = 24  # Inici i final, sense el·lipsi.
-        mostra_nota = nota and visible + 36 + 3 <= disponible
-        visible += 39 if mostra_nota else 0
+        mostra_nota = nota and visible + 24 + 3 <= disponible
+        visible += 27 if mostra_nota else 0
         nom = min(3, max(0, int((disponible - visible - 3) // 17.5)))
         visible += nom * 17.5 + (3 if nom else 0)
         return dict(padding=padding, nom=nom, ubicacio=True, grup=False,
@@ -451,7 +462,7 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
                 compacta = ''
                 if abans:
                     dia_curt = dict(zip((d.lower() for d in NOMS_DIES), ('dl', 'dt', 'dc', 'dj', 'dv')))[abans[1]]
-                    compacta = (f'<span class="nota-compacta" aria-hidden="true">Abans {dia_curt}'
+                    compacta = (f'<span class="nota-compacta" aria-hidden="true"><span class="abans-etiqueta">Abans </span>{dia_curt}'
                                 f'<span class="abans-hora">{abans[2]}</span></span>')
                 contingut += f'<small class="nota"><span class="nota-ampla">{escape(nota)}</span>{compacta}</small>'
             pressupost = pressupost_classe(c.fi - c.ini, nota=bool(nota))
