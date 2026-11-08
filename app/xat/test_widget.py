@@ -59,21 +59,69 @@ def test_context_grup_i_aula_sense_arrossegar_altres_pagines():
              'p2-vista': 'Proposta i avui', 'p2-titulacio': 'GXX', 'p2-curs': '1r',
              'p2-grup': '81', 'p2-aula': 'Q9/0001', 'p2-setmana': None}
     p = widget.pantalla_actual('Horari proposat', estat)
-    assert p['resum'] == 'Horari proposat · 5.2 · GXX 1r 81'
+    assert p['resum'] == 'Horari proposat · Torns nous (5.2) · GXX 1r 81'
     assert 'Q9/0001' in p['text']
     assert 'Semestre 2. Setmana: típica.' in p['text']
     p = widget.pantalla_actual('Com estem avui', estat)
     assert 'GXX' not in p['text']
-    assert '5.2' not in p['text']
+    assert 'Sí, hi cap' in p['text']
+    assert 'verificador oficial' in p['text']
+    assert 'pic 15 de 19 aules' in p['text']
     assert p['preguntes'][0] == 'Quantes sessions són al torn equivocat?'
     estat['p2-vista'] = 'Només avui'
     assert '5.2' not in widget.pantalla_actual('Horari proposat', estat)['text']
 
 
 def test_preguntes_i_junta():
-    assert len(widget.pantalla_actual('Imprevistos', {})['preguntes']) == 2
-    assert widget.pantalla_actual('Totes les respostes', {})['preguntes'] == widget.PER_DEFECTE
-    assert '5.4' in widget.pantalla_actual('Resum per a la Junta', {'junta-proposta': '5.4'})['text']
+    from types import SimpleNamespace
+    inventades = ['Aula Q9/0001 reservada el 15/02/2027.',
+                  'Assignatura inventada · TE/81 passa de 10 a 20 alumnes.']
+    with patch.dict(sys.modules, {'pagines.imprevistos': SimpleNamespace(
+            carrega=lambda: {'imprevistos': [{'descripcio': t} for t in inventades]})}):
+        for pagina in ('Imprevistos', 'Resum per a la Junta'):
+            p = widget.pantalla_actual(pagina, {'setmana': 'inventada', 'junta-proposta': '5.4'})
+            assert 'Setmana:' not in p['text']
+            assert 'Semestre 2.' in p['text']
+            assert all(t in p['text'] for t in inventades)
+        assert len(widget.pantalla_actual('Imprevistos', {})['preguntes']) == 3
+        assert '5.4' in p['text']
+        assert p['resum'].endswith('Amb el grau nou (5.4)')
+    assert widget.pantalla_actual('Totes les respostes', {})['preguntes'] == widget.PREGUNTES['Totes les respostes']
+    assert widget.PREGUNTES['Resum per a la Junta'] != widget.PER_DEFECTE
+    assert widget.PREGUNTES['Com estem avui'][-1] == 'Si 1r i 2n fan classe al matí, hi cabem?'
+    assert widget.PREGUNTES['Horari proposat'][-1] == 'Quines classes d’aquest grup canvien de dia o hora i per què?'
+
+
+def test_detall_obert_nomes_a_la_pagina_corresponent():
+    from types import SimpleNamespace
+    estat = {'detall_id': 'inventada', 'resultats': {
+        'inventada': SimpleNamespace(titol='Una resposta inventada')}}
+    for pagina in ('Com estem avui', 'Totes les respostes'):
+        p = widget.pantalla_actual(pagina, estat)
+        assert 'Resposta oberta: «Una resposta inventada» (identificador: inventada).' in p['text']
+        assert 'Una resposta inventada' in p['resum']
+        assert p['preguntes'][0] == 'Explica’m aquesta resposta en paraules senzilles'
+    assert 'inventada' not in widget.pantalla_actual('Horari proposat', estat)['text']
+    p = widget.pantalla_actual('Totes les respostes', {'detall_id': 'aforament'})
+    assert 'Més alumnes que places' in p['text']
+
+
+def test_imprevistos_no_disponibles_no_inventa_context():
+    with patch.object(widget, '_imprevistos', side_effect=OSError('inventat')):
+        p = widget.pantalla_actual('Imprevistos', {'setmana': 'inventada'})
+    assert 'no està disponible' in p['text']
+    assert 'Setmana:' not in p['text']
+    assert 'Q1/1003' not in p['text']
+
+
+def test_python_310_i_missatge_per_versions_anteriors():
+    import ast
+
+    codi = Path(widget.__file__).read_text()
+    ast.parse(codi, feature_version=(3, 10))
+    # El guardià s'executa abans de carregar Streamlit o el backend.
+    with patch.object(sys, 'version_info', (3, 9, 6)), pytest.raises(RuntimeError, match='Python 3.10'):
+        exec(compile(codi, str(widget.__file__), 'exec'), {})
 
 
 def test_sense_estils_consultes_i_correccio_footer():
@@ -105,17 +153,18 @@ const sandbox = {
   },
 };
 const source = fs.readFileSync(process.argv[1], 'utf8').replace('  window.XatIA = {', `
-  window.prova = { markdown, htmlMissatge, llegeixFlux, perAlServidor, desa, llegeixMemoria, estat,
-    sincronitzaPlafó, acabaTransicio, teclaPlafó, clicFons,
+  window.prova = { markdown, htmlMissatge, llegeixFlux, pregunta_, missatgeError, perAlServidor, desa, llegeixMemoria, estat,
+    sincronitzaPlafó, sincronitzaMenu, clicManualMenu, acabaTransicio, teclaPlafó, clicFons,
     preparaInteraccio() {
       el = {fons: {}, lupa: {hidden:true},
-        plafo: {contains: (node) => node === 'dins'}, boto: {focus() {}}};
+        final: {scrollIntoView() { el.desplacaments = (el.desplacaments || 0) + 1; }},
+        plafo: {contains: (node) => node === 'dins', getBoundingClientRect: () => ({width:420})}, boto: {focus() {}}};
       return el;
     },
     adreca() { return op.api; },
     prepara() { op = { clauMemoria: 'prova' }; },
     parcial(text) {
-      el = {conversa: {innerHTML: ''}, final: {scrollIntoView() {}}};
+      el = {conversa: {innerHTML: '', setAttribute() {}}, final: {scrollIntoView() {}}};
       estat.feina = true; estat.parcial = text;
       pintaConversa();
       estat.feina = false; estat.parcial = '';
@@ -158,6 +207,7 @@ assert.equal(resizes.length, 1);
 p.acabaTransicio({target: elements.plafo, propertyName: 'transform'});
 assert.equal(resizes.length, 2);
 assert.equal(timers.size, 0);
+assert.ok(elements.desplacaments > 0); // Després de la transició també segueix l'última resposta.
 p.clicFons();
 assert.equal(p.estat.obert, true);
 p.teclaPlafó({key:'Escape'});
@@ -201,6 +251,55 @@ for (const [id, callback] of timers) { timers.delete(id); callback(); }
 assert.equal(resizes.length, abansFinal + 1); // També sense transitionend.
 p.sincronitzaPlafó();
 assert.equal(resizes.length, abansFinal + 1);
+// Espai real per a menú + plafó: inclou 1440 px exactes i els canvis de mida.
+let menuDesplegat = true;
+let plegats = 0;
+let desplegats = 0;
+sandbox.window.innerWidth = 1440;
+sandbox.window.innerHeight = 900;
+sandbox.window.getComputedStyle = () => ({display:'block', visibility:'visible'});
+const menu = {getBoundingClientRect: () => ({width:300, height:900, left:menuDesplegat ? 0 : -300,
+  right:menuDesplegat ? 300 : 0, top:0, bottom:900})};
+sandbox.document.querySelector = () => menu;
+sandbox.document.querySelectorAll = (selector) => [{click() {
+  if (selector.includes('stSidebarCollapseButton')) { menuDesplegat = false; plegats++; }
+  else { menuDesplegat = true; desplegats++; }
+}}];
+p.estat.obert = false;
+p.sincronitzaMenu();
+p.estat.obert = true;
+p.sincronitzaMenu();
+assert.equal(plegats, 1);
+assert.equal(menuDesplegat, false);
+p.sincronitzaMenu();
+assert.equal(plegats, 1);
+p.estat.obert = false;
+p.sincronitzaMenu();
+assert.equal(desplegats, 1);
+assert.equal(menuDesplegat, true);
+sandbox.window.innerWidth = 1800;
+p.estat.obert = true;
+p.sincronitzaMenu();
+assert.equal(menuDesplegat, true);
+sandbox.window.innerWidth = 1440;
+p.sincronitzaMenu();
+assert.equal(menuDesplegat, false);
+p.estat.obert = false;
+p.sincronitzaMenu();
+p.estat.obert = true;
+p.sincronitzaMenu();
+p.clicManualMenu({target:{closest: () => true}});
+menuDesplegat = true;
+p.sincronitzaMenu();
+assert.equal(menuDesplegat, true); // Respecta l'acció manual mentre és obert.
+p.estat.obert = false;
+p.sincronitzaMenu();
+menuDesplegat = false;
+p.estat.obert = true;
+p.sincronitzaMenu();
+p.estat.obert = false;
+p.sincronitzaMenu();
+assert.equal(menuDesplegat, false); // No desplega un menú que ja estava plegat.
 const entitats = 'inici &gt; 15.00 &lt; 20.00 &amp; &quot;hora&quot; &#39;dia&#39; &#x27;aula&#x27;';
 const esperat = '<p>inici &gt; 15.00 &lt; 20.00 &amp; &quot;hora&quot; &#39;dia&#39; &#39;aula&#39;</p>';
 assert.equal(p.markdown(entitats), esperat);
@@ -249,8 +348,39 @@ async function flux(fi) {
   assert.equal(r.consultes[0].total_id, 23);
   assert.equal(r.tallada, false);
   const truncada = await flux(false);
-  assert.equal(truncada.tallada, true);
+  assert.equal(truncada.tallada, false);
+  assert.match(truncada.error, /connexió s’ha tallat/);
   assert.equal(truncada.consultes.length, 1);
+  assert.equal(truncada.text, 'Resposta inventada');
+  const cos = (events, falla = false) => {
+    let llegit = false;
+    return {getReader: () => ({read: async () => {
+      if (llegit) { if (falla) throw new TypeError('network'); return {done:true}; }
+      llegit = true;
+      return {value:new TextEncoder().encode(events.map(e => 'data: ' + JSON.stringify(e) + '\n\n').join('')), done:false};
+    }})};
+  };
+  const tall = await p.llegeixFlux(cos([{tros:'Resposta parcial'}], true));
+  assert.equal(tall.text, 'Resposta parcial');
+  assert.match(tall.error, /connexió s’ha tallat/);
+  await assert.rejects(() => p.llegeixFlux(cos([], true)), /connexió s’ha tallat/);
+  await assert.rejects(() => p.llegeixFlux(cos([])), /connexió s’ha tallat/);
+  await assert.rejects(() => p.llegeixFlux(cos([{fi:true, tallada:true}])), /pregunta més concreta/);
+  await assert.rejects(() => p.llegeixFlux(cos([{error:'La IA ha respost HTTP 429.'}])), /IA està saturada/);
+  const errorParcial = await p.llegeixFlux(cos([{tros:'Parcial'}, {error:'La IA ha respost HTTP 429.'}]));
+  assert.equal(errorParcial.text, 'Parcial');
+  assert.match(errorParcial.error, /IA està saturada/);
+  sandbox.fetch = async () => ({ok:false, status:429, headers:{get: () => 'application/json'}, json:async () => ({error:'HTTP 429'})});
+  await assert.rejects(() => p.pregunta_([]), /IA està saturada/);
+  sandbox.fetch = async () => { throw new TypeError('network'); };
+  await assert.rejects(() => p.pregunta_([]), /connexió amb el servidor/);
+  assert.match(p.missatgeError('HTTP 502'), /no està disponible/);
+  p.estat.feina = true;
+  const ambEina = await p.llegeixFlux(cos([{eina:'consulta_sql'}, {tros:'Fet'}, {fi:true}]));
+  assert.equal(ambEina.text, 'Fet');
+  assert.equal(p.estat.eina, 'consulta_sql');
+  assert.ok(p.parcial('Encara consultant').includes('Consultant l’horari…'));
+  p.estat.eina = '';
   const missatge = {role: 'assistant', content: r.text, consultes: r.consultes};
   const html = p.htmlMissatge(missatge);
   const nomesText = '<div class="xatia-missatge xatia-missatge--ia"><p>Resposta inventada</p></div>';
@@ -294,3 +424,12 @@ def test_css_plafó_acoblat_i_compactacio():
     assert '[data-testid="stColumn"]' in css
     assert 'transition: width 0.22s ease' in css
     assert 'prefers-reduced-motion' in css
+
+
+def test_accessibilitat_i_etiqueta_context():
+    js = (widget.WEB / 'xat-ia.js').read_text()
+    assert 'role="log" aria-live="polite"' in js
+    assert "setAttribute('aria-busy', String(estat.feina))" in js
+    assert 'aria-controls="xatia-plafo"' in js
+    assert "setAttribute('aria-expanded', String(obert))" in js
+    assert '`Context: ${veu}`' in js
