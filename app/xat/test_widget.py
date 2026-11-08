@@ -67,7 +67,7 @@ def test_context_grup_i_aula_sense_arrossegar_altres_pagines():
     assert 'Sí, hi cap' in p['text']
     assert 'verificador oficial' in p['text']
     assert 'pic 15 de 19 aules' in p['text']
-    assert p['preguntes'][0] == 'Quantes sessions són al torn equivocat?'
+    assert p['preguntes'] == [widget.PREGUNTA_DEMO, *widget.PREGUNTES['Com estem avui'][:2]]
     estat['p2-vista'] = 'Només avui'
     assert '5.2' not in widget.pantalla_actual('Horari proposat', estat)['text']
 
@@ -86,7 +86,7 @@ def test_preguntes_i_junta():
         assert len(widget.pantalla_actual('Imprevistos', {})['preguntes']) == 3
         assert '5.4' in p['text']
         assert p['resum'].endswith('Amb el grau nou (5.4)')
-    assert widget.pantalla_actual('Totes les respostes', {})['preguntes'] == widget.PREGUNTES['Totes les respostes']
+    assert widget.pantalla_actual('Totes les respostes', {})['preguntes'] == [widget.PREGUNTA_DEMO, *widget.PREGUNTES['Totes les respostes']]
     assert widget.PREGUNTES['Resum per a la Junta'] != widget.PER_DEFECTE
     assert widget.PREGUNTES['Com estem avui'][-1] == 'Si 1r i 2n fan classe al matí, hi cabem?'
     assert widget.PREGUNTES['Horari proposat'][-1] == 'Quines classes d’aquest grup canvien de dia o hora i per què?'
@@ -100,7 +100,8 @@ def test_detall_obert_nomes_a_la_pagina_corresponent():
         p = widget.pantalla_actual(pagina, estat)
         assert 'Resposta oberta: «Una resposta inventada» (identificador: inventada).' in p['text']
         assert 'Una resposta inventada' in p['resum']
-        assert p['preguntes'][0] == 'Explica’m aquesta resposta en paraules senzilles'
+        assert p['preguntes'][0] == widget.PREGUNTA_DEMO
+        assert p['preguntes'][1] == 'Explica’m aquesta resposta en paraules senzilles'
     assert 'inventada' not in widget.pantalla_actual('Horari proposat', estat)['text']
     p = widget.pantalla_actual('Totes les respostes', {'detall_id': 'aforament'})
     assert 'Més alumnes que places' in p['text']
@@ -153,7 +154,7 @@ const sandbox = {
   },
 };
 const source = fs.readFileSync(process.argv[1], 'utf8').replace('  window.XatIA = {', `
-  window.prova = { markdown, htmlMissatge, llegeixFlux, pregunta_, missatgeError, perAlServidor, desa, llegeixMemoria, estat,
+  window.prova = { preguntesAra, markdown, htmlMissatge, llegeixFlux, pregunta_, missatgeError, perAlServidor, desa, llegeixMemoria, estat,
     sincronitzaPlafó, sincronitzaMenu, clicManualMenu, acabaTransicio, teclaPlafó, clicFons,
     preparaInteraccio() {
       el = {fons: {}, lupa: {hidden:true},
@@ -162,7 +163,7 @@ const source = fs.readFileSync(process.argv[1], 'utf8').replace('  window.XatIA 
       return el;
     },
     adreca() { return op.api; },
-    prepara() { op = { clauMemoria: 'prova' }; },
+    prepara() { op = { clauMemoria: 'prova', preguntes: ['Pregunta per defecte'] }; },
     parcial(text) {
       el = {conversa: {innerHTML: '', setAttribute() {}}, final: {scrollIntoView() {}}};
       estat.feina = true; estat.parcial = text;
@@ -174,6 +175,18 @@ const source = fs.readFileSync(process.argv[1], 'utf8').replace('  window.XatIA 
 vm.runInNewContext(source, sandbox);
 const p = sandbox.window.prova;
 p.prepara();
+assert.equal(p.preguntesAra()[0], 'Pregunta per defecte');
+p.estat.pantalla = {preguntes: ['Pregunta de pàgina']};
+assert.equal(p.preguntesAra()[0], 'Pregunta de pàgina');
+p.estat.missatges = [{role:'user', content:'Pregunta inventada'}];
+assert.equal(p.preguntesAra()[0], 'Pregunta de pàgina');
+p.estat.missatges.push({role:'assistant', content:'Resposta inventada'});
+assert.equal(JSON.stringify(p.preguntesAra()), JSON.stringify(['Com ho saps?']));
+p.estat.pantalla = {preguntes: ['Una altra pàgina']};
+assert.equal(p.preguntesAra()[0], 'Com ho saps?');
+p.estat.missatges = [];
+assert.equal(p.preguntesAra()[0], 'Una altra pàgina');
+p.estat.pantalla = null;
 let mobil = false;
 const classes = new Set();
 const resizes = [];
@@ -433,3 +446,19 @@ def test_accessibilitat_i_etiqueta_context():
     assert 'aria-controls="xatia-plafo"' in js
     assert "setAttribute('aria-expanded', String(obert))" in js
     assert '`Context: ${veu}`' in js
+
+
+@pytest.mark.parametrize('pagina', [*widget.PREGUNTES, 'Pàgina inventada'])
+def test_demo_primera_a_totes_les_pagines(pagina):
+    with patch.object(widget, '_imprevistos', return_value=[]):
+        preguntes = widget.pantalla_actual(pagina, {})['preguntes']
+    assert preguntes[0] == 'Quantes aules queden lliures dimarts a les 10?'
+    assert len(preguntes) <= 3
+    assert len(preguntes) == len(set(preguntes))
+    assert widget.PER_DEFECTE[0] == preguntes[0]
+
+
+def test_benvinguda_planera():
+    with patch.object(widget, '_api', return_value='/api/xat'), patch.object(widget.st, 'html') as html:
+        widget.posa_widget(None)
+    assert 'Pregunta’m per aules, grups o l’horari proposat. Respondré amb les dades.' in html.call_args.args[0]
