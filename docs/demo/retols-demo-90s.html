@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rètols del vídeo</title>
+<style>
+:root{--fons:#f6f7f9;--targeta:#fff;--text:#16181d;--suau:#5b6270;--linia:#e2e5ea;--accent:#2f6fde}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--fons:#121418;--targeta:#1b1e24;--text:#eceef2;--suau:#a3a9b5;--linia:#2c3038;--accent:#7fb0ff}}
+:root[data-theme="dark"]{--fons:#121418;--targeta:#1b1e24;--text:#eceef2;--suau:#a3a9b5;--linia:#2c3038;--accent:#7fb0ff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--fons);color:var(--text);font:16px/1.5 -apple-system,"Helvetica Neue",sans-serif}
+main{max-width:1180px;margin:0 auto;padding:32px 16px 64px}
+h1{font-size:30px;margin:0 0 6px}
+h2{font-size:21px;margin:40px 0 12px}
+p.intro{color:var(--suau);margin:0 0 8px;max-width:820px}
+.com{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:16px}
+.caixa{background:var(--targeta);border:1px solid var(--linia);border-radius:12px;padding:16px}
+.caixa h3{margin:0 0 8px;font-size:16px}
+.caixa ul{margin:0;padding-left:18px;color:var(--suau);font-size:14.5px}
+/* Còpia exacta dels estils del vídeo (docs/demo/eines/grava.py) */
+.mostra{background:#d9dde3;border-radius:10px;padding:18px;position:relative;min-height:150px;margin-top:10px;overflow:hidden}
+.rotol{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);background:rgba(20,22,28,.92);color:#fff;border-radius:14px;padding:12px 22px;max-width:94%;width:max-content;box-shadow:0 10px 30px rgba(0,0,0,.28)}
+.rotol .part{font:700 14px/1.2 -apple-system,sans-serif;letter-spacing:.11em;text-transform:uppercase;color:#9cc3ff}
+.rotol .titol{font:800 29px/1.18 -apple-system,"Helvetica Neue",sans-serif;letter-spacing:-.01em;margin-top:5px}
+.rotol .detall{font:500 19px/1.32 -apple-system,sans-serif;color:#d6dae2;margin-top:5px}
+.xip{position:absolute;top:14px;right:18px;padding:8px 15px;border-radius:999px;background:rgba(20,22,28,.88);color:#fff;font:600 15px -apple-system,sans-serif}
+.xip b{color:#9cc3ff}
+.llista{display:flex;flex-direction:column;gap:18px}
+.fila{background:var(--targeta);border:1px solid var(--linia);border-radius:12px;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);overflow:hidden}
+.fila img{width:100%;display:block;aspect-ratio:16/9;object-fit:cover;background:#000}
+.info{padding:16px 18px}
+.num{display:inline-block;font:700 12px -apple-system,sans-serif;color:var(--accent);letter-spacing:.08em;text-transform:uppercase}
+.info .t{font-size:20px;font-weight:800;margin:4px 0 4px;line-height:1.25}
+.info .d{color:var(--suau);margin:0 0 10px}
+.info dl{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:0;font-size:14px}
+.info dt{color:var(--suau)}
+.info dd{margin:0}
+.nota{border-left:3px solid var(--accent);padding:8px 12px;background:var(--targeta);border-radius:0 8px 8px 0;margin-top:10px;font-size:14.5px}
+table{border-collapse:collapse;width:100%;font-size:14.5px;background:var(--targeta);border-radius:12px;overflow:hidden}
+th,td{border-bottom:1px solid var(--linia);padding:8px 10px;text-align:left;vertical-align:top}
+th{color:var(--suau);font-weight:600}
+@media (max-width:760px){.fila{grid-template-columns:1fr}.rotol .titol{font-size:22px}.rotol .detall{font-size:15px}}
+</style>
+</head>
+<body>
+<main>
+<h1>Rètols del vídeo demo de 90 s</h1>
+<p class="intro">Tot el text que surt al vídeo, en l'ordre en què surt, i com es veu. Les imatges són de la presa final (94,5 s), gravada amb el codi de <code>main</code> 0556bc7.</p>
+
+<h2>Com es mostren</h2>
+<div class="com">
+  <div class="caixa">
+    <h3>Etiqueta de la part (a dalt a la dreta)</h3>
+    <ul>
+      <li>Diu sempre quina part del repte es resol a la pantalla que es veu.</li>
+      <li>Hi és tot el vídeo, fins al tancament. Canvia quan canvia la part.</li>
+      <li>En canviar de pantalla s'amaga i torna a sortir quan la pantalla nova ja és carregada.</li>
+    </ul>
+    <div class="mostra" style="min-height:70px"><span class="xip"><b>Nivell 2 · 5.3</b> · Imprevistos</span></div>
+  </div>
+  <div class="caixa">
+    <h3>Rètol (a baix, al centre)</h3>
+    <ul>
+      <li>Tres línies: la part del repte (blau, majúscules), què es veu (gran) i què hi tenim en compte (petit).</li>
+      <li>Entra amb una fosa i un lleuger moviment cap amunt (0,35 s).</li>
+      <li>Es queda fins al rètol següent. En canviar de pantalla desapareix abans del clic, perquè cap rètol vell quedi sobre una pantalla nova.</li>
+      <li>Fons fosc translúcid perquè es llegeixi sobre qualsevol pantalla, també al projector.</li>
+    </ul>
+  </div>
+</div>
+<div class="mostra" style="min-height:190px">
+  <span class="xip"><b>Nivell 1</b> · Anàlisi: hi cap el model nou?</span>
+  <div class="rotol"><div class="part">Nivell 1 · Anàlisi de dades</div><div class="titol">1r i 2n al matí: sí, hi cabem</div><div class="detall">A l’hora més plena, 15 de 19 aules ocupades, i en guardem 2 de reserva per a imprevistos</div></div>
+</div>
+<p class="intro" style="margin-top:8px">Mida real al vídeo (1920×1080): títol 29 punts i detall 19 punts, a escala 4/3.</p>
+
+<h2>Les etiquetes de part</h2>
+<table>
+  <tr><th>Etiqueta</th><th>Quan surt</th></tr>
+  <tr><td><b>Nivell 1</b> · Anàlisi: hi cap el model nou?</td><td>Portada i «Com ho sabem»</td></tr>
+  <tr><td><b>Nivell 2 · 5.2</b> · Torns nous</td><td>Horari proposat</td></tr>
+  <tr><td><b>Nivell 2</b> · Verificador oficial</td><td>Terminal amb el verificador</td></tr>
+  <tr><td><b>Nivell 2 · 5.3</b> · Imprevistos</td><td>Imprevistos</td></tr>
+  <tr><td><b>Nivell 2 · 5.2 i 5.4</b> · Resum per a la Junta</td><td>Resum per a la Junta</td></tr>
+  <tr><td><b>Nivell 3</b> · Assistent d’IA</td><td>Assistent</td></tr>
+  <tr><td><b>Nivell 2</b> · Comprova-ho tu: les ordres, des de l’app</td><td>Pàgina «Comprova-ho tu»</td></tr>
+  <tr><td>(cap)</td><td>Tancament</td></tr>
+</table>
+
+<h2>Els rètols, un per un</h2>
+<p class="intro">Temps de la presa final, arrodonits. Els segons exactes de cada rètol són a <code>retols-demo-90s.json</code>.</p>
+<div class="llista">
+
+<div class="fila"><img src="retols/01.jpg" alt="Portada amb el rètol 1r i 2n al matí: sí, hi cabem" loading="lazy"><div class="info">
+<span class="num">1 · Portada «Com estem avui» · 0–8 s</span>
+<div class="t">1r i 2n al matí: sí, hi cabem</div>
+<p class="d">A l’hora més plena, 15 de 19 aules ocupades, i en guardem 2 de reserva per a imprevistos</p>
+<dl><dt>Part</dt><dd>Nivell 1 · Anàlisi de dades</dd><dt>Es veu</dt><dd>El cursor passa per «Sí» i per «15 ocupades».</dd></dl></div></div>
+
+<div class="fila"><img src="retols/02.jpg" alt="Portada amb el rètol Avui → amb la proposta" loading="lazy"><div class="info">
+<span class="num">2 · Portada, més avall · 8–14 s</span>
+<div class="t">Avui → amb la proposta</div>
+<p class="d">2.008 classes fora de torn → 459 excepcions declarades · 4.541 classes sense aula → 0</p>
+<dl><dt>Part</dt><dd>Nivell 1 · Anàlisi de dades</dd><dt>Es veu</dt><dd>Desplaçament a les targetes; el cursor assenyala les dues comparacions.</dd></dl></div></div>
+
+<div class="fila"><img src="retols/03.jpg" alt="Detall de les aules amb el rètol Cada xifra explica com s'ha calculat" loading="lazy"><div class="info">
+<span class="num">3 · «Mira el detall de les aules →» · 15–20 s</span>
+<div class="t">Cada xifra explica com s’ha calculat</div>
+<p class="d">No hi comptem laboratoris ni dobles titulacions, que no necessiten aula pròpia</p>
+<dl><dt>Part</dt><dd>Nivell 1 · Com ho sabem</dd><dt>Es veu</dt><dd>Baixa fins a «Com ho hem calculat».</dd></dl></div></div>
+
+<div class="fila"><img src="retols/04.jpg" alt="Horari proposat amb el rètol 1r i 2n al matí; 3r i 4t a la tarda" loading="lazy"><div class="info">
+<span class="num">4 · Horari proposat · 22–33 s</span>
+<div class="t">1r i 2n al matí; 3r i 4t a la tarda</div>
+<p class="d">Cada grup veu la seva setmana i què canvia respecte d’avui</p>
+<dl><dt>Part</dt><dd>Nivell 2 · 5.2 Torns nous</dd><dt>Es veu</dt><dd>Es tria 4t curs, «Mira l’exemple», «Més opcions» i la pastilla «Canvia».</dd></dl></div></div>
+
+<div class="fila"><img src="retols/05.jpg" alt="Detall d'una classe amb el rètol Cada classe diu on era abans" loading="lazy"><div class="info">
+<span class="num">5 · Detall d'una classe · 33–41 s</span>
+<div class="t">Cada classe diu on era abans</div>
+<p class="d">Grup 430: Computació d’Altes Prestacions passa de dijous 12:30 a dijous 14:30, a la Q3/0009</p>
+<dl><dt>Part</dt><dd>Nivell 2 · 5.2 Torns nous</dd><dt>Es veu</dt><dd>Clic a la classe: s'obre el detall amb «Abans: dijous 12:30 · Q4/1013».</dd></dl></div></div>
+
+<div class="fila"><img src="retols/06.jpg" alt="Terminal amb el verificador oficial" loading="lazy"><div class="info">
+<span class="num">6 · Terminal: verificador oficial · 41–52 s</span>
+<div class="t">La mateixa ordre que farà servir el jurat</div>
+<p class="d">Horari d’avui: NO VALIDA → proposta 5.2: VALIDA, amb 459 excepcions declarades i justificades</p>
+<dl><dt>Part</dt><dd>Nivell 2 · Verificador oficial</dd><dt>Es veu</dt><dd>Dues ordres reals. El veredicte surt en vermell (NO VALIDA) i en verd (VALIDA).</dd></dl></div></div>
+
+<div class="fila"><img src="retols/07.jpg" alt="Imprevistos amb el rètol Quatre imprevistos alhora, pocs canvis" loading="lazy"><div class="info">
+<span class="num">7 · Imprevistos · 54–60 s</span>
+<div class="t">Quatre imprevistos alhora, pocs canvis</div>
+<p class="d">Aula reservada, grup que creix, aula avariada i classe cancel·lada · comprovat amb el verificador</p>
+<dl><dt>Part</dt><dd>Nivell 2 · 5.3 Imprevistos</dd><dt>Es veu</dt><dd>El cursor assenyala «65 classes canvien d’aula».</dd></dl></div></div>
+
+<div class="fila"><img src="retols/08.jpg" alt="Imprevistos amb el rètol Aula avariada un dia" loading="lazy"><div class="info">
+<span class="num">8 · «Mira l’exemple» · 60–64 s</span>
+<div class="t">Aula avariada un dia: 6 classes canvien d’aula</div>
+<p class="d">Es fan el mateix dia i a la mateixa hora; només canvia l’aula</p>
+<dl><dt>Part</dt><dd>Nivell 2 · 5.3 Imprevistos</dd><dt>Es veu</dt><dd>La taula «Què canvia» es filtra a l'exemple.</dd></dl></div></div>
+
+<div class="fila"><img src="retols/09.jpg" alt="Resum per a la Junta amb el rètol La Junta decideix amb una pàgina" loading="lazy"><div class="info">
+<span class="num">9 · Resum per a la Junta · 66–72 s</span>
+<div class="t">La Junta decideix amb una pàgina</div>
+<p class="d">Matí 15 de 19 aules · tarda 18 de 19 · i el grau nou de 40 places també hi cap</p>
+<dl><dt>Part</dt><dd>Nivell 2 · Resum per a la Junta</dd><dt>Es veu</dt><dd>El cursor passa per «Hi cabem a l’hora més plena?» i «Hi cap el grau nou de 40 places?».</dd></dl></div></div>
+
+<div class="fila"><img src="retols/10.jpg" alt="Assistent amb el rètol Pregunta amb les teves paraules" loading="lazy"><div class="info">
+<span class="num">10 · Assistent · 72–81 s</span>
+<div class="t">Pregunta amb les teves paraules</div>
+<p class="d">Respon només amb dades de l’horari, i a «Comprova-ho» hi ha la consulta i les aules que ha trobat</p>
+<dl><dt>Part</dt><dd>Nivell 3 · Intel·ligència artificial</dd><dt>Es veu</dt><dd>S'escriu «Quantes aules queden lliures dimarts a les 10 a la proposta 5.2?» i s'obre «Comprova-ho» amb les 6 aules.</dd></dl></div></div>
+
+<div class="fila"><img src="retols/11.jpg" alt="Pàgina Comprova-ho tu amb el verificador de la 5.2" loading="lazy"><div class="info">
+<span class="num">11 · «Comprova-ho tu» · 83–92 s</span>
+<div class="t">Les ordres del terminal, des de l’app</div>
+<p class="d">Un botó per comprovació: es veu l’ordre, el veredicte del verificador oficial i la sortida real</p>
+<dl><dt>Part</dt><dd>Nivell 2 · Comprova-ho tu</dd><dt>Es veu</dt><dd>Clic a «Executa» del verificador de la 5.2: surt VALIDA AMB RELAXACIONS DECLARADES i la sortida.</dd></dl></div></div>
+
+<div class="fila"><img src="retols/12.jpg" alt="Tancament en negre: Espais de l'Escola, Equip Neo" loading="lazy"><div class="info">
+<span class="num">12 · Tancament · 92–94,5 s</span>
+<div class="t">Espais de l’Escola</div>
+<p class="d">EQUIP NEO</p>
+<dl><dt>Es veu</dt><dd>Torna a «Com estem avui» i fosa a negre. Sense etiqueta de part.</dd></dl></div></div>
+
+</div>
+
+<div class="nota"><b>Canvi de pantalla:</b> el rètol i l'etiqueta s'amaguen abans de cada clic que porta a una altra pantalla, perquè cap rètol vell quedi sobre una pantalla nova.</div>
+</main>
+</body>
+</html>

@@ -1,0 +1,191 @@
+[
+ {
+  "t": 0.28,
+  "tipus": "part",
+  "valor": "<b>Nivell 1</b> · Anàlisi: hi cap el model nou?"
+ },
+ {
+  "t": 0.59,
+  "tipus": "rotol",
+  "valor": {
+   "titol": "1r i 2n al matí: sí, hi cabem",
+   "part": "Nivell 1 · Anàlisi de dades",
+   "detall": "A l’hora més plena, 15 de 19 aules ocupades, i en guardem 2 de reserva per a imprevistos"
+  }
+ },
+ {
+  "t": 7.72,
+  "tipus": "rotol",
+  "valor": {
+   "titol": "Avui → amb la proposta",
+   "part": "Nivell 1 · Anàlisi de dades",
+   "detall": "2.008 classes fora de torn → 459 excepcions declarades · 4.541 classes sense aula → 0"
+  }
+ },
+ {
+  "t": 13.67,
+  "tipus": "rotol",
+  "valor": ""
+ },
+ {
+  "t": 15.11,
+  "tipus": "rotol",
+  "valor": {
+   "titol": "Cada xifra explica com s’ha calculat",
+   "part": "Nivell 1 · Com ho sabem",
+   "detall": "No hi comptem laboratoris ni dobles titulacions, que no necessiten aula pròpia"
+  }
+ },
+ {
+  "t": 20.13,
+  "tipus": "rotol",
+  "valor": ""
+ },
+ {
+  "t": 20.13,
+  "tipus": "part",
+  "valor": ""
+ },
+ {
+  "t": 21.57,
+  "tipus": "part",
+  "valor": "<b>Nivell 2 · 5.2</b> · Torns nous"
+ },
+ {
+  "t": 21.57,
+  "tipus": "rotol",
+  "valor": {
+   "titol": "1r i 2n al matí; 3r i 4t a la tarda",
+   "part": "Nivell 2 · 5.2 Torns nous",
+   "detall": "Cada grup veu la seva setmana i què canvia respecte d’avui"
+  }
+ },
+ {
+  "t": 33.23,
+  "tipus": "rotol",
+  "valor": {
+   "titol": "Cada classe diu on era abans",
+   "part": "Nivell 2 · 5.2 Torns nous",
+   "detall": "Grup 430: Computació d’Altes Prestacions passa de dijous 12:30 a dijous 14:30, a la Q3/0009"
+  }
+ },
+ {
+  "t": 40.87,
+  "tipus": "rotol",
+  "valor": ""
+ },
+ {
+  "t": 40.87,
+  "tipus": "part",
+  "valor": "<b>Nivell 2</b> · Verificador oficial"
+ },
+ {
+  "t": 41.32,
+  "tipus": "rotol",
+  "valor": {
+   "titol": "La mateixa ordre que farà servir el jurat",
+   "part": "Nivell 2 · Verificador oficial",
+   "detall": "Horari d’avui: NO VALIDA → proposta 5.2: VALIDA, amb 459 excepcions declarades i justificades"
+  }
+ },
+ {
+  "t": 52.13,
+  "tipus": "rotol",
+  "valor": ""
+ },
+ {
+  "t": 54.14,
+  "tipus": "part",
+  "valor": "<b>Nivell 2 · 5.3</b> · Imprevistos"
+ },
+ {
+  "t": 54.14,
+  "tipus": "rotol",
+  "valor": {
+   "titol": "Quatre imprevistos alhora, pocs canvis",
+   "part": "Nivell 2 · 5.3 Imprevistos",
+   "detall": "Aula reservada, grup que creix, aula avariada i classe cancel·lada · comprovat amb el verificador"
+  }
+ },
+ {
+  "t": 59.51,
+  "tipus": "rotol",
+  "valor": {
+   "titol": "Aula avariada un dia: 6 classes canvien d’aula",
+   "part": "Nivell 2 · 5.3 Imprevistos",
+   "detall": "Es fan el mateix dia i a la mateixa hora; només canvia l’aula"
+  }
+ },
+ {
+  "t": 63.97,
+  "tipus": "rotol",
+  "valor": ""
+ },
+ {
+  "t": 63.98,
+  "tipus": "part",
+  "valor": ""
+ },
+ {
+  "t": 65.54,
+  "tipus": "part",
+  "valor": "<b>Nivell 2 · 5.2 i 5.4</b> · Resum per a la Junta"
+ },
+ {
+  "t": 65.55,
+  "tipus": "rotol",
+  "valor": {
+   "titol": "La Junta decideix amb una pàgina",
+   "part": "Nivell 2 · Resum per a la Junta",
+   "detall": "Matí 15 de 19 aules · tarda 18 de 19 · i el grau nou de 40 places també hi cap"
+  }
+ },
+ {
+  "t": 71.98,
+  "tipus": "part",
+  "valor": "<b>Nivell 3</b> · Assistent d’IA"
+ },
+ {
+  "t": 71.98,
+  "tipus": "rotol",
+  "valor": {
+   "titol": "Pregunta amb les teves paraules",
+   "part": "Nivell 3 · Intel·ligència artificial",
+   "detall": "Respon només amb dades de l’horari, i a «Comprova-ho» hi ha la consulta i les aules que ha trobat"
+  }
+ },
+ {
+  "t": 80.78,
+  "tipus": "rotol",
+  "valor": ""
+ },
+ {
+  "t": 80.79,
+  "tipus": "part",
+  "valor": ""
+ },
+ {
+  "t": 83.29,
+  "tipus": "part",
+  "valor": "<b>Nivell 2</b> · Comprova-ho tu: les ordres, des de l’app"
+ },
+ {
+  "t": 83.29,
+  "tipus": "rotol",
+  "valor": {
+   "titol": "Les ordres del terminal, des de l’app",
+   "part": "Nivell 2 · Comprova-ho tu",
+   "detall": "Un botó per comprovació: es veu l’ordre, el veredicte del verificador oficial i la sortida real"
+  }
+ },
+ {
+  "t": 91.88,
+  "tipus": "rotol",
+  "valor": ""
+ },
+ {
+  "t": 91.88,
+  "tipus": "part",
+  "valor": ""
+ }
+]
