@@ -51,6 +51,13 @@ def documenta(pregunta, out, text):
         diagnostic = out / 'diagnostic.md'
         anterior = diagnostic.read_text(encoding='utf-8') if diagnostic.exists() else '# Diagnòstic 5.2\n'
         diagnostic.write_text(seccio(anterior, 'Prova de S04526', PROVA_S04526.split('\n', 1)[1]), encoding='utf-8')
+        text = seccio(text, 'Republicació de la proposta desada',
+            'variant-referencia.csv és la proposta final desada. L’ordre amb '
+            '--referencia-qualitat parteix de pista-inicial.csv, torna a fer la cerca '
+            'i utilitza aquesta variant per a les restauracions conjuntes: torna a publicar '
+            'la mateixa proposta, sense redescobrir-la de manera independent. '
+            'La variant prové del resultat final de la cerca conservat per l’equip. '
+            'No s’ha repetit la cerca sense la variant en aquesta revisió.')
         text = text.replace('registra els intents i les proves R1', 'registra els intents')
         text = seccio(text, 'Justificació de les relaxacions',
                       NOTA_FIXADES + '\n\nLa prova de S04526 és a [diagnostic.md, «Prova de S04526»](diagnostic.md#prova-de-s04526).')
@@ -78,6 +85,11 @@ def arrodoneix_text(text):
         elif not code:
             line = re.sub(r'(?<![\w.])(\d+\.\d{4,})(?![\w.])',
                           lambda m: f'{float(m[0]):.2f}'.replace('.', ','), line)
+            line = re.sub(r'(Temps total:\s*)(\d+[.,]\d+)\s*s',
+                          lambda m: m[1] + f'{float(m[2].replace(",", ".")):.1f}'.replace('.', ',') + ' s', line)
+            line = re.sub(r'(?<![\w.])(\d+\.\d{1,3})(?![\w.]|\s+(?:minuts|sessions|classes))',
+                          lambda m: m[0] if re.fullmatch(r'5\.[1-4]', m[0]) else
+                          f'{float(m[0]):.2f}'.rstrip('0').rstrip('.').replace('.', ','), line)
             if line.startswith('|'):
                 line = re.sub(r'(?<=\|)(\s*)(\d+\.\d+)(\s*)(?=\|)',
                               lambda m: m[1] + f'{float(m[2]):.2f}'.replace('.', ',') + m[3], line)
