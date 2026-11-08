@@ -756,7 +756,7 @@ with patch('components.vistes.una', side_effect=RuntimeError('Error inventat')) 
 
     def test_docents_expliquen_el_torn_de_cada_classe(self):
         info = text(self.troballa('docents-cavall', xifra='17'))
-        self.assertIn('segons el torn que li toca a cada classe', info['frase'])
+        self.assertIn('Segons el torn que li toca a cada classe', info['frase'])
         self.assertIn('segons el torn que li toca a cada classe', info['metode_planer'])
         self.assertIn('17 docents', info['frase'])
 

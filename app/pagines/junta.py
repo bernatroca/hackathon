@@ -112,7 +112,7 @@ def files_cursos(files):
 def barres_cursos(files):
     return ''.join(f'<div class="junta-fila"><span>{escape(r["nom"])}</span>'
                    + barra(r.get('afectades_pct', r['franja_pct']), 'var(--blau)')
-                   + f'<b>{junta.percentatge(r.get("afectades_pct", r["franja_pct"]))}</b></div>' for r in files)
+                   + f'<b>{junta.percentatge(r.get("afectades_pct", r["franja_pct"]))}</b></div>' for r in files if r.get('afectades_pct', r['franja_pct']) > 0)
 
 
 def fitxes(d):
@@ -128,7 +128,8 @@ def fitxes(d):
                         if p['classes'] == p['aules_disponibles'] else '')
                      + ('<small>Estimació de les aules necessàries.</small>' if p['estimacio'] else '')
                      + '</section>')
-    cursos = files_cursos(d['sessions_mogudes'])
+    cursos = files_cursos([r for r in d.get('cursos_afectats', d['sessions_mogudes'])
+                                      if r.get('afectades_pct', r['franja_pct']) > 0])
     pitjor = max(cursos, key=lambda r: r['franja_pct'], default=None)
     if pitjor and pitjor['franja_pct'] == 0:
         pitjor = None
@@ -143,6 +144,12 @@ def fitxes(d):
                     if pitjor else '<div class="junta-xifra">Cap</div><small>Cap curs canvia de dia ni d&#39;hora.</small>')
                  + (f'<small>{escape(junta.resum_guany_torn(d))}</small>' if junta.resum_guany_torn(d) else '')
                  + '</section>')
+    if 'fora_torn_avui_compten' in d:
+        total = d['fora_torn_avui_compten'] + d['fora_torn_avui_heretades']
+        peces.append('<section class="junta-fitxa"><h3>Classes fora de torn avui</h3>'
+                     f'<div class="junta-xifra">{junta.numero(total)}</div>'
+                     f'<small>{junta.numero(total)} = {junta.numero(d["fora_torn_avui_compten"])} que compten'
+                     f' + {junta.numero(d["fora_torn_avui_heretades"])} heretades.</small></section>')
     n = len(d['excepcions'])
     heretades = d['fora_torn_ja_avui']
     peces.append('<section class="junta-fitxa"><h3>Excepcions noves als torns</h3>'
@@ -188,6 +195,7 @@ def grau_nou_preparat():
 def mostra():
     st.markdown(ESTIL, unsafe_allow_html=True)
     st.write('Aquí tens el resum per decidir: mira les aules ocupades al matí i a la tarda i si hi cap el grau nou. Pots descarregar-lo per a la Junta.')
+    espai_conclusio = st.container()
     opcions = disponibles()
     with st.expander('Més opcions', expanded=False):
         triada = st.selectbox('Proposta', opcions,
@@ -209,6 +217,9 @@ def mostra():
             from datetime import datetime
             hora = datetime.fromisoformat(d['data']).strftime('%H:%M')
             st.warning(f"Resum de les {hora}; no s'ha pogut actualitzar")
+        with espai_conclusio:
+            for frase in d.get('conclusio', []):
+                st.write(frase)
         st.caption('Proposta: ' + NOMS_PROPOSTES.get(triada, triada))
         st.markdown(fitxes(d), unsafe_allow_html=True)
         if triada == '5.2':
@@ -219,6 +230,10 @@ def mostra():
             else:
                 st.caption('Consulta la proposta «Amb el grau nou (5.4)» a «Més opcions» per veure’n la cabuda.')
         st.caption(junta.resum_canvis_aula(d))
+        if d.get('marge_imprevistos'):
+            st.write(junta.explicacio_marge(d))
+        if d.get('resum_excepcions_aula'):
+            st.write(d['resum_excepcions_aula'])
         for torn, etiqueta in [('mati', 'Matí'), ('tarda', 'Tarda')]:
             pic = d['pics'][torn].get('simultani')
             if pic:
@@ -236,7 +251,8 @@ def mostra():
             esquerra, dreta = st.columns([3, 2])
             with esquerra, st.container(border=True):
                 st.subheader("Classes que canvien d’horari o d’aula, per curs")
-                cursos = files_cursos(d['sessions_mogudes'])
+                cursos = files_cursos([r for r in d.get('cursos_afectats', d['sessions_mogudes'])
+                                      if r.get('afectades_pct', r['franja_pct']) > 0])
                 if not cursos or cursos[0].get('afectades_pct', cursos[0]['franja_pct']) == 0:
                     st.write("Cap curs canvia de dia ni d'hora.")
                 else:
@@ -262,10 +278,11 @@ def mostra():
                     st.caption('Una aula gran pot acollir un grup petit. L’estat compara les classes amb totes les aules prou grans, guardant la reserva.')
                 else:
                     st.info('Resum antic: cal tornar-lo a generar.')
-        mostra_taula(pd.DataFrame([{'Titulació i curs': r['nom'],
-            'Canvi d’hora': r['franja'], 'Canvi d’aula': r['aula'], 'Aules assignades': r['aules_assignades'],
-            'Total afectades': r.get('afectades', r['franja'])}
-            for r in files_cursos(d['sessions_mogudes'])]))
+        if d.get('mostrar_canvis', triada != 'Avui'):
+            mostra_taula(pd.DataFrame([{'Titulació i curs': r['nom'],
+                'Canvi d’hora': r['franja'], 'Canvi d’aula': r['aula'], 'Aules assignades': r['aules_assignades'],
+                'Total afectades': r.get('afectades', r['franja'])}
+                for r in files_cursos(d['sessions_mogudes'])]))
         with st.expander('Detall tècnic' , expanded=False):
             st.subheader(junta.titol_marge(d))
             st.write(junta.explicacio_marge(d))
@@ -275,7 +292,8 @@ def mostra():
             st.caption('Les mides corresponen al moment de més ocupació del torn triat; sense aula assignada, fem servir els alumnes previstos (estimació). Els colors són orientatius i no garanteixen que tot l’horari encaixi.')
             if d['torn_no_avaluable']:
                 st.write(f"{d['torn_no_avaluable']} {junta.classe(d['torn_no_avaluable'])} sense torn definit.")
-            mostra_taula(pd.DataFrame([{'Titulació i curs': r['nom'], 'Canvien de dia o hora': junta.percentatge(r['franja_pct']), 'Canvis d’aula': r['aula'], 'Aules assignades': r['aules_assignades']} for r in d['sessions_mogudes']]))
+            if d.get('mostrar_canvis', triada != 'Avui'):
+                mostra_taula(pd.DataFrame([{'Titulació i curs': r['nom'], 'Canvien de dia o hora': junta.percentatge(r['franja_pct']), 'Canvis d’aula': r['aula'], 'Aules assignades': r['aules_assignades']} for r in d['sessions_mogudes']]))
             if d['excepcions']:
                 mostra_taula(pd.DataFrame([dict(e, motiu=junta.motiu_planer(e['motiu'])) for e in d['excepcions']]))
         if format_actual:

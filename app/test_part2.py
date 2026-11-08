@@ -697,6 +697,7 @@ class TestRedisseny(unittest.TestCase):
         c = Cella('S90001', 'L', 510, 570, 'Q9/0001', 'Inventada', 'Teoria', '81', False, False)
         casos = [(c, 'igual'), (replace(c, aula_assignada=True), 'aula-nova'),
                  (replace(c, canvi_aula=True), 'canvi'),
+                 (replace(c, canvi_aula=True, excepcio_demostrada=True), 'canvi'),
                  (replace(c, canvi_franja=True, setmana_diferent=True), 'fora-patro'),
                  (replace(c, aula_assignada=True, relaxacions=('Excepció inventada',)), 'aula-nova'),
                  (replace(c, canvi_franja=True, relaxacions=('Motiu inventat',)), 'canvi'),

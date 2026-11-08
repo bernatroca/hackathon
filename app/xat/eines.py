@@ -802,7 +802,7 @@ def _metadades_xifres():
         'aforament': 'sessions que superen l’aforament segons R3',
         'marge-grau-nou': 'marge d’hores-aula per al grau nou',
         'dobles-mati': 'dobles titulacions de cursos superiors al matí',
-        'docents-cavall': 'docents de cursos inicials i superiors el mateix dia',
+        'docents-cavall': 'docents amb matí i tarda el mateix dia segons el torn requerit',
         'canvis-aula': 'dispersió i canvis d’aula de l’alumnat',
         'hores-mortes': 'hores mortes de l’alumnat dins del mateix torn',
         'problemes-millores': 'problemes observats i propostes de millora',

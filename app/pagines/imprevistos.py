@@ -107,7 +107,7 @@ def _carrega(paths, versions):
                     relaxacions_referencia=_llegeix_relaxacions(relax_abans),
                     resum=json.loads(resum.read_text(encoding='utf-8')) if resum.is_file() else {},
                     informe=informe, noms=noms)
-    return afegeix_motius(dades, base, contingencies, proposta_52, proposta_53, noms)
+    return dades
 
 
 def afegeix_motius(dades, base, contingencies, proposta_52, proposta_53, noms):
@@ -370,7 +370,6 @@ def mostra(dades=None):
                 st.write(f'Exemple triat: {titol}.')
             files = filtra(dades['files'], clau)
             if files:
-                titols = {t['clau']: t['titol'] for t in dades['imprevistos']}
                 hi_ha_franja = any(r['dia_hora_nous'] for r in files)
                 taula = []
                 for r in files:
@@ -383,8 +382,7 @@ def mostra(dades=None):
                                     if abans != despres else 'sense canvi'}
                     if hi_ha_franja:
                         fila['Dia/hora nous'] = r['dia_hora_nous'] or 'sense canvi'
-                    fila['Motiu'] = r.get('motiu') or '; '.join(
-                        titols[k] for k in r['imprevistos']) or 'Canvi per reorganitzar les aules arran dels imprevistos.'
+                    fila['Motiu'] = r['motiu']
                     taula.append(fila)
                 st.dataframe(pd.DataFrame(taula), hide_index=True, width='stretch',
                              column_config={

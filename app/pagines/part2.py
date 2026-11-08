@@ -167,7 +167,9 @@ def motius_imprevistos(base, contingencies, referencia, proposta, noms):
 
 @st.cache_data(show_spinner=False)
 def carrega_motius_imprevistos(referencia, proposta, noms):
-    return motius_imprevistos(carrega_oficial(), carrega_oficial(CONTINGENCIES), referencia, proposta, noms)
+    from nivell2.imprevistos import calcula
+    return calcula(carrega_oficial(), carrega_oficial(CONTINGENCIES),
+                   referencia, proposta, [], noms=noms)['motius_per_sessio']
 
 
 def tria_si_cal(label, opcions, *, key, format_func=str, index=0, contenidor=st, help=None):

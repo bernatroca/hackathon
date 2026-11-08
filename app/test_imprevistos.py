@@ -293,7 +293,7 @@ def test_taula_destaca_aula_motiu_i_no_repeteix_la_franja_sense_canvi():
     assert app.button(key='imp-boto-totes').label == 'Totes les classes (6)'
     taula = app.dataframe[0].value
     assert 'Q9/0001 → Q9/1003' in set(taula['Aula'])
-    assert 'Canvi per reorganitzar les aules arran dels imprevistos.' in set(taula['Motiu'])
+    assert set(taula['Motiu']) == {r['motiu'] for r in dades_inventades()['files']}
     app.button(key='imp-boto-grup_creix').click().run(timeout=30)
     assert not app.error
     assert 'Dia/hora nous' not in app.dataframe[0].value

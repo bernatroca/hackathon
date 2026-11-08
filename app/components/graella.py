@@ -221,7 +221,8 @@ ESTATS = {
 
 
 def estat_cella(c):
-    return ('relaxada' if c.excepcio_demostrada else
+    return ('relaxada' if c.excepcio_demostrada and not (
+                c.canvi_aula and not c.canvi_franja and not c.setmana_diferent) else
             'fora-patro' if c.setmana_diferent or any(
                 m.startswith('Fora de l’hora habitual') for m in c.relaxacions) else
             'canvi' if c.canvi else 'aula-nova' if c.aula_assignada else 'igual')

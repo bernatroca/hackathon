@@ -45,7 +45,7 @@ TEXTOS = {
         frase='Hi ha {xifra} classes de cursos superiors de doble titulació al matí per setmana lectiva de mitjana; els correspondria la tarda.',
         proposem='Revisar amb cada titulació quines classes es poden separar.'),
     'docents-cavall': dict(estat='ambre', etiqueta='Vigilar', titol='Professorat amb matí i tarda',
-        frase='{xifra} docents tindrien classes al matí i a la tarda d’un mateix dia del semestre, segons el torn que li toca a cada classe.',
+        frase='Segons el torn que li toca a cada classe, {xifra} docents tindrien classes al matí i a la tarda d’un mateix dia del semestre.',
         proposem='Concentrar les classes de cada docent quan sigui compatible amb els grups.'),
 }
 
@@ -75,7 +75,7 @@ METODES_PLANERS = {
     'hores-mortes': 'Sumem els buits entre classes compatibles de cada grup dins del mateix torn, sense duplicar les classes que comparteix. Repartim el total del semestre entre les setmanes lectives; són hores de grup, no de cada estudiant. El gràfic mostra els grups de la setmana indicada.',
     'canvis-aula': 'Comptem els canvis de passadís entre classes consecutives de cada grup quan coneixem les dues aules. Repartim el total del semestre entre les setmanes lectives. El gràfic mostra els grups de la setmana indicada.',
     'dobles-mati': 'Comptem les classes de doble titulació de cursos superiors que avui es fan al matí i haurien d’anar a la tarda. Repartim el total del semestre entre les setmanes lectives i el gràfic mostra la setmana indicada. Cal revisar amb les titulacions si aquestes classes es poden separar.',
-    'docents-cavall': 'Mirem quins docents farien classe al matí i a la tarda d’un mateix dia segons el torn que li toca a cada classe, mantenint els dies actuals (1r i 2n al matí; cursos superiors, dobles titulacions i màsters a la tarda). La xifra principal cobreix el semestre. El gràfic agrupa el recompte de docents pel nombre de dies amb matí i tarda de la setmana indicada, sense mostrar identificadors.',
+    'docents-cavall': 'Mirem quins docents tindrien classes al matí i a la tarda d’una mateixa data, segons el torn que li toca a cada classe. Projectem aquests torns sobre els dies actuals, incloses les dobles titulacions i els màsters. La xifra principal cobreix el semestre, incloses les sessions anuals datades dins seu. El gràfic agrupa els docents pel nombre de dies amb matí i tarda de la setmana indicada, sense mostrar identificadors. Els docents estan assignats al grup; no confirmem qui imparteix cada classe.',
 }
 for id_, metode in METODES_PLANERS.items():
     TEXTOS[id_]['metode_planer'] = metode

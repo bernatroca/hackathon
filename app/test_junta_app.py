@@ -52,8 +52,8 @@ junta.mostra()
 def test_junta_obre_sense_errors_i_zero_sense_grafic():
     app = obre(dades(), ['Avui', '5.1', '5.2', '5.3', '5.4'])
     assert app.selectbox[0].value == '5.2'
-    assert app.selectbox[0].options == ['Avui', 'Aules assignades (5.1)', 'Horari complet (5.2)',
-                                       'Amb imprevistos (5.3)', 'Amb el grau nou (5.4)']
+    assert app.selectbox[0].options == ['Avui', 'Aules assignades (5.1)', 'Torns nous (5.2)',
+                                       'Resoldre els imprevistos (5.3)', 'Incorporar el grau nou (5.4)']
     assert any('Cap curs canvia' in m.value for m in app.markdown)
     assert not app.get('plotly_chart')
     assert app.get('download_button')
@@ -104,7 +104,7 @@ def test_excepcions_agrupades_i_pic_vermell():
     app = obre(d, ['Avui'])
     assert any('estat vermell' in m.value for m in app.markdown)
     assert any(e.label == 'Detall tècnic' for e in app.expander)
-    assert len(app.dataframe[2].value) == 2
+    assert len(app.dataframe[0].value) == 2
 
 
 def test_assignacions_no_generen_grafic_i_estimacio_visible():
@@ -273,7 +273,7 @@ def test_barres_vuit_i_desplegable_ordenats():
     assert 'Curs inventat 1<' not in html
     tots = next(e for e in app.expander if e.label == 'Veure tots els cursos')
     assert not tots.proto.expanded
-    assert tots.markdown[0].value.count('class="junta-fila"') == 10
+    assert tots.markdown[0].value.count('class="junta-fila"') == 9
 
 
 def test_estats_mides_acumulades_i_canvi_de_torn():
@@ -485,7 +485,7 @@ def test_descarrega_identifica_proposta(nom):
      'Hi cap el grau nou de 40 places: 2 classes col·locades.'),
     ({'vs_52': {'canvis_franja_vs_referencia': 1,
                 'canvis_aula_vs_referencia': 3, 'imprevistos': 4}},
-     '1 classe canvia de dia o hora i 3 d’aula per 4 imprevistos'),
+     '1 classe canvien de dia o hora i 3 classes més canvien d’aula per 4 imprevistos'),
 ])
 def test_fitxes_mostren_diferencia_escenari(bloc, text):
     assert text in junta.fitxes(dict(dades(), **bloc))
@@ -533,3 +533,23 @@ def test_grau_nou_preparat_rebutja_resum_antic():
         assert junta.grau_nou_preparat() == {'hi_cap': True}
         d['empremtes_referencia'] = {'proposta': 'antiga'}
         assert junta.grau_nou_preparat() is None
+
+
+def test_camps_nous_junta_i_avui_sense_taules_canvis():
+    d = dades()
+    d.update(conclusio=['Conclusió inventada per decidir.'], mostrar_canvis=False,
+             cursos_afectats=[], fora_torn_avui_compten=20, fora_torn_avui_heretades=12,
+             resum_excepcions_aula='Una classe inventada canvia només d’aula.')
+    app = obre(d, ['Avui'])
+    text = '\n'.join(m.value for m in app.markdown)
+    assert 'Conclusió inventada per decidir.' in text
+    assert '32 = 20 que compten + 12 heretades' in text
+    assert 'Una classe inventada canvia només d’aula.' in text
+    assert not app.dataframe
+
+
+def test_barres_nomes_cursos_afectats():
+    fila = dades()['sessions_mogudes'][0]
+    html = junta.barres_cursos([fila, dict(fila, nom='Inventat afectat', afectades_pct=10)])
+    assert html.count('class="junta-fila"') == 1
+    assert 'Inventat afectat' in html
