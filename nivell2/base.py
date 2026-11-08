@@ -32,8 +32,8 @@ def _arrel_principal() -> Path:
 
 
 PRINCIPAL = _arrel_principal()
-# Les dades són fora de git. Per defecte, a la carpeta principal; es poden canviar amb variables d'entorn.
-REPTE = Path(os.environ.get('REPTE_DIR') or PRINCIPAL / 'repte' / 'repte-horaris-escola')
+# El repte és fora de git, a repte/ des de l'arrel del repositori, o a REPTE_DIR.
+REPTE = Path(os.environ.get('REPTE_DIR') or ARREL / 'repte' / 'repte-horaris-escola')
 PAQUET = REPTE / 'paquet'
 ESCENARIS = PAQUET / 'escenaris'
 CONTINGENCIES = ESCENARIS / 'contingencies'

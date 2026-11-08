@@ -1,5 +1,6 @@
 """Executa amb streamlit run app/app.py des de l'arrel del repositori."""
 import sys
+import os
 from pathlib import Path
 ARREL = Path(__file__).resolve().parent
 for carpeta in (ARREL.parent,ARREL):
@@ -7,13 +8,27 @@ for carpeta in (ARREL.parent,ARREL):
         sys.path.insert(0,str(carpeta))
 
 import streamlit as st
+
+st.set_page_config(page_title="Espais de l’Escola",page_icon='▦',layout='wide')
+st.session_state['_error_mostrat'] = False
+repte = Path(os.environ.get('REPTE_DIR') or ARREL.parent / 'repte' / 'repte-horaris-escola')
+if not (repte / 'paquet' / 'sessions.csv').is_file() or not (repte / 'horaris').is_dir():
+    missatge, boto = st.columns([4, 1])
+    missatge.error('No trobem les dades del repte. Posa el paquet a repte/repte-horaris-escola/ '
+                   'o indica la carpeta amb REPTE_DIR.')
+    if boto.button('Torna-ho a provar', key='reintenta-paquet'):
+        from nivell1.dades import connexio
+        connexio.cache_clear()
+        st.cache_data.clear()
+        st.rerun()
+    st.stop()
+
 from pagines import portada, preguntes, part2, junta
-from servei import setmanes, versio_registre
+from servei import setmanes, versio_registre, actualitza_dades
 from components.vistes import franja_context
 from errors import mostra_error
 from xat.widget import posa_widget, pantalla_actual
 
-st.set_page_config(page_title="Espais de l’Escola",page_icon='▦',layout='wide')
 st.markdown('<style>'+ (ARREL/'estil.css').read_text() +'</style>',unsafe_allow_html=True)
 
 
@@ -50,21 +65,37 @@ zona = st.empty()
 zona.empty()
 with zona.container():
     with st.spinner('Calculant les xifres del semestre…'):
+        error_setmanes = False
         with st.sidebar:
-            with st.expander('Opcions',expanded=False):
-                semestre = st.selectbox('Semestre',[2,1],format_func=lambda s:'2n' if s == 2 else '1r',key='semestre')
-                try:
-                    disponibles = setmanes(semestre)
-                except Exception as exc:
-                    disponibles = []
-                    mostra_error()
-                setmana = st.selectbox('Setmana',[None]+disponibles,format_func=lambda s:'Típica' if s is None else str(s),key=f'setmana-{semestre}')
-                st.session_state.setmana = setmana
-                st.caption('Setmana típica: la que té un nombre de classes normal. «Hi cap el matí?» fa servir la setmana més plena si no en tries cap.')
-                if st.button('Actualitza les dades'):
-                    st.cache_data.clear()
-                    st.rerun()
+            if pagina.url_path in ('', 'avui', 'respostes'):
+                with st.expander('Opcions',expanded=False):
+                    semestre = st.selectbox('Semestre',[2,1],format_func=lambda s:'2n' if s == 2 else '1r',key='semestre')
+                    try:
+                        disponibles = setmanes(semestre)
+                    except Exception:
+                        disponibles = []
+                        error_setmanes = True
+                    mesos = ('gener', 'febrer', 'març', 'abril', 'maig', 'juny',
+                             'juliol', 'agost', 'setembre', 'octubre', 'novembre', 'desembre')
+                    etiquetes = {codi: f'Setmana del {dilluns.day} '
+                                 + ('d’' if dilluns.month in (4, 8, 10) else 'de ')
+                                 + f'{mesos[dilluns.month - 1]} · {n} classes'
+                                 for codi, dilluns, n in disponibles}
+                    setmana = st.selectbox('Setmana',[None]+list(etiquetes),
+                        format_func=lambda s:'Típica' if s is None else etiquetes[s],key=f'setmana-{semestre}')
+                    st.session_state.setmana = setmana
+                    st.caption('Setmana típica: la que té un nombre de classes normal, sense les setmanes de menys de 200 classes. '
+                               '«Hi cap el matí?» fa servir la setmana amb més classes alhora si no en tries cap.')
+            else:
+                st.session_state.semestre = 2
+                st.session_state.setmana = None
+                st.caption('La proposta és del 2n semestre')
+            if st.button('Actualitza les dades'):
+                actualitza_dades()
+                st.rerun()
             st.caption('Ús local · Les dades no es publiquen')
+        if error_setmanes:
+            mostra_error()
         if franja is not None:
             franja.markdown(franja_context(semestre, setmana), unsafe_allow_html=True)
         pagina.run()

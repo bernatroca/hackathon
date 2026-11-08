@@ -9,7 +9,7 @@ import pandas as pd
 import streamlit as st
 
 from components.vistes import estat
-from nivell2.imprevistos import ORDRE, calcula
+from nivell2.imprevistos import ORDRE, calcula, motiu_planer
 
 
 def normalitza_assignatura(text):
@@ -201,7 +201,7 @@ def _selecciona(clau):
 
 
 def mostra_filtres(dades):
-    opcions = [('totes', 'Tots els imprevistos')]
+    opcions = [('totes', 'Totes les classes')]
     opcions.extend((t['clau'], t['titol']) for t in dades['imprevistos'])
     if any(not r['imprevistos'] for r in dades['files']):
         opcions.append(('suport', 'Altres classes mogudes'))
@@ -244,21 +244,45 @@ def mostra(dades=None):
             st.subheader('Què canvia')
             st.caption('Una fila per classe datada, ordenada pel dia i l’hora d’abans. '
                        'Una classe pot estar afectada per més d’un imprevist.')
-            if resum.get('classes_de_suport', 0):
-                st.caption(suport(resum['classes_de_suport']))
+            st.caption('Per provar un imprevist nou, demana-ho a l’Assistent')
             clau = mostra_filtres(dades)
             files = filtra(dades['files'], clau)
             if files:
-                st.dataframe(pd.DataFrame([{'Assignatura': normalitza_assignatura(r['assignatura']), 'Grup': r['grup'],
-                                           'Abans': r['abans'], 'Després': r['despres']} for r in files]),
-                             hide_index=True, width='stretch')
+                titols = {t['clau']: t['titol'] for t in dades['imprevistos']}
+                hi_ha_franja = any(r['dia_hora_nous'] for r in files)
+                taula = []
+                for r in files:
+                    abans, despres = r['aula_abans'], r['aula_despres']
+                    fila = {'Assignatura': normalitza_assignatura(r['assignatura']), 'Grup': r['grup'],
+                            'Data': pd.Timestamp(r['data']).strftime('%d/%m/%Y') + (
+                                ' (cancel·lada)' if r['cancellada'] else ''),
+                            'Hora': r['hora'],
+                            'Aula': f'{abans or "sense aula"} → {despres or "sense aula"}'
+                                    if abans != despres else 'sense canvi'}
+                    if hi_ha_franja:
+                        fila['Dia/hora nous'] = r['dia_hora_nous'] or 'sense canvi'
+                    fila['Motiu'] = '; '.join(titols[k] for k in r['imprevistos']) or 'Per fer lloc'
+                    taula.append(fila)
+                st.dataframe(pd.DataFrame(taula), hide_index=True, width='stretch',
+                             column_config={
+                                 'Assignatura': st.column_config.TextColumn(width='medium'),
+                                 'Grup': st.column_config.TextColumn(width='small'),
+                                 'Data': st.column_config.TextColumn(width='small'),
+                                 'Hora': st.column_config.TextColumn(width='small'),
+                                 'Aula': st.column_config.TextColumn(width='medium'),
+                                 'Dia/hora nous': st.column_config.TextColumn(width='medium'),
+                                 'Motiu': st.column_config.TextColumn(width='medium'),
+                             })
             else:
                 st.info('No hi ha classes que canviïn amb aquest filtre.')
             with st.expander('Detall tècnic', expanded=False):
                 st.write('Excepcions declarades per motiu, incloses les que ja tenia l’horari proposat:')
                 relaxacions = resum.get('relaxacions_per_motiu', [])
                 if relaxacions:
-                    st.dataframe(pd.DataFrame([{'Motiu': r['motiu'], 'Classes': r['sessions']}
+                    regles = resum.get('regles_per_motiu', {})
+                    st.dataframe(pd.DataFrame([{'Regla': ', '.join(regles.get(r['motiu'], [])),
+                                               'Motiu': motiu_planer(r['motiu'], r['sessions']),
+                                               'Classes': r['sessions']}
                                                for r in relaxacions]), hide_index=True, width='stretch')
                 else:
                     st.write('No hi ha excepcions declarades.')
@@ -266,7 +290,7 @@ def mostra(dades=None):
                 st.code(dades.get('ordre', ORDRE), language='bash')
         except Exception:
             # No mostrem excepcions de lectura que podrien incloure contingut privat.
-            st.error('No hem pogut carregar la proposta d’imprevistos. Torna-la a generar i actualitza les dades.')
+            st.error('No hem pogut carregar la proposta d’imprevistos. Si continua passant, avisa l’equip.')
             with st.expander('Detall tècnic', expanded=False):
                 st.code(ORDRE, language='bash')
 

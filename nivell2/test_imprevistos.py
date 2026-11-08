@@ -215,3 +215,43 @@ def test_avaluacio_reutilitza_text_junta_sense_afirmar_que_es_fixada():
                  'sessions': 'reserva-inventada', 'justificacio': original}])
     assert d['imprevistos'][0]['motius'] == [MOTIU_S04526]
     assert 'fixada' not in motiu_planer(original)
+
+
+def test_recuperacio_del_grup_que_creix_no_es_compta_com_canvi_de_franja_del_grup():
+    b, c, p, q, noms = escenari()
+    c.sessions['cancel-inventada'].alumnes = 70
+    q.files['cancel-inventada'].aula = 'Q9/0002'
+    d = resultat((b, c, p, q, noms))
+    creix, recuperacio = d['imprevistos'][1], d['imprevistos'][3]
+    assert creix['sessions_afectades'] == 3
+    assert creix['canvis_aula'] == 3
+    assert creix['canvis_franja'] == 0
+    assert recuperacio['canvis_franja'] == 1
+    fila = next(r for r in d['files'] if 'recuperacio' in r['imprevistos'])
+    assert fila['abans'].endswith(' (cancel·lada)')
+    assert fila['cancellada']
+    assert fila['aula_abans'] == 'Q9/1003'
+    assert fila['aula_despres'] == 'Q9/0002'
+    assert '19/02/2027' in fila['dia_hora_nous']
+    assert d['resum']['canvis_franja_vs_referencia'] == 2
+
+
+def test_capacitats_i_diferencia_entre_horari_davui_i_proposat_son_dinamiques():
+    b, c, p, q, noms = escenari()
+    c.aules = {'Q9/1003': NS(capacitat=24), 'Q9/0002': NS(capacitat=80)}
+    b.sessions['reserva-inventada'].aula = 'Q9/0001'
+    p.files['creix-inventada'].aula = 'Q9/0001'
+    d = resultat((b, c, p, q, noms))
+    reserva, creix = d['imprevistos'][:2]
+    assert 'avui n’hi havia 1; a l’horari proposat, 2' in reserva['descripcio']
+    assert 'Q9/1003 (24 places)' in creix['descripcio']
+    assert 'Aules de destinació: Q9/0002 (80 places)' in creix['descripcio']
+    assert 'passa de 20 a 70 alumnes' in creix['descripcio']
+
+
+def test_detall_associa_les_regles_amb_el_motiu_sense_canviar_els_recomptes():
+    rows = [{'restriccio': regla, 'sessions': 'reserva-inventada',
+             'justificacio': 'Motiu inventat.'} for regla in ('R7-PLAB', 'R1-FIXADA')]
+    d = resultat(relaxacions=rows)
+    assert d['resum']['regles_per_motiu'] == {'Motiu inventat.': ['R1-FIXADA', 'R7-PLAB']}
+    assert d['resum']['relaxacions_per_motiu'] == [{'motiu': 'Motiu inventat.', 'sessions': 1}]
