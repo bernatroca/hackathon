@@ -88,6 +88,45 @@ def _fixada_tancada(base, s, ref):
         for t in base.tancaments)
 
 
+def comprova_reserva_operativa(base, proposta):
+    """Auditoria de la proposta, independent dels cubells i variables del solver.
+
+    Una aula ha de quedar oberta i buida durant tota l'hora. Les compartides
+    i dues classes successives a la mateixa aula només ocupen un espai.
+    El detall només serveix per diagnosticar errors; el resum publica recomptes.
+    """
+    ordinaries = {r for r, a in base.aules.items() if a.ordinaria}
+    dates = {s.data for s in base.sessions.values()}
+    ocupades = defaultdict(set)
+    for sid, s in base.sessions.items():
+        data, ini = _referencia(s, proposta)
+        dates.add(data)
+        aula = proposta.files[sid].aula
+        if not s.sense_espai and aula in ordinaries:
+            for franja in FRANGES:
+                if ini < franja+60 and ini+s.durada > franja:
+                    ocupades[data, franja].add(aula)
+    for t in base.tancaments:
+        dates.update(t.data_ini+dt.timedelta(days=i)
+                     for i in range((t.data_fi-t.data_ini).days+1)
+                     if (t.data_ini+dt.timedelta(days=i)).weekday() < 5)
+    minim = len(ordinaries)
+    deficits = []
+    for data in sorted(dates):
+        for franja in FRANGES:
+            tancades = {t.aula for t in base.tancaments
+                        if t.aula in ordinaries and t.data_ini <= data <= t.data_fi
+                        and t.ini < franja+60 and t.fi > franja}
+            lliures = ordinaries-tancades-ocupades[data, franja]
+            minim = min(minim, len(lliures))
+            if len(lliures) < RESERVA_MIN:
+                deficits.append({'data': data, 'franja': franja,
+                                 'lliures': sorted(lliures),
+                                 'tancades': sorted(tancades),
+                                 'ocupades': sorted(ocupades[data, franja])})
+    return minim, deficits
+
+
 def _heretats(base, ref):
     """Parells crus del 5.2: no reutilitza conflictes de la partida ni deduplica compartides."""
     days = defaultdict(list)
@@ -305,9 +344,18 @@ def _resol(base, units, links, opened, ref, inherited, deadline, seed, amplia, p
         used = model.new_bool_var('aula_ocupada')
         model.add_max_equality(used, active)
         bucket_uses[date, f].append(used)
-    if len(ordinaries) >= RESERVA_MIN:
-        for key, xs in bucket_uses.items():
-            model.add(sum(xs)+len(fixed_occupied[key]) <= len(ordinaries)-RESERVA_MIN)
+    if ordinaries:
+        dates = {date for date, _ in current.values()}
+        dates |= {dt.date.fromordinal(stamp//1440)
+                  for candidates in options.values() for stamp, _ in candidates}
+        for date in sorted(dates):
+            for f in FRANGES:
+                closed = {t.aula for t in base.tancaments if t.aula in ordinaries
+                          and t.data_ini <= date <= t.data_fi
+                          and t.ini < f+60 and t.fi > f}
+                key = date, f
+                model.add(sum(bucket_uses[key])+len(fixed_occupied[key])
+                          <= len(ordinaries-closed)-RESERVA_MIN)
     # La rutina inclou les setmanes congelades de les activitats obertes.
     for u, rows in units.items():
         if u not in opened:
@@ -345,10 +393,14 @@ def _resol(base, units, links, opened, ref, inherited, deadline, seed, amplia, p
     solver.parameters.random_seed = seed
     _resol.diagnostic = {'construccio_ms': round(1000*(time.monotonic()-begin)),
                         'variables': len(model.proto.variables),
-                        'restriccions': len(model.proto.constraints)}
+                        'restriccions': len(model.proto.constraints),
+                        'limit_determinista': solver.parameters.max_deterministic_time,
+                        'limit_rellotge_s': solver.parameters.max_time_in_seconds}
     # solve optimitza fins a OPTIMAL o fins a consumir el pressupost; no hi ha
     # cap callback que aturi la cerca en trobar el primer FEASIBLE.
     status = solver.solve(model)
+    _resol.diagnostic.update(temps_determinista=solver.response_proto.deterministic_time,
+                            temps_solver_s=solver.wall_time)
     state = solver.status_name(status)
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         return None, state
@@ -492,11 +544,20 @@ def repara(proposta: Proposta, canvi: Canvi) -> Reparacio:
     stats = {'sessions_afectades_per_imprevist': {k: len(v) for k, v in reasons.items()},
              'sessions_afectades': len(affected), 'intents': [], 'sessions_obertes': 0,
              'canvis_franja_vs_referencia': 0, 'canvis_aula_vs_referencia': 0}
-    if not affected:
+    _, deficits = comprova_reserva_operativa(base, proposta)
+    # També cal reparar una reserva perduda encara que l'aula tancada fos buida.
+    reserve_affected = {sid for sid, s in base.sessions.items()
+                        if not s.sense_espai and any(
+                            _referencia(s, proposta)[0] == d['data']
+                            and _referencia(s, proposta)[1] < d['franja']+60
+                            and _referencia(s, proposta)[1]+s.durada > d['franja']
+                            and proposta.files[sid].aula in d['ocupades']
+                            for d in deficits)} if any(a.ordinaria for a in base.aules.values()) else set()
+    if not affected and not reserve_affected:
         return Reparacio(copy.deepcopy(proposta), 'OPTIMAL', {**stats, 'temps_s': time.monotonic()-start})
     units, links = _unitats(base)
     inherited = _heretats(base, proposta)
-    opened = {base.sessions[sid].unitat for sid in affected}
+    opened = {base.sessions[sid].unitat for sid in affected | reserve_affected}
     reference = {sid: _referencia(s, proposta) for sid, s in base.sessions.items()}
     for level in range(5):
         components = {links[u] for u in opened}
