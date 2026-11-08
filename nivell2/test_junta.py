@@ -263,10 +263,11 @@ def test_aulari_i_documents_amb_reserva_calculada(total):
     md, html = documents(d)
     assert f"L'aulari té {total} aules ordinàries; en guardem {RESERVA} de reserva per a imprevistos." in md
     for text in (md, html):
-        assert f'A la tarda queden {maxim} aules lliures' in text if maxim != 1 else 'A la tarda queda 1 aula lliure' in text
-        assert 'Aquest marge permet absorbir imprevistos' in text
+        assert (f'Al matí queden {maxim - 1} aules lliures' in text if maxim > 2
+                else 'Al matí no queda cap aula lliure' in text)
+        assert ('Aquest marge permet absorbir imprevistos' in text) == (maxim > 1)
         assert 'aules de reserva' in text
-        paragraf = text.split('Aquest marge')[1].split('.')[0]
+        paragraf = text.split('## Detall tècnic')[0].split('<section class="detall-tecnic">')[0]
         assert 'R8' not in paragraf and 'PLAB' not in paragraf
     assert f'1/{maxim}' in md and f'1/{maxim}' in html
 
@@ -433,7 +434,7 @@ def test_marge_real_i_motiu_del_cas(tmp_path):
     assert d['excepcions'][0]['motiu'] == junta.MOTIU_S04526
     assert '1 excepció nova, demostrada' in junta.resum_excepcions(d)
     d['pics']['tarda']['pitjor']['classes'] = 1
-    assert junta.titol_marge(d) == 'Per què 1 de 1 no és prou'
+    assert junta.titol_marge(d) == 'Al matí no queda cap aula lliure a l’hora punta'
     d['aulari']['disponibles'] = 2
     assert 'queda 1 aula lliure' in junta.titol_marge(d)
 
@@ -456,3 +457,153 @@ def test_motiu_avaluacio_reconeix_nomes_relaxacio_coneguda():
     from nivell2 import junta
     assert junta.es_motiu_avaluacio("Setmana d'avaluació: impossibilitat demostrada amb R1 dura; vegeu diagnostic.md.")
     assert not junta.es_motiu_avaluacio('Un altre motiu: diagnostic.md')
+
+
+@pytest.mark.parametrize('mati,tarda,titol', [
+    (21, 20, 'Al matí calen 21 aules de 19: ja cal fer servir la reserva'),
+    (19, 13, 'Al matí no queda cap aula lliure a l’hora punta'),
+    (15, 18, 'A la tarda queda 1 aula lliure a l’hora punta'),
+    (15, 13, 'Al matí queden 4 aules lliures a l’hora punta'),
+])
+def test_marge_del_torn_mes_ple(mati, tarda, titol):
+    from nivell2 import junta
+    b = petita()
+    p = Proposta.de_base(b)
+    d = calcula(p, b, b, colloca(b, p))
+    d['aulari']['disponibles'] = 19
+    for torn, n in [('mati', mati), ('tarda', tarda)]:
+        d['pics'][torn]['pitjor']['classes'] = n
+    assert junta.titol_marge(d) == titol
+    assert ('ja se superen' in junta.explicacio_marge(d)) == (max(mati, tarda) > 19)
+    assert ('Aquest marge permet' in junta.explicacio_marge(d)) == (max(mati, tarda) < 19)
+    assert titol in documents(d)[0]
+
+
+@pytest.mark.parametrize('proposta', ['Avui', '5.1', '5.2', '5.3', '5.4'])
+def test_a4_identificat_i_dates_planeres(proposta):
+    from nivell2 import junta
+    b = petita()
+    p = Proposta.de_base(b)
+    d = calcula(p, b, b, colloca(b, p), nom_proposta=proposta)
+    d['data'] = '2026-11-08T02:07:02+01:00'
+    md, html = documents(d)
+    titol = 'Resum per a la Junta · ' + junta.NOMS_PROPOSTES[proposta]
+    assert md.startswith('# ' + titol)
+    assert '<title>' + titol + '</title>' in html
+    assert '<h1>' + titol + '</h1>' in html
+    assert '08/11/2026 02:07' in md
+    assert 'setmana del 01/02' in md
+    assert '2027-W' not in md + html
+    assert '(aules per a classes)' not in md + html
+    assert 'Empremta:' not in md.split('## Detall tècnic')[0]
+    assert junta.empremta_resum(d) in md.split('## Detall tècnic')[1]
+    if proposta != 'Avui':
+        assert 'comparat amb l’horari d’avui' in md
+    if proposta in ('Avui', '5.1'):
+        assert '0 classes fixades' not in md
+    if proposta == '5.1':
+        assert 'Aquesta proposta no mou cap hora.' in md
+
+
+def test_grau_nou_es_compara_amb_52_i_no_es_un_curs_mogut(tmp_path, monkeypatch):
+    from nivell2 import junta
+    b = petita()
+    ref = Proposta.de_base(b)
+    ref.files['0'].h_ini = '09:30'
+    ref.escriu(tmp_path / '5.2' / 'proposta.csv')
+    nou = deepcopy(b)
+    s = deepcopy(b.sessions['0'])
+    s.id, s.cohorts, s.aula, s.ini = 'grau-inventat', ('GNOU:1r',), 'Reserva0', 570
+    nou.sessions[s.id] = s
+    nou.ordre.append(s.id)
+    proposta = deepcopy(ref)
+    proposta.files[s.id] = Proposta.de_base(nou).files[s.id]
+    proposta.files[s.id].h_ini = '10:30'  # Una classe nova mai és un canvi respecte d’avui.
+    proposta.escriu(tmp_path / '5.4' / 'proposta.csv')
+    monkeypatch.setattr(junta, 'carrega_oficial', lambda e=None: nou if e == GRAU_NOU else b)
+    monkeypatch.setattr(junta, 'carrega_model', lambda e=None: nou if e == GRAU_NOU else b)
+    d = junta.genera('5.4', resultats=tmp_path)
+    assert all(r['cohort'] != 'GNOU:1r' for r in d['sessions_mogudes'])
+    assert 'GNOU:1r' not in d['pitjor_cohort']
+    assert junta.nom('GNOU:1r') == 'Grau nou (40 places), 1r'
+    assert d['grau_nou'] == {'hi_cap': True, 'sessions_collocades': 1,
+                            'sessions_52_mogudes': 0, 'pic_mati_52': 1, 'pic_mati': 1}
+    for text in junta.documents(d):
+        assert 'Hi cap el grau nou de 40 places: 1 classe col·locada' in text
+        assert 'Cap classe de la resta es mou' in text
+    # També detectem un canvi d’aula de la resta: no fixem el resultat a zero.
+    proposta.files['0'].aula = 'Reserva1'
+    proposta.escriu(tmp_path / '5.4' / 'proposta.csv')
+    assert junta.genera('5.4', resultats=tmp_path)['grau_nou']['sessions_52_mogudes'] == 1
+
+
+def test_imprevistos_usa_recompte_compartit_i_dates_explicites(tmp_path, monkeypatch):
+    from nivell2 import junta
+    b = petita()
+    ref = Proposta.de_base(b)
+    ref.escriu(tmp_path / '5.2' / 'proposta.csv')
+    cont = deepcopy(b)
+    cont.cancellades = {'0': date(2027, 2, 3)}
+    proposta = deepcopy(ref)
+    proposta.files['0'].data, proposta.files['0'].dia = '2027-02-03', 'X'
+    proposta.files['0'].aula = proposta.files['1'].aula = 'Reserva0'
+    proposta.escriu(tmp_path / '5.3' / 'proposta.csv')
+    monkeypatch.setattr(junta, 'carrega_oficial', lambda e=None: cont if e == CONTINGENCIES else b)
+    monkeypatch.setattr(junta, 'carrega_model', lambda e=None: cont if e == CONTINGENCIES else b)
+    d = junta.genera('5.3', resultats=tmp_path)
+    assert d['vs_52'] == {'canvis_aula_vs_referencia': 2,
+                          'canvis_franja_vs_referencia': 1, 'imprevistos': 1,
+                          'canvis_aula_recuperades': 1, 'canvis_aula_oficials': 1}
+    for text in junta.documents(d):
+        assert '1 classe canvia de dia o hora i 1 d’aula per 1 imprevist' in text
+        assert '1 classe cancel·lada recuperada també canvia d’aula (2 canvis d’aula en total)' in text
+
+
+def test_motiu_demostrat_un_cop_al_document(tmp_path):
+    from nivell2 import junta
+    b = petita()
+    b.sessions['0'].torn = 'tarda'
+    p = Proposta.de_base(b)
+    relax = tmp_path / 'relaxacions.csv'
+    relax.write_text('restriccio,sessions,justificacio\nR1-TORN,0,Setmana d’avaluació: impossibilitat demostrada amb R1 dura; vegeu diagnostic.md.\n')
+    d = calcula(p, b, b, colloca(b, p), relax, '5.2')
+    for text in junta.documents(d):
+        assert text.count('ho demostra el càlcul') == 1
+        assert 'càlcul.:' not in text
+        assert 'S04526' not in text
+
+
+@pytest.mark.parametrize('tecnic,planer', [
+    ('R2-CALENDARI', 'dia no lectiu'),
+    ('R4-ALUMNAT', 'coincideix amb una altra classe del grup'),
+    ('R4-AULA', 'l’aula està ocupada'),
+    ('R4-DOCENT', 'el professor té una altra classe'),
+    ('supera el límit de qualitat de la variant de referència', 'empitjorava massa la resta de l’horari'),
+])
+def test_motius_de_rutina_planers(tecnic, planer):
+    from nivell2 import junta
+    text = junta.motiu_planer('Restauració al patró rebutjada: restriccions oficials: ' + tecnic)
+    assert text == planer
+
+
+def test_motiu_fixades_neutre():
+    from nivell2 import junta
+    assert junta.motiu_planer(junta.MOTIU_FIXADES) == 'Classe fixada de 1r/2n: no es mou (regla 1)'
+
+
+def test_cli_totes_regenera_cinc_propostes(tmp_path, monkeypatch):
+    from nivell2 import junta
+    b = petita()
+    p = Proposta.de_base(b)
+    for nom in ('5.1', '5.2', '5.3', '5.4'):
+        p.escriu(tmp_path / nom / 'proposta.csv')
+    monkeypatch.setattr(junta, 'RESULTATS', tmp_path)
+    monkeypatch.setattr(junta, 'carrega_oficial', lambda e=None: b)
+    monkeypatch.setattr(junta, 'carrega_model', lambda e=None: b)
+    assert junta.main(['--totes']) == 0
+    for nom in ('Avui', '5.1', '5.2', '5.3', '5.4'):
+        carpeta = tmp_path / 'junta' / ('' if nom == 'Avui' else nom)
+        d = json.loads((carpeta / 'junta.json').read_text())
+        assert d['proposta'] == nom
+        for ext, text in zip(('md', 'html'), junta.documents(d)):
+            assert (carpeta / f'junta.{ext}').read_text() == text
