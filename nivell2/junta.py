@@ -9,7 +9,7 @@ import re
 import shutil
 import tempfile
 from collections import Counter, defaultdict
-from datetime import datetime
+from datetime import date, datetime
 from html import escape
 from pathlib import Path
 from statistics import median
@@ -30,7 +30,11 @@ NOMS = {'GED': 'Enginyeria de Dades', 'GEI': 'Enginyeria Informàtica',
         'GEST': 'Enginyeria de Sistemes de Telecomunicació',
         'GEET+GEST': 'Enginyeria Electrònica i de Sistemes de Telecomunicació',
         'MEBA': 'Màster en Enginyeria Biològica i Ambiental',
-        'MET': 'Màster en Enginyeria de Telecomunicació', 'MRICSE': 'Màster (pla 1530)'}
+        'MET': 'Màster en Enginyeria de Telecomunicació', 'MRICSE': 'Màster (pla 1530)',
+        'GNOU': 'Grau nou (40 places)'}
+NOMS_PROPOSTES = {'Avui': 'Avui', '5.1': 'Aules assignades (5.1)',
+                 '5.2': 'Horari complet (5.2)', '5.3': 'Amb imprevistos (5.3)',
+                 '5.4': 'Amb el grau nou (5.4)'}
 
 
 COM_HO_HEM_CALCULAT = (
@@ -58,9 +62,10 @@ DETALL_TECNIC += (
     'no garantia d’encaix. No se sumen els marges.')
 
 
-VERSIO_RESUM = 5
-VERSIO_CALCUL = 4
-MOTIU_S04526 = ("S04526 és el divendres 9/4, l’únic dia lectiu de la setmana "
+VERSIO_RESUM = 6
+VERSIO_CALCUL = 5
+MOTIU_FIXADES = 'La regla 1 diu que les classes de 1r i 2n d’aquests graus no es toquen; ja es fan a la tarda.'
+MOTIU_S04526 = ("Aquesta classe és el divendres 9/4, l’únic dia lectiu de la setmana "
                 "d’avaluació: del 5 al 8/4 és avaluació. Aquell dia no hi ha cap "
                 "franja de tarda lliure per a aquesta classe; ho demostra el càlcul.")
 
@@ -114,8 +119,22 @@ def es_motiu_avaluacio(text):
 
 
 def motiu_planer(text):
-    if text == MOTIU_S04526:
+    if text == MOTIU_S04526 or es_motiu_avaluacio(text):
         return MOTIU_S04526
+    if text.replace("'", '’').strip() == MOTIU_FIXADES:
+        return 'Classe fixada de 1r/2n: no es mou (regla 1)'
+    text = text.replace('../5.2/diagnostic.md', 'diagnostic.md')
+    for tecnic, planer in [
+            ('Restauració al patró rebutjada: restriccions oficials: ', ''),
+            ('Restauració al patró rebutjada: ', ''),
+            ('R2-CALENDARI', 'dia no lectiu'),
+            ('R4-ALUMNAT', 'coincideix amb una altra classe del grup'),
+            ('R4-AULA', 'l’aula està ocupada'),
+            ('R4-DOCENT', 'el professor té una altra classe'),
+            ('supera el límit de qualitat de la variant de referència',
+             'empitjorava massa la resta de l’horari'),
+            ('R1 dura', 'el torn obligatori')]:
+        text = text.replace(tecnic, planer)
     for tecnic, planer in [('R1-TORN', 'regla de torn'), ('PLAB', 'laboratori'),
                            ('TE/', 'grup '), ('PAUL', 'problemes'), ('SEM', 'seminari'),
                            (' J ', ' d’un altre edifici '), ('R8', 'reserva d’aules'),
@@ -146,16 +165,28 @@ def explicacio_aulari(d):
 
 def titol_marge(d):
     n = d['aulari']['disponibles']
-    pic = d['pics']['tarda']['pitjor']['classes']
-    if pic >= n:
-        return f'Per què {pic} de {n} no és prou'
+    torn, pic = torn_amb_menys_marge(d)
+    if pic > n:
+        return f'{torn} calen {pic} aules de {n}: ja cal fer servir la reserva'
+    if pic == n:
+        return f'{torn} no queda cap aula lliure a l’hora punta'
     marge = n - pic
-    return f"A la tarda {'queda' if marge == 1 else 'queden'} {marge} {'aula lliure' if marge == 1 else 'aules lliures'} a l’hora punta"
+    return f"{torn} {'queda' if marge == 1 else 'queden'} {marge} {'aula lliure' if marge == 1 else 'aules lliures'} a l’hora punta"
+
+
+def torn_amb_menys_marge(d):
+    torn = max(('mati', 'tarda'), key=lambda t: d['pics'][t]['pitjor']['classes'])
+    return ('Al matí' if torn == 'mati' else 'A la tarda'), d['pics'][torn]['pitjor']['classes']
 
 
 def explicacio_marge(d):
-    if d['pics']['tarda']['pitjor']['classes'] < d['aulari']['disponibles']:
+    torn, pic = torn_amb_menys_marge(d)
+    if pic < d['aulari']['disponibles']:
         return "Aquest marge permet absorbir imprevistos, a més de les aules de reserva."
+    if pic > d['aulari']['disponibles']:
+        return (f"{torn} ja se superen les aules disponibles per a classes: "
+                f"calen {pic - d['aulari']['disponibles']} aules de la reserva o moure classes. "
+                'No queda marge per absorbir imprevistos.')
     return ("Ocupar totes les aules disponibles a l'hora punta vol dir que qualsevol avaria, "
             f"reserva o grup que creix obliga a fer servir les {d['aulari']['reserva']} aules "
             'de reserva o a moure classes. Recomanem mantenir almenys 1–2 aules lliures '
@@ -277,7 +308,7 @@ def pics_i_mides(base, model, col, nomes_mati_requerit=False):
     return out
 
 
-def calcula(proposta, base, model, col, relaxacions=None):
+def calcula(proposta, base, model, col, relaxacions=None, nom_proposta='Avui'):
     _, cohorts = calcula_xifres(proposta, base, Informe(
         {'veredicte': 'No s’ha verificat aquí', 'restriccions': {}, 'objectius': {}}, ''))
     totals = {r['cohort']: r['sessions'] for r in cohorts}
@@ -330,9 +361,17 @@ def calcula(proposta, base, model, col, relaxacions=None):
                  aules_assignades=assignades[r['cohort']],
                  nom=nom(r['cohort']), mogudes=mogudes[r['cohort']],
                  mogudes_pct=100 * mogudes[r['cohort']] / r['sessions'])
+    if nom_proposta == '5.4':
+        cohorts = [r for r in cohorts if r['cohort'].partition(':')[0] != 'GNOU']
     cohorts.sort(key=lambda r: (-r['afectades_pct'], -r['afectades'], r['cohort']))
     pitjor = max((r['mogudes_pct'] for r in cohorts), default=0)
     return {'versio_resum': VERSIO_RESUM, 'versio_calcul': VERSIO_CALCUL, 'data': datetime.now().astimezone().isoformat(timespec='seconds'),
+            'proposta': nom_proposta,
+            'relaxacio_torn': any(r.restriccio == 'R1-TORN' for r in relax),
+            'fora_torn_avui': sum(_torn_ok(s.torn, s.ini, s.fi) is False for s in base.sessions.values()
+                                 if not (nom_proposta == '5.4' and any(c.startswith('GNOU:') for c in s.cohorts))),
+            'fora_torn_proposta': sum(_torn_ok(c.s.torn, c.ini, c.fi) is False for c in col.values()
+                                     if not (nom_proposta == '5.4' and any(coh.startswith('GNOU:') for coh in c.s.cohorts))),
             'canvis_aula': sum(bool(c.s.aula and not a_traslladar(c.s.aula) and not c.s.sense_espai and c.aula != c.s.aula) for c in col.values()),
             'aulari': aulari(base),
             'pics': pics_i_mides(base, model, col), 'sessions_mogudes': cohorts,
@@ -347,17 +386,81 @@ def calcula(proposta, base, model, col, relaxacions=None):
             'detall_tecnic': DETALL_TECNIC}
 
 
+def data_planera(valor):
+    moment = datetime.fromisoformat(valor)
+    return moment.strftime('%d/%m/%Y %H:%M') if 'T' in valor else moment.strftime('%d/%m/%Y')
+
+
+def setmana_planera(valor):
+    if not valor:
+        return 'sense classes'
+    any_iso, setmana = valor.split('-W')
+    return 'setmana del ' + date.fromisocalendar(int(any_iso), int(setmana), 1).strftime('%d/%m')
+
+
+def resum_curs_afectat(d):
+    cursos = d['sessions_mogudes']
+    pitjor = max(cursos, key=lambda r: r['franja_pct'], default=None)
+    if not pitjor or not pitjor['franja_pct']:
+        return "Cap curs canvia de dia ni d’hora."
+    empatats = sum(r['franja_pct'] == pitjor['franja_pct'] for r in cursos) - 1
+    torn = ('per passar al torn que els toca' if pitjor.get('torn') == pitjor['franja']
+            else 'per fer encaixar l’horari')
+    return (f"{pitjor['nom']}: {percentatge(pitjor['franja_pct'])} de les classes canvien de dia o hora "
+            f"({pitjor['franja']} de {pitjor['sessions']}), {torn}"
+            + (f'; i {empatats} cursos més amb el mateix percentatge' if empatats else '') + '.')
+
+
+def resum_guany_torn(d):
+    if 'fora_torn_avui' not in d or 'fora_torn_proposta' not in d:
+        return ''
+    return f"Classes fora del seu torn: {d['fora_torn_avui']} avui → {d['fora_torn_proposta']} amb aquesta proposta."
+
+
+def resum_escenari(d):
+    if 'grau_nou' in d:
+        g = d['grau_nou']
+        resposta = 'Hi cap el grau nou de 40 places' if g['hi_cap'] else 'El grau nou de 40 places encara no hi cap'
+        n = g['sessions_collocades']
+        return (f"{resposta}: {n} {classe(n)} {'col·locada' if n == 1 else 'col·locades'}. "
+                f"El pic del matí passa de {g['pic_mati_52']} a {g['pic_mati']} de {d['aulari']['disponibles']} aules. "
+                + ('Cap classe de la resta es mou respecte de l’horari proposat (5.2).'
+                   if g['sessions_52_mogudes'] == 0 else
+                   f"{g['sessions_52_mogudes']} {classe(g['sessions_52_mogudes'])} de la resta "
+                   f"es {'mou' if g['sessions_52_mogudes'] == 1 else 'mouen'} respecte de l’horari proposat (5.2)."))
+    if 'vs_52' in d:
+        v = d['vs_52']
+        n = v['canvis_franja_vs_referencia']
+        a = v.get('canvis_aula_oficials', v['canvis_aula_vs_referencia'])
+        recuperades = v.get('canvis_aula_recuperades', 0)
+        return (f"Respecte de l’horari proposat (5.2): {n} {classe(n)} "
+                f"{'canvia' if n == 1 else 'canvien'} de dia o hora i {a} d’aula "
+                f"per {v['imprevistos']} {'imprevist' if v['imprevistos'] == 1 else 'imprevistos'} (vegeu Imprevistos)."
+                + (f" A més, {recuperades} {classe(recuperades)} cancel·lada recuperada també canvia d’aula "
+                   f"({v['canvis_aula_vs_referencia']} canvis d’aula en total)." if recuperades == 1 else
+                   f" A més, {recuperades} classes cancel·lades recuperades també canvien d’aula "
+                   f"({v['canvis_aula_vs_referencia']} canvis d’aula en total)." if recuperades else ''))
+    return ''
+
+
 def documents(d):
     """Una mateixa pàgina de contingut per al Markdown i l’HTML imprimible."""
-    md = ['# Resum per a la Junta', f"Data: {d['data'][:10]}",
-          'Empremta: ' + empremta_resum(d),
+    proposta = d.get('proposta', 'Avui')
+    titol = 'Resum per a la Junta · ' + NOMS_PROPOSTES.get(proposta, proposta)
+    md = ['# ' + titol,
+          ('Horari d’avui.' if proposta == 'Avui' else
+           NOMS_PROPOSTES.get(proposta, proposta) + ' comparat amb l’horari d’avui.'),
+          f"Data: {data_planera(d['data'])}"]
+    if resum_escenari(d):
+        md.append(resum_escenari(d))
+    md += [
           '## Aules ocupades a l’hora punta (per a la reserva)',
           'Mostrem quantes aules calen en el moment de més ocupació. Si falta assignar una aula, en fem una estimació.', explicacio_aulari(d),
           '| Torn | Màxim de la setmana més plena | Màxim d’una setmana habitual |', '|---|---|---|']
     for torn, nom_torn in [('mati', 'Matí'), ('tarda', 'Tarda')]:
         p, t = d['pics'][torn]['pitjor'], d['pics'][torn]['tipica']
-        nom_torn += ' (estimació)' if p['estimacio'] else ' (aules per a classes)'
-        md.append(f"| {nom_torn} | {p['classes']}/{p['aules_disponibles']} · {p['setmana']} · {p['hora']} | {t['classes']}/{t['aules_disponibles']} · {t['setmana']} · {t['hora']} |")
+        nom_torn += ' (estimació)' if p['estimacio'] else ''
+        md.append(f"| {nom_torn} | {p['classes']}/{p['aules_disponibles']} · {setmana_planera(p['setmana'])} · {p['hora']} | {t['classes']}/{t['aules_disponibles']} · {setmana_planera(t['setmana'])} · {t['hora']} |")
     md += ['## Màxim de classes alhora', EXPLICACIO_PICS]
     for torn, etiqueta in [('mati', 'Matí'), ('tarda', 'Tarda')]:
         p = d['pics'][torn].get('simultani')
@@ -377,34 +480,22 @@ def documents(d):
     for r in d['sessions_mogudes']:
         md.append(f"| {r['nom']} | {percentatge(r['mogudes_pct'])} ({r['mogudes']}/{r['sessions']}) | " +
                   ' | '.join(f"{percentatge(r[c+'_pct'])} ({r[c]})" for c in ('aula', 'torn')) + f" | {r['aules_assignades']} |")
-    pitjors = [r for r in d['sessions_mogudes'] if r['cohort'] in d['pitjor_cohort']]
-    md.append("Cap curs canvia de dia ni d'hora." if all(r['mogudes'] == 0 for r in pitjors)
-              else 'Percentatge més alt: ' + '; '.join(f"{r['nom']}: {percentatge(r['mogudes_pct'])} ({r['mogudes']})" for r in pitjors) + '.')
-    md += ['## Excepcions noves als torns']
-    if not d['excepcions']:
-        md.append('No hi ha excepcions noves als torns.')
-    else:
-        md.append(f"{len(d['excepcions'])} {classe(len(d['excepcions']))} amb una excepció declarada al torn que els toca. Els motius consten al detall tècnic.")
+    md += [resum_curs_afectat(d), resum_guany_torn(d), '## Excepcions noves als torns', resum_excepcions(d)]
+    if d['excepcions']:
         motius = defaultdict(list)
         for r in d['excepcions_resum']:
             motius[r['motiu']].append(f"{r['nom']}: {percentatge(r['percentatge'])} ({r['sessions']})")
         for motiu, files in motius.items():
             n = sum(e.get('motiu') == motiu for e in d['excepcions'])
-            md.append(motiu_planer(motiu) + f' ({n} {classe(n)}): ' + '; '.join(files) + '.')
-    md.append(resum_excepcions(d))
-    for e in d['excepcions']:
-        if e.get('id_sessio') == 'S04526' and e.get('motiu') == MOTIU_S04526:
-            md.append('Cas S04526: ' + MOTIU_S04526)
+            md.append(motiu_planer(motiu).rstrip('.') + f' ({n} {classe(n)}; ' + '; '.join(files) + ').')
     if d['fora_torn_ja_avui']:
         md.append(f"{d['fora_torn_ja_avui']} {classe(d['fora_torn_ja_avui'])} ja es {'fa' if d['fora_torn_ja_avui'] == 1 else 'fan'} avui fora del seu torn i no es {'toca' if d['fora_torn_ja_avui'] == 1 else 'toquen'}.")
     if d['torn_no_avaluable']:
         md.append(f"No podem comprovar el torn de {d['torn_no_avaluable']} {classe(d['torn_no_avaluable'])} perquè no tenen un torn definit.")
     md += ['## Com ho hem calculat', COM_HO_HEM_CALCULAT,
-           '## Detall tècnic', '<small>',
+           '## Detall tècnic', '<small>', 'Empremta: ' + empremta_resum(d),
            '## ' + titol_marge(d), explicacio_marge(d),
            d.get('detall_tecnic', DETALL_TECNIC)]
-    for r in d['excepcions_resum']:
-        md.append(motiu_planer(r['motiu']) + ': ' + r['nom'] + f": {percentatge(r['percentatge'])} ({r['sessions']}).")
     md.append('</small>')
     # Petit renderitzador segur: tot text de la proposta s’escapa abans d’anar a HTML.
     html, taula = [], False
@@ -445,12 +536,16 @@ def documents(d):
     if len(d['sessions_mogudes']) > 8:
         html += ['<p>En paper: els vuit cursos amb més canvis. La resta es pot consultar a l’app.</p>']
     markdown = '\n'.join(line + ('' if line.startswith('|') else '\n') for line in md)
-    return markdown + '\n', '<!doctype html><html lang="ca"><meta charset="utf-8"><title>Resum per a la Junta</title><style>' + css + '</style><div id="page"><main>' + '\n'.join(html) + '</main></div>' + '</html>\n'
+    return markdown + '\n', '<!doctype html><html lang="ca"><meta charset="utf-8"><title>' + escape(titol) + '</title><style>' + css + '</style><div id="page"><main>' + '\n'.join(html) + '</main></div>' + '</html>\n'
 
 
 
 def resum_excepcions(d):
     n = len(d['excepcions'])
+    if not d.get('relaxacio_torn', bool(d.get('fixades_tarda') or n)):
+        if d.get('proposta') == '5.1':
+            return 'Aquesta proposta no mou cap hora.'
+        return 'No hi ha excepcions noves als torns.'
     noves = f"{n} excepció nova, demostrada" if n == 1 and d['excepcions'][0].get('motiu') == MOTIU_S04526 else f"{n} excepcions noves"
     return noves + f"; {d.get('fixades_tarda', 0)} classes fixades que ja són a la tarda (regla 1)."
 
@@ -480,29 +575,83 @@ def publica(desti, dades):
             shutil.rmtree(vell)
 
 
+def completa_escenari(d, nom_proposta, proposta, base, model, col, referencia):
+    """Compara amb la 5.2 en memòria, sense alterar cap lliurament."""
+    if nom_proposta == '5.3':
+        # Import local: imprevistos comparteix els textos planers d’aquest mòdul.
+        from nivell2.imprevistos import calcula as calcula_imprevistos
+        resum = calcula_imprevistos(carrega_oficial(), base, referencia, proposta, [])
+        d['vs_52'] = {k: resum['resum'][k] for k in
+                      ('canvis_aula_vs_referencia', 'canvis_franja_vs_referencia')}
+        recuperades = resum['resum']['canvis_aula_recuperades']
+        d['vs_52']['canvis_aula_recuperades'] = recuperades
+        # El verificador exclou del canvi d’aula les classes cancel·lades.
+        d['vs_52']['canvis_aula_oficials'] = d['vs_52']['canvis_aula_vs_referencia'] - recuperades
+        d['vs_52']['imprevistos'] = sum(t['sessions_afectades'] > 0 for t in resum['imprevistos'])
+    elif nom_proposta == '5.4':
+        ref_col = _col_loca(base, referencia.a_files(), InformeIntern())
+        nous = {sid for sid, s in base.sessions.items() if any(c.startswith('GNOU:') for c in s.cohorts)}
+        collocades = sum(sid in col and bool(col[sid].aula) for sid in nous)
+        mogudes = sum((col[sid].data, col[sid].ini, col[sid].aula) !=
+                      (c.data, c.ini, c.aula) for sid, c in ref_col.items())
+        pic_52 = pics_i_mides(base, model, ref_col)['mati']['pitjor']['classes']
+        d['grau_nou'] = {'hi_cap': collocades == len(nous), 'sessions_collocades': collocades,
+                         'sessions_52_mogudes': mogudes, 'pic_mati_52': pic_52,
+                         'pic_mati': d['pics']['mati']['pitjor']['classes']}
+
+
+def genera(nom_proposta, *, resultats=None, sortida=None, proposta_path=None):
+    resultats = Path(resultats) if resultats is not None else RESULTATS
+    path = None if nom_proposta == 'Avui' else (Path(proposta_path) if proposta_path else resultats / nom_proposta / 'proposta.csv')
+    referencia_path = resultats / '5.2' / 'proposta.csv'
+    referencia_abans = empremtes(referencia_path) if nom_proposta in ('5.3', '5.4') and referencia_path.is_file() else None
+    abans = empremtes(path)
+    escenari = escenari_proposta(nom_proposta)
+    base, model = carrega_oficial(escenari), carrega_model(escenari)
+    if path is None:
+        proposta = Proposta.de_base(base)
+        col = _col_loca(base, proposta.a_files(), InformeIntern())
+        relax = None
+    else:
+        proposta, col = carrega_proposta(path, base, escenari)
+        relax = path.with_name('relaxacions.csv')
+        relax = relax if relax.is_file() else None
+    dades = calcula(proposta, base, model, col, relax, nom_proposta)
+    if referencia_abans is not None:
+        referencia = Proposta.llegeix(referencia_path)
+        # El segon semestre és l’àmbit del resum, també si el CSV en conté més.
+        referencia.files = {sid: a for sid, a in referencia.files.items() if sid in base.sessions}
+        proposta_semestre = Proposta({sid: a for sid, a in proposta.files.items() if sid in base.sessions})
+        completa_escenari(dades, nom_proposta, proposta_semestre, base, model, col, referencia)
+        if empremtes(referencia_path) != referencia_abans:
+            raise ValueError('La proposta de referència ha canviat durant el càlcul')
+        dades['empremtes_referencia'] = referencia_abans
+    if empremtes(path) != abans:
+        raise ValueError('Les fonts han canviat durant el càlcul')
+    dades['empremtes'] = abans
+    desti = Path(sortida) if sortida is not None else resultats / 'junta' / ('' if nom_proposta == 'Avui' else nom_proposta)
+    publica(desti, dades)
+    return dades
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('proposta', type=Path)
+    parser.add_argument('proposta', type=Path, nargs='?')
+    parser.add_argument('--totes', action='store_true', help='Regenera Avui i les quatre propostes')
     parser.add_argument('--sortida', type=Path, default=RESULTATS / 'junta')
     args = parser.parse_args(argv)
+    if args.totes and args.proposta:
+        parser.error('Tria una proposta o --totes')
     try:
-        escenari = escenari_proposta(args.proposta.parent.name)
-        base, model = carrega_oficial(escenari), carrega_model(escenari)
-        abans = empremtes(args.proposta)
-        proposta, col = carrega_proposta(args.proposta, base, escenari)
-        relax = args.proposta.parent / 'relaxacions.csv'
-        dades = calcula(proposta, base, model, col, relax if relax.exists() else None)
-        if empremtes(args.proposta) != abans:
-            raise ValueError('Les fonts han canviat durant el càlcul')
-        dades['empremtes'] = abans
-        publica(args.sortida, dades)
-        for torn in ('mati', 'tarda'):
-            resum = dades['pics'][torn]
-            etiqueta = ' (estimació)' if resum['pitjor']['estimacio'] else ''
-            maxim = resum['pitjor']['aules_disponibles']
-            print(f"{torn}{etiqueta}: pic {resum['pitjor']['classes']}/{maxim}; "
-                  f"total taula de mides {resum['total_mides']}/{maxim}")
-        print(f"Resum escrit a {args.sortida}: junta.json, junta.md i junta.html")
+        noms = list(NOMS_PROPOSTES) if args.totes else [args.proposta.parent.name if args.proposta else 'Avui']
+        for nom_proposta in noms:
+            desti = args.sortida / nom_proposta if args.totes and nom_proposta != 'Avui' else args.sortida
+            dades = genera(nom_proposta, sortida=desti, proposta_path=args.proposta,
+                           resultats=args.proposta.parent.parent if args.proposta else RESULTATS)
+            for torn in ('mati', 'tarda'):
+                p = dades['pics'][torn]['pitjor']
+                print(f"{nom_proposta}, {torn}: pic {p['classes']}/{p['aules_disponibles']}")
+        print(f"{len(noms)} resums generats en JSON, Markdown i HTML")
         return 0
     except (OSError, ValueError, KeyError) as exc:
         parser.exit(2, f'No s’ha pogut generar el resum: {exc}\n')

@@ -10,12 +10,10 @@ from components.taules import mostra_taula
 from components.vistes import estat
 from errors import mostra_error
 from nivell2 import junta
-from nivell2.base import RESULTATS as SORTIDA, Proposta
-from horaris.check import Informe, _col_loca
+from nivell2.base import RESULTATS as SORTIDA
 
 RESULTATS = SORTIDA
-NOMS_PROPOSTES = {'5.1': 'Aules assignades (5.1)', '5.2': 'Horari complet (5.2)',
-                 '5.3': 'Amb imprevistos (5.3)', '5.4': 'Amb el grau nou (5.4)'}
+NOMS_PROPOSTES = junta.NOMS_PROPOSTES
 
 
 def disponibles():
@@ -44,28 +42,10 @@ def empremtes(nom):
 
 
 def genera(nom, versio=None, versio_relax=None):
-    abans = empremtes(nom)
-    escenari = junta.escenari_proposta(nom)
-    base = junta.carrega_oficial(escenari)
-    model = junta.carrega_model(escenari)
-    if nom == 'Avui':
-        proposta = Proposta.de_base(base)
-        col = _col_loca(base, proposta.a_files(), Informe())
-        relax = None
-    else:
-        path = RESULTATS / nom / 'proposta.csv'
-        proposta, col = junta.carrega_proposta(path, base, escenari)
-        relax = path.with_name('relaxacions.csv')
-        relax = relax if relax.is_file() else None
-    dades = junta.calcula(proposta, base, model, col, relax)
-    if empremtes(nom) != abans:
-        raise ValueError('Les fonts han canviat durant el càlcul')
-    dades['empremtes'] = abans
     desti = SORTIDA / 'junta'
     if nom != 'Avui':
         desti /= nom
-    junta.publica(desti, dades)
-    return dades
+    return junta.genera(nom, resultats=RESULTATS, sortida=desti)
 
 
 def resum_valid(d):
@@ -83,10 +63,13 @@ def resum_valid(d):
 def carrega(nom):
     anterior = llegeix(ruta_resum(nom))
     try:
+        ref = RESULTATS / '5.2' / 'proposta.csv'
+        referencia = junta.empremtes(ref) if nom in ('5.3', '5.4') and ref.is_file() else None
         if (anterior and resum_valid(anterior)
                 and anterior.get('versio_resum') == junta.VERSIO_RESUM
                 and anterior.get('versio_calcul') == junta.VERSIO_CALCUL
-                and anterior.get('empremtes') == empremtes(nom)):
+                and anterior.get('empremtes') == empremtes(nom)
+                and anterior.get('empremtes_referencia') == referencia):
             return anterior
         return genera(nom)
     except Exception:
@@ -139,7 +122,6 @@ def fitxes(d):
         color, text, tinta = ocupacio(p['classes'], p['aules_disponibles'])
         peces.append(f'<section class="junta-fitxa"><h3>{nom}, hora més plena</h3>'
                      f'<div class="junta-xifra">{p["classes"]} <small>de {p["aules_disponibles"]} aules</small></div>'
-                     + f'<small>{escape(junta.explicacio_aulari(d))}</small>'
                      + barra(100 * p['classes'] / max(1, p['aules_disponibles']), tinta)
                      + estat({'estat': color, 'etiqueta': text})
                      + ('<small>Si una aula falla, cal fer servir la reserva.</small>'
@@ -150,9 +132,16 @@ def fitxes(d):
     pitjor = max(cursos, key=lambda r: r['franja_pct'], default=None)
     if pitjor and pitjor['franja_pct'] == 0:
         pitjor = None
+    empatats = sum(r['franja_pct'] == pitjor['franja_pct'] for r in cursos) - 1 if pitjor else 0
+    torn = ('per passar al torn que els toca' if pitjor and pitjor.get('torn') == pitjor['franja']
+            else 'per fer encaixar l’horari')
     peces.append('<section class="junta-fitxa"><h3>Curs més afectat</h3>'
                  + (f'<div class="junta-xifra">{junta.percentatge(pitjor["franja_pct"])}</div>'
-                    f'<small>{escape(pitjor["nom"])}</small>' if pitjor else '<div class="junta-xifra">Cap</div><small>Cap curs canvia de dia ni d&#39;hora.</small>')
+                    f'<small>{escape(pitjor["nom"])}</small>'
+                    f'<small>de les classes canvien de dia o hora ({pitjor["franja"]} de {pitjor["sessions"]}), {torn}.</small>'
+                    + (f'<small>i {empatats} cursos més amb el mateix percentatge.</small>' if empatats else '')
+                    if pitjor else '<div class="junta-xifra">Cap</div><small>Cap curs canvia de dia ni d&#39;hora.</small>')
+                 + (f'<small>{escape(junta.resum_guany_torn(d))}</small>' if junta.resum_guany_torn(d) else '')
                  + '</section>')
     n = len(d['excepcions'])
     heretades = d['fora_torn_ja_avui']
@@ -162,11 +151,13 @@ def fitxes(d):
                  + estat({'estat': 'ambre' if n else 'verd', 'etiqueta': 'Fora del torn' if n else 'Cap'})
                  + (f'<small>{heretades} {junta.classe(heretades)} ja es {'fa' if heretades == 1 else 'fan'} avui fora del seu torn i no es {'toca' if heretades == 1 else 'toquen'}.</small>' if heretades else '')
                  + '</section>')
-    return '<div class="junta-fitxes">' + ''.join(peces) + '</div>'
+    return ('<div class="junta-fitxes">' + ''.join(peces) + '</div>'
+            + f'<p>{escape(junta.explicacio_aulari(d))}</p>'
+            + (f'<p>{escape(junta.resum_escenari(d))}</p>' if junta.resum_escenari(d) else ''))
 
 
 ESTIL = """<style>
-.junta-fitxes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.junta-fitxes{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
 .junta-fitxa{background:var(--targeta,#fff);border:1px solid var(--linia,#e6e5e0);border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:10px;min-width:0}
 .junta-fitxa h3{font-size:14px!important;margin:0;padding:0;color:var(--tinta-2)}
 .junta-xifra{font-size:32px;font-weight:700;line-height:1.2}
@@ -179,7 +170,7 @@ ESTIL = """<style>
 .junta-taula{width:100%;border-collapse:collapse;font-size:14px}
 .junta-taula td,.junta-taula th{text-align:left;padding:8px 4px;border-bottom:1px solid var(--linia,#e6e5e0)}
 .st-key-junta-dos h3{font-size:17px!important}
-@media(max-width:900px){.junta-fitxes{grid-template-columns:repeat(2,minmax(0,1fr))}.st-key-junta-dos [data-testid="stHorizontalBlock"]{flex-direction:column}.st-key-junta-dos [data-testid="stColumn"]{width:100%!important;min-width:0!important}}
+@media(max-width:900px){.st-key-junta-dos [data-testid="stHorizontalBlock"]{flex-direction:column}.st-key-junta-dos [data-testid="stColumn"]{width:100%!important;min-width:0!important}}
 </style>"""
 
 
@@ -212,16 +203,12 @@ def mostra():
             if pic:
                 st.write(f"{etiqueta}: màxim de classes alhora: {pic['classes']} ({pic['hora']}).")
         st.caption(junta.EXPLICACIO_PICS)
-        st.caption("Aules ocupades a l’hora punta (per a la reserva): les dues primeres fitxes.")
-        st.write(junta.resum_excepcions(d))
         if d['excepcions']:
             st.subheader('Excepcions als torns')
             for motiu in dict.fromkeys(e['motiu'] for e in d['excepcions']):
                 casos = [e for e in d['excepcions'] if e['motiu'] == motiu]
                 noms = sorted({junta.nom(c) for e in casos for c in e['cohorts']})
                 st.write(f"{len(casos)} {junta.classe(len(casos))}: {junta.motiu_planer(motiu)} Titulacions: {', '.join(noms)}.")
-                if any(e['id_sessio'] == 'S04526' and e['motiu'] == junta.MOTIU_S04526 for e in casos):
-                    st.write('Cas S04526: ' + junta.MOTIU_S04526)
         format_actual = all('ocupades_al_pic' in m for torn in ('mati', 'tarda')
                             for m in d['pics'][torn]['mides'])
         with st.container(key='junta-dos'):
@@ -244,12 +231,14 @@ def mostra():
                     files = []
                     for m in d['pics'][torn]['mides']:
                         n, total = m['ocupades_al_pic'], m['aules_categoria']
-                        color, text = ('vermell', 'Falten') if n > total else ('ambre', 'Just') if n == total else ('verd', 'Hi cap')
+                        color, text = ('vermell', 'Falten') if m['marge'] < 0 else ('ambre', 'Just') if m['marge'] == 0 else ('verd', 'Hi cap')
                         mida = m.get('mida', str(max(1, m['minim_places'])))
-                        files.append(f'<tr><td>{escape(mida)}</td><td>{n} de {total}</td><td>'
+                        files.append(f'<tr><td>{escape(mida)}</td><td>{n} de {total}</td>'
+                                     f'<td>{m["demanda_acumulada"]} de {m["oferta_acumulada"]}</td><td>'
                                      + estat({'estat': color, 'etiqueta': text}) + '</td></tr>')
-                    st.markdown('<table class="junta-taula"><thead><tr><th>Mida</th><th>Ocupades</th><th>Estat</th></tr></thead><tbody>'
+                    st.markdown('<table class="junta-taula"><thead><tr><th>Mida</th><th>Ocupades</th><th>Prou grans</th><th>Estat</th></tr></thead><tbody>'
                                 + ''.join(files) + '</tbody></table>', unsafe_allow_html=True)
+                    st.caption('Una aula gran pot acollir un grup petit. L’estat compara les classes amb totes les aules prou grans, guardant la reserva.')
                 else:
                     st.info('Resum antic: cal tornar-lo a generar.')
         mostra_taula(pd.DataFrame([{'Titulació i curs': r['nom'],
@@ -261,17 +250,15 @@ def mostra():
             st.write(junta.explicacio_marge(d))
             st.write(d.get('detall_tecnic', junta.DETALL_TECNIC))
             st.write(junta.COM_HO_HEM_CALCULAT)
-            st.caption(f"Resum calculat: {d['data']} · {triada}")
+            st.caption(f"Resum calculat: {junta.data_planera(d['data'])} · {NOMS_PROPOSTES.get(triada, triada)}")
             st.caption('Les mides corresponen al moment de més ocupació del torn triat; sense aula assignada, fem servir els alumnes previstos (estimació). Els colors són orientatius i no garanteixen que tot l’horari encaixi.')
             if d['torn_no_avaluable']:
                 st.write(f"{d['torn_no_avaluable']} {junta.classe(d['torn_no_avaluable'])} sense torn definit.")
             mostra_taula(pd.DataFrame([{'Titulació i curs': r['nom'], 'Canvien de dia o hora': junta.percentatge(r['franja_pct']), 'Canvis d’aula': r['aula'], 'Aules assignades': r['aules_assignades']} for r in d['sessions_mogudes']]))
-            for motiu in dict.fromkeys(r['motiu'] for r in d['excepcions']):
-                st.write(junta.motiu_planer(motiu))
             if d['excepcions']:
                 mostra_taula(pd.DataFrame([dict(e, motiu=junta.motiu_planer(e['motiu'])) for e in d['excepcions']]))
         if format_actual:
-            _, html = junta.documents(d)
-            st.download_button('Descarrega el resum A4', html, file_name='junta.html', mime='text/html')
+            _, html = junta.documents(dict(d, proposta=triada))
+            st.download_button('Descarrega el resum A4', html, file_name=f'junta-{triada}.html', mime='text/html')
     except Exception:
         mostra_error()
