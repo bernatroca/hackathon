@@ -197,6 +197,7 @@
   function missatgeError(missatge, codi) {
     const text = typeof missatge === 'string' ? missatge : '';
     if (codi === 429 || /\b429\b/.test(text)) return 'La IA està saturada. Torna-ho a provar d’aquí a uns segons.';
+    if ([401, 403, 404, 424].includes(codi) || /\bHTTP\s+(401|403|404)\b/i.test(text) || /no està ben configurat/i.test(text)) return 'L’assistent no està ben configurat (clau o model del fitxer .env). Avisa qui manté l’app.';
     if (codi >= 500 || /\bHTTP\s+5\d\d\b/i.test(text)) return 'El servei de l’assistent no està disponible ara mateix. Torna-ho a provar d’aquí a uns segons.';
     return text || 'No s’ha pogut completar la consulta. Torna-ho a provar.';
   }
@@ -368,7 +369,7 @@
       </button>
       <div class="xatia-fons" hidden></div>
       <aside id="xatia-plafo" class="xatia-plafo" aria-label="${escapa(op.titol)}" aria-hidden="true" inert>
-        <header class="xatia-cap">
+        <header tabindex="-1" class="xatia-cap">
           <span class="xatia-titol">${icona('sparkles', 18)} ${escapa(op.titol)}</span>
           <button type="button" class="xatia-icona" data-fa="nova" aria-label="Conversa nova" title="Conversa nova">${icona('nova', 16)}</button>
           <button type="button" class="xatia-icona xatia-nomes-ordinador" data-fa="gran" aria-label="Fes-ho gran" title="Fes-ho gran">${icona('gran', 16)}</button>
@@ -591,7 +592,10 @@
         else if (accio === 'treu') {
           estat.preparades = estat.preparades.filter((_, i) => i !== Number(fa.dataset.i));
           pinta();
-        } else if (accio === 'pregunta') envia(fa.dataset.text, false);
+        } else if (accio === 'pregunta') {
+          envia(fa.dataset.text, false);
+          enfocaEntrada();
+        }
         return;
       }
       const img = e.target.closest('.xatia-captures img, .xatia-preparada img');
@@ -688,8 +692,13 @@
     }
     // Anunciem la resposta completa, sense llegir cada fragment del flux.
     el.conversa.setAttribute('aria-busy', String(estat.feina));
+    if (el.conversa.xatiaHtml === html) return;
+    const segueix = !el.cos || el.cos.scrollHeight - el.cos.scrollTop - el.cos.clientHeight < 80;
+    const posicio = el.cos && el.cos.scrollTop;
     el.conversa.innerHTML = html;
-    el.final.scrollIntoView({ block: 'end' });
+    el.conversa.xatiaHtml = html;
+    if (segueix) el.final.scrollIntoView({ block: 'end' });
+    else el.cos.scrollTop = posicio;
   }
 
   function preguntesAra() {
@@ -723,15 +732,7 @@
 
     el.error.hidden = !estat.error;
     el.error.textContent = estat.error;
-    /* Què veu de la pantalla, perquè se sàpiga que se li pot dir «i això?». */
-    const veu = estat.pantalla && estat.pantalla.resum;
-    el.veu.hidden = !veu;
-    el.veu.textContent = veu ? `Context: ${veu}` : '';
-    el.veu.title = veu || '';
-
-    el.preguntes.innerHTML = preguntesAra()
-      .map((t) => `<button type="button" class="xatia-fitxa" data-fa="pregunta" data-text="${escapa(t)}"${ocupat ? ' disabled' : ''}>${escapa(t)}</button>`)
-      .join('');
+    pintaPeu();
     el.preparades.innerHTML = estat.preparades
       .map((u, i) => `<span class="xatia-preparada"><img src="${u}" alt="Captura ${i + 1}"><button type="button" data-fa="treu" data-i="${i}" aria-label="Treu la captura">${icona('x', 12)}</button></span>`)
       .join('');
@@ -742,6 +743,24 @@
     el.captura.disabled = feina || estat.preparades.length >= op.maxCaptures;
     el.envia.disabled = ocupat || (!el.caixa.value.trim() && !estat.preparades.length);
     el.caixa.placeholder = estat.preparades.length ? 'Què en vols saber?' : esMobil() ? 'Pregunta…' : 'Pregunta el que vulguis, o passa’m una captura…';
+  }
+
+  function pintaPeu() {
+    if (!el.veu) return;
+    const ocupat = estat.feina || estat.preparant > 0;
+    /* Què veu de la pantalla, perquè se sàpiga que se li pot dir «i això?». */
+    const veu = estat.pantalla && estat.pantalla.resum;
+    el.veu.hidden = !veu;
+    el.veu.textContent = veu ? `Context: ${veu}` : '';
+    el.veu.title = veu || '';
+
+    el.preguntes.innerHTML = preguntesAra()
+      .map((t) => `<button type="button" class="xatia-fitxa" data-fa="pregunta" data-text="${escapa(t)}"${ocupat ? ' disabled' : ''}>${escapa(t)}</button>`)
+      .join('');
+  }
+
+  function enfocaEntrada() {
+    (esMobil() ? el.plafo.querySelector('header') : el.caixa).focus({ preventScroll: true });
   }
 
   /* ---------- accions ---------- */
@@ -777,6 +796,7 @@
     estat.error = '';
     desa();
     pinta();
+    enfocaEntrada();
   }
 
   let salutActual = 0;
@@ -814,7 +834,7 @@
     },
     pantalla(p) {
       estat.pantalla = p || null;
-      pinta();
+      pintaPeu();
     },
     obre,
     tanca,

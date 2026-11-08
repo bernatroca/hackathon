@@ -59,14 +59,15 @@ def test_context_grup_i_aula_sense_arrossegar_altres_pagines():
              'p2-vista': 'Proposta i avui', 'p2-titulacio': 'GXX', 'p2-curs': '1r',
              'p2-grup': '81', 'p2-aula': 'Q9/0001', 'p2-setmana': None}
     p = widget.pantalla_actual('Horari proposat', estat)
-    assert p['resum'] == 'Horari proposat · Torns nous (5.2) · GXX 1r 81'
+    assert p['resum'] == 'Horari proposat · Torns nous (5.2) · GXX 1r Grup 81'
     assert 'Q9/0001' in p['text']
     assert 'Semestre 2. Setmana: típica.' in p['text']
     p = widget.pantalla_actual('Com estem avui', estat)
     assert 'GXX' not in p['text']
-    assert 'Sí, hi cap' in p['text']
-    assert 'verificador oficial' in p['text']
-    assert 'pic 15 de 19 aules' in p['text']
+    assert 'La pàgina diu:' not in p['text']
+    for context in ({'semestre': 1}, {'semestre': 2, 'setmana': 'inventada'}):
+        assert 'La pàgina diu:' not in widget.pantalla_actual('Com estem avui', context)['text']
+    assert 'La pàgina diu:' not in widget.pantalla_actual('Com estem avui', {'semestre': 2})['text']
     assert p['preguntes'] == [widget.PREGUNTA_DEMO, *widget.PREGUNTES['Com estem avui'][:2]]
     estat['p2-vista'] = 'Només avui'
     assert '5.2' not in widget.pantalla_actual('Horari proposat', estat)['text']
@@ -85,7 +86,7 @@ def test_preguntes_i_junta():
             assert all(t in p['text'] for t in inventades)
         assert len(widget.pantalla_actual('Imprevistos', {})['preguntes']) == 3
         assert '5.4' in p['text']
-        assert p['resum'].endswith('Amb el grau nou (5.4)')
+        assert p['resum'].endswith('Incorporar el grau nou (5.4)')
     assert widget.pantalla_actual('Totes les respostes', {})['preguntes'] == [widget.PREGUNTA_DEMO, *widget.PREGUNTES['Totes les respostes']]
     assert widget.PREGUNTES['Resum per a la Junta'] != widget.PER_DEFECTE
     assert widget.PREGUNTES['Com estem avui'][-1] == 'Si 1r i 2n fan classe al matí, hi cabem?'
@@ -156,6 +157,16 @@ const sandbox = {
 const source = fs.readFileSync(process.argv[1], 'utf8').replace('  window.XatIA = {', `
   window.prova = { preguntesAra, markdown, htmlMissatge, llegeixFlux, pregunta_, missatgeError, perAlServidor, desa, llegeixMemoria, estat,
     sincronitzaPlafó, sincronitzaMenu, clicManualMenu, acabaTransicio, teclaPlafó, clicFons,
+    pintaConversa,
+    preparaLectura() {
+      let html = "";
+      el = {cos: {scrollHeight:1000, scrollTop:100, clientHeight:300},
+        conversa: {setAttribute() {}, get innerHTML() { return html; },
+          set innerHTML(v) { html = v; el.escriptures++; }},
+        veu: {}, preguntes: {}, escriptures:0, desplacaments:0,
+        final: {scrollIntoView() { el.desplacaments++; }}};
+      return el;
+    },
     preparaInteraccio() {
       el = {fons: {}, lupa: {hidden:true},
         final: {scrollIntoView() { el.desplacaments = (el.desplacaments || 0) + 1; }},
@@ -187,6 +198,22 @@ assert.equal(p.preguntesAra()[0], 'Com ho saps?');
 p.estat.missatges = [];
 assert.equal(p.preguntesAra()[0], 'Una altra pàgina');
 p.estat.pantalla = null;
+const lectura = p.preparaLectura();
+p.estat.missatges = [{role:'assistant', content:'Inventat'}];
+p.pintaConversa();
+assert.equal(lectura.desplacaments, 0);
+assert.equal(lectura.cos.scrollTop, 100);
+assert.equal(lectura.escriptures, 1);
+p.pintaConversa();
+assert.equal(lectura.escriptures, 1);
+sandbox.window.XatIA.pantalla({resum:'Context nou', preguntes:[]});
+assert.equal(lectura.escriptures, 1);
+assert.equal(lectura.desplacaments, 0);
+lectura.cos.scrollTop = 690;
+p.estat.missatges.push({role:'user', content:'Una altra'});
+p.pintaConversa();
+assert.equal(lectura.desplacaments, 1);
+p.estat.missatges = [];
 let mobil = false;
 const classes = new Set();
 const resizes = [];
@@ -388,6 +415,11 @@ async function flux(fi) {
   sandbox.fetch = async () => { throw new TypeError('network'); };
   await assert.rejects(() => p.pregunta_([]), /connexió amb el servidor/);
   assert.match(p.missatgeError('HTTP 502'), /no està disponible/);
+  for (const codi of [401, 403, 404]) {
+    assert.match(p.missatgeError('La IA ha respost HTTP ' + codi, 502), /no està ben configurat/);
+    assert.match(p.missatgeError('', codi), /no està ben configurat/);
+  }
+  assert.match(p.missatgeError('L’assistent no està ben configurat (clau o model).', 502), /no està ben configurat/);
   p.estat.feina = true;
   const ambEina = await p.llegeixFlux(cos([{eina:'consulta_sql'}, {tros:'Fet'}, {fi:true}]));
   assert.equal(ambEina.text, 'Fet');
@@ -462,3 +494,30 @@ def test_benvinguda_planera():
     with patch.object(widget, '_api', return_value='/api/xat'), patch.object(widget.st, 'html') as html:
         widget.posa_widget(None)
     assert 'Pregunta’m per aules, grups o l’horari proposat. Respondré amb les dades.' in html.call_args.args[0]
+
+
+@pytest.mark.parametrize('proposta', ['5.3', '5.4'])
+def test_context_compara_amb_torns_nous(proposta):
+    p = widget.pantalla_actual('Horari proposat', {
+        'p2-vista': 'Proposta i avui', 'p2-proposta': proposta,
+        'p2-titulacio': 'GEET', 'p2-curs': '1r', 'p2-grup': '31'})
+    assert 'amb Torns nous (5.2).' in p['text']
+    assert 'amb avui' not in p['text']
+    assert p['preguntes'][2] == 'Què canvia respecte de Torns nous (5.2)?'
+    assert 'Enginyeria Electrònica de Telecomunicació 1r Grup 31' in p['resum']
+    assert widget._nom_proposta(proposta) in p['text']
+
+
+def test_portada_reutilitza_presentacio_del_resultat_visible():
+    resultat = object()
+    resultats = {'hi-cap-mati': resultat}
+    info = {'etiqueta': 'Cal actuar', 'c': {'resposta': 'No hi cap'},
+            'frase': 'Falta espai inventat.'}
+    with patch('presentacio.text', return_value={'inventat': True}) as text, \
+            patch('presentacio.text_portada', return_value=info) as portada:
+        p = widget.pantalla_actual('Com estem avui', {
+            'semestre': 1, 'setmana': 'inventada', 'resultats': resultats})
+    text.assert_called_once_with(resultat, resultats, setmana_triada='inventada')
+    portada.assert_called_once_with(resultat, {'inventat': True})
+    assert 'La pàgina diu: Cal actuar. No hi cap. Falta espai inventat.' in p['text']
+    assert 'Sí, hi cap' not in p['text']

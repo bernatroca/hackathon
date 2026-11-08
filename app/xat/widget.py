@@ -30,11 +30,8 @@ def _imprevistos():
     return [t['descripcio'] for t in dades['imprevistos']] if dades else []
 
 
-def _nom_proposta(proposta, junta=False):
-    if junta:
-        from pagines.junta import NOMS_PROPOSTES
-    else:
-        from pagines.part2 import NOMS_PROPOSTES
+def _nom_proposta(proposta):
+    from pagines.part2 import NOMS_PROPOSTES
     return NOMS_PROPOSTES.get(proposta, str(proposta))
 
 
@@ -58,8 +55,17 @@ def pantalla_actual(titol, estat):
         setmana = estat.get('p2-setmana')
         proposta = estat.get('p2-proposta', 'Avui') if estat.get('p2-vista') == 'Proposta i avui' else 'Avui'
         parts.append(_nom_proposta(proposta))
-        linies.append(f'Compara la proposta {proposta} amb avui.' if proposta != 'Avui' else 'Mostra només l’horari d’avui.')
-        grup = ' '.join(str(estat[k]) for k in ('p2-titulacio', 'p2-curs', 'p2-grup') if estat.get(k) is not None)
+        referencia = 'Torns nous (5.2)' if proposta in ('5.3', '5.4') else 'avui'
+        linies.append(f'Compara la proposta {_nom_proposta(proposta)} amb {referencia}.' if proposta != 'Avui' else 'Mostra només l’horari d’avui.')
+        if proposta in ('5.3', '5.4'):
+            preguntes = [p.replace('Què ha canviat respecte d’avui?', 'Què canvia respecte de Torns nous (5.2)?') for p in preguntes]
+        from nivell2.junta import NOMS
+        titulacio = estat.get('p2-titulacio')
+        curs = estat.get('p2-curs')
+        numero = estat.get('p2-grup')
+        grup = ' '.join(str(v) for v in (NOMS.get(titulacio, titulacio),
+                        'Màster' if curs == 'M' else curs,
+                        f'Grup {numero}' if numero is not None else None) if v is not None)
         if grup:
             parts.append(grup)
             linies.append(f'Estudis, curs i grup seleccionats: {grup}.')
@@ -70,8 +76,8 @@ def pantalla_actual(titol, estat):
     elif titol == 'Resum per a la Junta':
         semestre = 2
         proposta = estat.get('junta-proposta', 'Avui')
-        parts.append(_nom_proposta(proposta, junta=True))
-        linies.append(f'Proposta seleccionada: {proposta}.')
+        parts.append(_nom_proposta(proposta))
+        linies.append(f'Proposta seleccionada: {_nom_proposta(proposta)}.')
     elif titol == 'Imprevistos':
         semestre = 2
         linies.append('Mostra els imprevistos de la proposta 5.3.')
@@ -88,8 +94,12 @@ def pantalla_actual(titol, estat):
         linies.append(f'Semestre {semestre}. Setmana: {setmana if setmana is not None else "típica"}.')
     if titol in ('Com estem avui', 'Totes les respostes'):
         if titol == 'Com estem avui':
-            linies.append('La pàgina diu: Sí, hi cap; confirmat amb l’horari proposat (5.2) '
-                          'i el verificador oficial; pic 15 de 19 aules (segon semestre).')
+            resultats = estat.get('resultats', {})
+            portada = resultats.get('hi-cap-mati')
+            if portada is not None:
+                from presentacio import text, text_portada
+                info = text_portada(portada, text(portada, resultats, setmana_triada=setmana))
+                linies.append(f'La pàgina diu: {info["etiqueta"]}. {info["c"]["resposta"]}. {info["frase"]}')
         detall_id = estat.get('detall_id')
         if detall_id:
             from textos import TEXTOS
