@@ -18,7 +18,7 @@ from pathlib import Path
 import duckdb
 import pandas as pd
 
-REPTE_DIR = Path(os.environ.get('REPTE_DIR', '/Users/bernatroca/Bernat/Hackathon/repte/repte-horaris-escola'))
+REPTE_DIR = Path(os.environ.get('REPTE_DIR') or Path(__file__).resolve().parents[1] / 'repte' / 'repte-horaris-escola')
 PAQUET = REPTE_DIR / 'paquet'
 CONSULTES = Path(__file__).parent / 'consultes'
 
@@ -92,9 +92,14 @@ def consulta(nom: str, **params) -> tuple[pd.DataFrame, str]:
 
 
 def setmana_tipica(semestre: int) -> str:
-    """Setmana ISO amb el nombre de sessions més proper a la mediana del semestre (la primera si n'hi ha més d'una)."""
+    """Mediana de les setmanes amb almenys 200 classes; desempat per la primera.
+
+    Si tot el semestre és més petit, conservem les setmanes disponibles.
+    """
     return connexio().execute("""
-        WITH n AS (SELECT setmana, count(*) AS c FROM sessions WHERE sem = $s GROUP BY setmana)
+        WITH recomptes AS (SELECT setmana, count(*) AS c FROM sessions WHERE sem = $s GROUP BY setmana),
+        n AS (SELECT * FROM recomptes WHERE c >= 200 OR NOT EXISTS (
+            SELECT 1 FROM recomptes WHERE c >= 200))
         SELECT setmana FROM n ORDER BY abs(c - (SELECT median(c) FROM n)), setmana LIMIT 1""",
                               {'s': semestre}).fetchone()[0]
 

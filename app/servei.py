@@ -6,6 +6,13 @@ from pathlib import Path
 import streamlit as st
 from nivell1 import troballes
 from nivell1.dades import connexio, AULES_DISPONIBLES
+from nivell2.base import RESULTATS_PRINCIPAL as RESULTATS_PART2
+
+
+def actualitza_dades():
+    """Torna a llegir tant les taules de DuckDB com els càlculs de Streamlit."""
+    connexio.cache_clear()
+    st.cache_data.clear()
 
 
 def versio_registre():
@@ -47,7 +54,6 @@ def una(id_, semestre, setmana, versio):
 una.clear = _una.clear
 
 
-RESULTATS_PART2 = Path(__file__).resolve().parents[1] / 'resultats' / 'nivell2'
 VEREDICTES_VALIDS = ('VALIDA', 'VALIDA AMB RELAXACIONS DECLARADES')
 
 
@@ -75,9 +81,12 @@ def validacio_part2(apartat):
 
 @st.cache_data(ttl=None, show_spinner=False)
 def setmanes(semestre):
-    return [str(fila[0]) for fila in connexio().execute(
-        'SELECT DISTINCT setmana FROM sessions WHERE sem = $semestre ORDER BY setmana',
-        {'semestre': semestre}).fetchall()]
+    """Setmana ISO, dilluns i recompte; exclou les setmanes residuals."""
+    return connexio().execute("""
+        SELECT setmana, CAST(date_trunc('week', min(data)) AS DATE), count(*)
+        FROM sessions WHERE sem = $semestre
+        GROUP BY setmana HAVING count(*) >= 200 ORDER BY setmana
+        """, {'semestre': semestre}).fetchall()
 
 # Regla 8: es reserven dues de les aules docents disponibles a l'inventari.
 AULES_RESERVA = 2
