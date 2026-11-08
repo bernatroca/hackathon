@@ -165,9 +165,13 @@ def resum_html(resum):
     nota = ''
     if (oficials is not None and recuperades
             and resum['canvis_aula_vs_referencia'] == oficials+recuperades):
-        nota = (f'<p>El CSV inclou {resum["canvis_aula_vs_referencia"]} canvis d’aula. '
-                f'El verificador en compta {oficials}: no compta el canvi d’aula '
-                'de la classe cancel·lada que recuperem.</p>')
+        n = resum['canvis_aula_vs_referencia']
+        classes = 'classe' if n == 1 else 'classes'
+        recuperacio = ('la classe cancel·lada que recuperem' if recuperades == 1
+                       else f'les {recuperades} classes cancel·lades que recuperem')
+        nota = (f'<p>La proposta canvia l’aula de {n} {classes}; '
+                f'el verificador en compta {oficials} perquè no compta '
+                f'{recuperacio}.</p>')
     return ('<section class="imp-resum" aria-label="Resum de la proposta">'
             + estat({'estat': color, 'etiqueta': text})
             + '<p>Canvis respecte de l’horari proposat.' + excepcions + '</p>'
@@ -227,7 +231,8 @@ def mostra(dades=None):
                 dades = carrega()
             if dades is None:
                 st.info('Encara no hi ha la proposta d’imprevistos')
-                st.code(ORDRE, language='bash')
+                with st.expander('Detall tècnic', expanded=False):
+                    st.code(ORDRE, language='bash')
                 return
             resum = dades['resum']
             st.markdown('<p class="imp-intro">Partim de l’horari proposat i recol·loquem '
@@ -262,7 +267,8 @@ def mostra(dades=None):
         except Exception:
             # No mostrem excepcions de lectura que podrien incloure contingut privat.
             st.error('No hem pogut carregar la proposta d’imprevistos. Torna-la a generar i actualitza les dades.')
-            st.code(ORDRE, language='bash')
+            with st.expander('Detall tècnic', expanded=False):
+                st.code(ORDRE, language='bash')
 
 
 if __name__ == '__main__':

@@ -6,7 +6,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 
-from nivell2.imprevistos import calcula, motiu_planer
+from nivell2.imprevistos import calcula, motiu_planer, MOTIU_DESCONEGUT, MOTIUS_PLANERS
 
 
 def escenari():
@@ -82,7 +82,7 @@ def test_excepcions_noves_per_sessio_sense_confondre_heretades():
     ampliada = dict(antiga, sessions='reserva-inventada|avaria-inventada')
     d = resultat(relaxacions=[ampliada, ampliada], relaxacions_referencia=[antiga])
     assert [t['excepcio'] for t in d['imprevistos']] == [False, False, True, False]
-    assert d['imprevistos'][2]['motius'] == ['Motiu inventat.']
+    assert d['imprevistos'][2]['motius'] == [MOTIU_DESCONEGUT]
     assert d['resum']['relaxacions_per_motiu'] == [{'motiu': 'Motiu inventat.', 'sessions': 2}]
     # Una justificació nova de la mateixa regla també és una excepció nova.
     d = resultat(relaxacions=[dict(antiga, justificacio='Un altre motiu inventat.')], relaxacions_referencia=[antiga])
@@ -145,8 +145,7 @@ def test_bases_incompatibles_i_motius_planers():
     del q.files['igual-inventada']
     with pytest.raises(ValueError, match='mateixes classes'):
         resultat((b, c, p, q, noms))
-    assert motiu_planer('R1-FIXADA: TE, PAUL, SEM i PLAB.') == (
-        'torn i classes fixades: teoria, problemes, seminari i laboratori.')
+    assert motiu_planer('R1-FIXADA: TE, PAUL, SEM i PLAB.') == MOTIU_DESCONEGUT
 
 
 def test_recompte_csv_inclou_recuperada_i_ignora_resum_antic():
@@ -161,5 +160,58 @@ def test_recompte_csv_inclou_recuperada_i_ignora_resum_antic():
     assert d['resum']['canvis_aula_oficials'] == 5
     assert d['resum']['canvis_aula_recuperades'] == 1
     assert d['resum']['veredicte'] == 'NO VALIDA'
-    assert motiu_planer('R2-FRANJA') == 'finestra horària'
-    assert motiu_planer('R4-DOCENT') == 'solapaments d’aula, professorat o alumnat'
+    assert motiu_planer('R2-FRANJA') == MOTIU_DESCONEGUT
+    assert motiu_planer('R4-DOCENT') == MOTIU_DESCONEGUT
+
+
+@pytest.mark.parametrize('original,planer', MOTIUS_PLANERS.items())
+def test_traduccions_conegudes_i_original_al_detall(original, planer):
+    assert motiu_planer(original) == planer
+    assert motiu_planer(original.replace('’', "'").replace('diagnostic.md', '../5.2/diagnostic.md')) == planer
+    d = resultat(relaxacions=[{'restriccio': 'R1-FIXADA',
+                 'sessions': 'reserva-inventada', 'justificacio': original}])
+    assert d['imprevistos'][0]['motius'] == [planer]
+    assert d['resum']['relaxacions_per_motiu'] == [{'motiu': original, 'sessions': 1}]
+
+
+@pytest.mark.parametrize('text', ['', 'R9 nova regla: diagnostic.md', 'Motiu encara desconegut.'])
+def test_motiu_desconegut_prudent(text):
+    assert motiu_planer(text) == MOTIU_DESCONEGUT
+
+
+@pytest.mark.parametrize('conegut', [True, False])
+@pytest.mark.parametrize('n', [1, 2])
+def test_motius_compten_classes_uniques_per_targeta(conegut, n):
+    from nivell2.imprevistos import MOTIU_FIXADA
+    b, c, p, q, noms = escenari()
+    # La reserva afecta tres classes; només una o dues tenen aquesta excepció.
+    p.files['creix-inventada'].aula = 'Q9/0001'
+    p.files['suport-inventada'].aula = 'Q9/0001'
+    original = next(iter(MOTIUS_PLANERS)) if conegut else 'Motiu nou inventat.'
+    ids = ['reserva-inventada', 'creix-inventada'][:n]
+    rows = [{'restriccio': rule, 'sessions': '|'.join(ids + ['avaria-inventada']),
+             'justificacio': original} for rule in ('R1-FIXADA', 'R7-PLAB')]
+    # La tercera classe ja tenia l’excepció: no és una excepció nova.
+    antiga = {'restriccio': 'R1-FIXADA', 'sessions': 'suport-inventada', 'justificacio': original}
+    d = calcula(b, c, p, q, rows + rows + [antiga],
+                relaxacions_referencia=[antiga], noms=noms)
+    reserva, _, avaria, _ = d['imprevistos']
+    assert reserva['sessions_afectades'] == 3
+    assert reserva['motius'] == [motiu_planer(original, n)]
+    assert reserva['motius'][0].startswith(f'{n} d’aquestes classes ')
+    assert avaria['motius'] == [motiu_planer(original, 1)]
+    if conegut:
+        assert ('estava fixada;' if n == 1 else 'estaven fixades;') in reserva['motius'][0]
+        assert ('li canviem' if n == 1 else 'els canviem') in reserva['motius'][0]
+        assert ('es fa el mateix dia' if n == 1 else 'es fan el mateix dia') in reserva['motius'][0]
+    else:
+        assert ('necessita una excepció' if n == 1 else 'necessiten una excepció') in reserva['motius'][0]
+
+
+def test_avaluacio_reutilitza_text_junta_sense_afirmar_que_es_fixada():
+    from nivell2.junta import MOTIU_S04526
+    original = next(m for m in MOTIUS_PLANERS if m.startswith('Setmana'))
+    d = resultat(relaxacions=[{'restriccio': 'R1-TORN',
+                 'sessions': 'reserva-inventada', 'justificacio': original}])
+    assert d['imprevistos'][0]['motius'] == [MOTIU_S04526]
+    assert 'fixada' not in motiu_planer(original)

@@ -72,6 +72,18 @@ def test_una_altra_aula_abans_de_moure_hora():
     validate(new, result.proposta)
 
 
+def test_pressupost_determinista_es_la_meitat_del_pressupost():
+    b = base(sessio('inventada'))
+    new = copy.deepcopy(b)
+    new.tancaments = [Tancament('Q9/0001', DATE, DATE)]
+    result = resolve(b, new)
+    assert result.estat == 'OPTIMAL'
+    diagnostic = result.estadistiques['intents'][-1]['diagnostic']
+    assert diagnostic['limit_determinista'] == 2.5  # resolve dona 5 segons.
+    assert diagnostic['temps_determinista'] < diagnostic['limit_determinista']
+    assert diagnostic['temps_solver_s'] < diagnostic['limit_rellotge_s']
+
+
 def test_aula_tancada_obliga_relaxar_només_aula_fixada():
     b = base(sessio('fixada', fixada='R1: inventada'))
     new = copy.deepcopy(b)
@@ -210,14 +222,46 @@ def test_quatre_imprevistos_simultanis():
 
 
 def test_reserva_es_compta_per_aules_diferents_durant_tota_hora():
-    b = base(sessio('a', ini=900, durada=30), sessio('b', ini=930, durada=30, aula='Q9/0002'))
+    b = base(sessio('a', ini=880, durada=20), sessio('b', ini=900, durada=20, aula='Q9/0002'))
     b.aules = {r: Aula(r, a.edifici, 'Aules docents', a.capacitat) for r, a in b.aules.items()}
+    b.aules['Q9/0003'] = Aula('Q9/0003', 'Q9', 'Aules docents', 30)
     new = copy.deepcopy(b)
     new.tancaments = [Tancament('Q9/0001', DATE, DATE)]
     result = resolve(b, new)
-    # Tres aules i dues de reserva: totes dues classes successives comparteixen aula.
+    # Quatre aules, una tancada i dues de reserva: les classes comparteixen aula.
     assert result.proposta.files['a'].aula == 'Q9/0002'
     validate(new, result.proposta)
+
+
+def test_aula_tancada_buida_no_compta_com_a_reserva():
+    b = base(sessio('a'))
+    b.aules = {r: Aula(r, a.edifici, 'Aules docents', a.capacitat)
+               for r, a in b.aules.items()}
+    b.aules['Q9/0099'] = Aula('Q9/0099', 'Q9', 'Seminaris', 30)
+    new = copy.deepcopy(b)
+    new.tancaments = [Tancament('Q9/0002', DATE, DATE)]
+    result = resolve(b, new)
+    assert result.proposta is not None
+    assert result.proposta.files['a'].aula == 'Q9/0099'
+    assert result.estadistiques['sessions_afectades'] == 0
+    validate(new, result.proposta)
+
+
+def test_reserva_operativa_compta_tambe_les_aules_congelades():
+    b = base(sessio('fixa1', fixada='R1: inventada'),
+             sessio('fixa2', fixada='R1: inventada', aula='Q9/0002'),
+             sessio('afectada', ini=1080, aula='Q9/0099'))
+    b.aules = {r: Aula(r, a.edifici, 'Aules docents', a.capacitat)
+               for r, a in b.aules.items()}
+    b.aules['Q9/0003'] = Aula('Q9/0003', 'Q9', 'Aules docents', 30)
+    b.aules['Q9/0099'] = Aula('Q9/0099', 'Q9', 'Seminaris', 30)
+    new = copy.deepcopy(b)
+    new.tancaments = [Tancament('Q9/0003', DATE, DATE)]
+    new.sessions['afectada'].alumnes = 21
+    result = resolve(b, new)
+    assert result.proposta is None
+    assert result.estat == 'INFEASIBLE'
+    assert not result.relaxacions
 
 
 def test_heretats_es_calculen_sobre_52_amb_totes_les_compartides():

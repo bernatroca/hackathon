@@ -46,4 +46,4 @@ Estat (ds 23:16): tots els punts greus i mitjans d’aquesta llista s’han arre
     - No lliurem cap fitxer amb la graella setmanal per aula (PDF, línies 214–217). L'app la pot descarregar, però no és al paquet.
     - Al 5.3, el 10/03 de 14.30 a 15.30 només queda una aula de reserva útil, perquè l'aula avariada es compta com a lliure.
     - `relaxacions.csv` del 5.3 remet a un `diagnostic.md` que és a la carpeta del 5.2.
-    - L'especificació diu 12 sessions a l'aula reservada, però en són 14.
+    - L'especificació diu 12 sessions a l'aula reservada (és l'horari d'avui); al 5.2 final en són 15.

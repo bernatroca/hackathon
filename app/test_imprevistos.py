@@ -58,7 +58,7 @@ def test_pagina_resum_quatre_targetes_i_taula_llegible():
     assert any('Subgrup' in g for g in taula['Grup'])
     assert app.expander[0].label == 'Detall tècnic'
     assert not app.expander[0].proto.expanded
-    assert app.code[0].value == 'python -m nivell2.s53 --temps 40 --llavor 0'
+    assert app.code[0].value == 'python -m nivell2.s53 --temps 120 --llavor 0'
 
 
 def test_filtres_natius_per_imprevist_i_classes_de_suport():
@@ -228,9 +228,61 @@ def test_canvis_csv_i_oficials_i_suport_explicats():
     dades['resum'].update(canvis_aula_vs_referencia=54, canvis_aula_oficials=53,
                           canvis_aula_recuperades=1, classes_de_suport=2)
     html = contingut(obre(dades))
-    assert 'El CSV inclou 54 canvis' in html
-    assert 'El verificador en compta 53' in html
+    assert 'La proposta canvia l’aula de 54 classes' in html
+    assert 'el verificador en compta 53' in html
     assert 'classe cancel·lada' in html
     assert '2 classes més es mouen per fer lloc a les afectades' in html
     assert 'només movem' not in html
     assert imprevistos.veredicte({'veredicte': 'NO VALIDA'})[0] == 'vermell'
+
+
+def test_motius_tecnics_nomes_dins_del_detall():
+    from nivell2.imprevistos import MOTIUS_PLANERS, MOTIU_DESCONEGUT
+    for original in [*MOTIUS_PLANERS, 'R9: motiu desconegut; vegeu diagnostic.md i CSV']:
+        dades = dades_inventades()
+        from nivell2.imprevistos import motiu_planer
+        dades['imprevistos'][0]['motius'] = [motiu_planer(original)]
+        dades['resum']['relaxacions_per_motiu'] = [{'motiu': original, 'sessions': 1}]
+        app = obre(dades)
+        exterior = contingut(app)
+        assert original not in exterior
+        assert not re.search(r"\b(?:R\d+|CSV|TE|PAUL|SEM|PLAB)\b|diagnostic\.md", exterior)
+        assert "'" not in re.sub(r'<[^>]+>', '', exterior)
+        assert app.expander[0].dataframe[0].value.iloc[0]['Motiu'] == original
+
+
+def test_nota_recompte_concorda_i_es_dinamica():
+    for n, oficials, recuperades, fragment in [
+        (1, 0, 1, '1 classe;'),
+        (7, 5, 2, '7 classes;'),
+    ]:
+        dades = dades_inventades()
+        dades['resum'].update(canvis_aula_vs_referencia=n, canvis_aula_oficials=oficials,
+                              canvis_aula_recuperades=recuperades)
+        html = contingut(obre(dades))
+        assert fragment in html
+        assert f'el verificador en compta {oficials}' in html
+        if recuperades == 2:
+            assert 'les 2 classes cancel·lades que recuperem' in html
+
+
+def test_targeta_mostra_recompte_del_motiu_i_text_avaluacio_compartit():
+    from nivell2.test_imprevistos import escenari
+    from nivell2.imprevistos import calcula, MOTIUS_PLANERS, motiu_planer
+    from nivell2.junta import MOTIU_S04526
+    for n in (1, 2):
+        for original in (next(iter(MOTIUS_PLANERS)), 'Motiu desconegut inventat.'):
+            b, c, p, q, noms = escenari()
+            p.files['creix-inventada'].aula = 'Q9/0001'
+            p.files['suport-inventada'].aula = 'Q9/0001'
+            ids = ['reserva-inventada', 'creix-inventada'][:n]
+            avaluacio = next(m for m in MOTIUS_PLANERS if m.startswith('Setmana'))
+            rows = [{'restriccio': 'R7-PLAB', 'sessions': '|'.join(ids), 'justificacio': original},
+                    {'restriccio': 'R1-TORN', 'sessions': 'avaria-inventada', 'justificacio': avaluacio}]
+            app = obre(calcula(b, c, p, q, rows, noms=noms))
+            html = contingut(app)
+            assert '3 classes afectades' in html
+            assert motiu_planer(original, n) in html
+            assert MOTIU_S04526 in html
+            assert original not in html
+            assert avaluacio not in html

@@ -166,10 +166,10 @@ Dades de les teories al 2n semestre:
 
 ## 5.3 Imprevistos: canviar el mínim
 
-Partim del CSV final del 5.2, que no es toca, i només toquem les sessions afectades. Les afectades es calculen sobre aquest 5.2, no sobre l'horari d'avui (les 12 de l’aula reservada són d'avui i poden canviar). Si amb les afectades no n'hi ha prou, se n'amplien de mica en mica les que es poden moure. Per a cada una, l'ordre de preferència és: la mateixa franja en una aula del mateix passadís; després, la mateixa franja en una altra aula; i un altre dia només per a la sessió cancel·lada. Cap sessió no canvia de torn.
+Partim del CSV final del 5.2, que no es toca, i només toquem les sessions afectades. Les afectades es calculen sobre aquest 5.2, no sobre l'horari d'avui (les 12 de l’aula reservada són d'avui i poden canviar). Si amb les afectades no n'hi ha prou, se n'amplien de mica en mica les que es poden moure. Per a cada una, l'ordre de preferència és: la mateixa franja en una aula del mateix passadís; després, la mateixa franja en una altra aula; i un altre dia només per a la sessió cancel·lada. Cap sessió no canvia de torn. La reserva de dues aules lliures es compta només amb aules obertes aquell dia (una aula avariada o reservada no compta com a lliure); és més estricte que la R8 del verificador, que compta les tancades com a lliures.
 
-- **Una aula reservada del 15 al 19 de març.** Hi ha 12 sessions a recol·locar, només aquella setmana.
-- **Un grup de teoria de GEQ passa de 91 a 130 alumnes.** Com que és tot el semestre, la canviem a una aula de 130 o més a la mateixa franja, totes les setmanes. Si no n'hi ha cap de lliure, la desdoblem i declarem R3-AFORAMENT.
+- **Una aula reservada del 15 al 19 de març.** A l'horari d'avui hi ha 12 sessions en aquella aula; al 5.2 final n'hi ha 15 (`aula_reservada` a `resultats/nivell2/5.3/resum.json`). Només aquella setmana.
+- **Un grup de teoria de GEQ passa de 91 a 130 alumnes.** Com que és tot el semestre, la canviem a una aula de 130 o més a la mateixa franja, totes les setmanes. Si no n'hi ha cap de lliure, la desdoblaríem i declararíem R3-AFORAMENT; no ha calgut: obrint sessions veïnes s'ha trobat sempre una aula de 130 places o més a la mateixa franja. El desdoblament no està programat.
 - **Una aula avariada el 10 de març.** Recol·loquem les sessions d'aquell dia.
 - **Una sessió cancel·lada el 8 de març.** Es recupera fins al 19 de març, al torn del seu grup, en una franja amb l'alumnat, el docent i una aula lliures.
 

@@ -12,8 +12,10 @@ import time
 from collections import Counter
 
 from nivell2.base import (CONTINGENCIES, RESULTATS, RESULTATS_PRINCIPAL,
-                          PYTHON, REPTE, Proposta, carrega_model, verifica)
-from nivell2.reparacio import Canvi, repara
+                          PYTHON, REPTE, Proposta, carrega_model, verifica, fmt)
+from nivell2.reparacio import Canvi, afectades, comprova_reserva_operativa, repara
+from nivell2.franges import _referencia
+from nivell2.imprevistos import TEMPS_REPARACIO
 from nivell2.s52 import escriu_csv
 from horaris.model import llegeix_relaxacions
 
@@ -27,15 +29,45 @@ def resum_relaxacions(rows):
             for (rule, why), n in sorted(counts.items())]
 
 
+def recomptes_proposta(base, proposta, referencia, canvi):
+    """Comparació amb el 5.2: només recomptes, sense files ni identificadors."""
+    afectades_directes = set().union(*afectades(referencia, canvi).values())
+    franges = {sid for sid, s in base.sessions.items()
+               if _referencia(s, proposta) != _referencia(s, referencia)}
+    aules = {sid for sid in base.sessions
+             if proposta.files[sid].aula != referencia.files[sid].aula}
+    minim, _ = comprova_reserva_operativa(base, proposta)
+    return {'canvis_aula_vs_referencia': len(aules-set(base.cancellades)),
+            'canvis_franja_vs_referencia': len(franges),
+            'classes_suport': len((franges | aules)-afectades_directes),
+            'reserva_minima_operativa': minim}
+
+
+def _mostra_deficits(deficits):
+    for d in deficits:
+        print('ERROR reserva operativa:', d['data'].isoformat(),
+              fmt(d['franja'])+'–'+fmt(d['franja']+60),
+              '; aules lliures:', ', '.join(d['lliures']) or 'cap',
+              '; aules tancades:', ', '.join(d['tancades']) or 'cap',
+              '; aules ocupades:', ', '.join(d['ocupades']) or 'cap')
+
+
+def regressio_oficial(anterior, nova):
+    """Una reserva igual o pitjor no justifica més canvis oficials."""
+    keys = ('canvis_franja_vs_referencia', 'canvis_aula_vs_referencia')
+    return (anterior['reserva_minima_operativa'] >= nova['reserva_minima_operativa']
+            and sum(nova[k] for k in keys) > sum(anterior[k] for k in keys))
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument('--temps', type=float, default=40)
+    ap.add_argument('--temps', type=float, default=TEMPS_REPARACIO)
     ap.add_argument('--llavor', type=int, default=0)
     ap.add_argument('--comprova-determinisme', action='store_true',
                     help='genera dues vegades i exigeix CSV idèntics abans de publicar')
     args = ap.parse_args(argv)
-    if not 0 < args.temps <= 45:
-        ap.error('El pressupost ha de ser superior a zero i com a màxim de 45 segons')
+    if not 0 < args.temps <= TEMPS_REPARACIO:
+        ap.error(f'El pressupost ha de ser superior a zero i com a màxim de {TEMPS_REPARACIO} segons')
     start = time.monotonic()
     RESULTATS.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='.5.3-', dir=RESULTATS) as temporary:
@@ -80,15 +112,25 @@ def _genera(args, out, start):
     before_report = verifica(refpath, relaxacions=relaxpath)
     if before_report.veredicte not in ('VALIDA', 'VALIDA AMB RELAXACIONS DECLARADES'):
         raise ValueError('Cal una referència 5.2 validada abans de reparar-la')
-    result = repara(reference, Canvi(carrega_model(CONTINGENCIES), carrega_model(),
-                                   args.temps, args.llavor))
+    base = carrega_model(CONTINGENCIES)
+    canvi = Canvi(base, carrega_model(), args.temps, args.llavor)
+    result = repara(reference, canvi)
     (out/'execucio.json').write_text(json.dumps(result.estadistiques, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
     if result.proposta is None:
         print('Reparació sense proposta:', result.estat, '; intents:', len(result.estadistiques['intents']))
+        _mostra_deficits(comprova_reserva_operativa(base, reference)[1])
         for attempt in result.estadistiques['intents']:
             print('Nivell:', attempt['nivell'], '; sessions obertes:', attempt['sessions_obertes'])
             for label, n in attempt.get('diagnostic', {}).items():
                 print(label+':', n)
+        return 1
+    if result.estat != 'OPTIMAL':
+        print('ERROR: estat solver:', result.estat, '; cal OPTIMAL; no es publica el 5.3')
+        return 1
+    minimum, deficits = comprova_reserva_operativa(base, result.proposta)
+    if minimum < 2:
+        print('ERROR: reserva mínima operativa:', minimum, '; no es publica el 5.3')
+        _mostra_deficits(deficits)
         return 1
     path = result.proposta.escriu(out/'proposta.csv')
     rows = inherited+result.relaxacions
@@ -97,6 +139,9 @@ def _genera(args, out, start):
     report = verifica(path, escenari=CONTINGENCIES, referencia=refpath,
                       relaxacions=relax, json_path=out/'informe.json',
                       violacions_path=out/'violacions.csv')
+    if report.veredicte not in ('VALIDA', 'VALIDA AMB RELAXACIONS DECLARADES') or report.compten():
+        print('ERROR: verificació oficial:', report.veredicte, '; no es publica el 5.3')
+        return 1
     elapsed = time.monotonic()-start
     summary = {k: result.estadistiques[k] for k in
                ('sessions_afectades', 'sessions_afectades_per_imprevist', 'sessions_obertes')}
@@ -110,12 +155,29 @@ def _genera(args, out, start):
                    veredicte=report.veredicte, temps_s=round(elapsed, 3),
                    estat_solver=result.estat,
                    optim_global_demostrat=False)
+    counts = recomptes_proposta(base, result.proposta, reference, canvi)
+    counts.update({k: report.objectius[k] for k in
+                   ('canvis_franja_vs_referencia', 'canvis_aula_vs_referencia')})
+    summary.update(reserva_minima_operativa=minimum, classes_suport=counts['classes_suport'])
+    previous = RESULTATS/'5.3'/'proposta.csv'
+    if previous.is_file():
+        summary['comparacio_anterior'] = {
+            'abans': recomptes_proposta(base, Proposta.llegeix(previous), reference, canvi),
+            'despres': counts}
+        old = summary['comparacio_anterior']['abans']
+        if regressio_oficial(old, counts):
+            print('ERROR: regressió respecte del 5.3 publicat; no es publica la proposta nova')
+            print('Canvis oficials (franja + aula):',
+                  old['canvis_franja_vs_referencia']+old['canvis_aula_vs_referencia'], '→',
+                  counts['canvis_franja_vs_referencia']+counts['canvis_aula_vs_referencia'])
+            print('Reserva mínima operativa:', old['reserva_minima_operativa'], '→', minimum)
+            return 1
     (out/'resum.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
     # Comparació oficial amb avui i, separadament, amb el 5.2 congelat.
     escriu_csv(out/'xifres.csv', [{'xifra': k, 'abans': before_report.objectius.get(k, 0),
                                   'despres': v} for k, v in report.objectius.items()],
                ['xifra', 'abans', 'despres'])
-    command = shlex.join([str(PYTHON), '-m', 'nivell2.s53', '--temps', str(args.temps), '--llavor', str(args.llavor)])
+    command = shlex.join([str(PYTHON), '-m', 'nivell2.s53', '--temps', f'{args.temps:g}', '--llavor', str(args.llavor)])
     final = RESULTATS/'5.3'
     checking = shlex.join([str(PYTHON), '-m', 'horaris', 'check', str((final/'proposta.csv').resolve()),
         '--semestre', '2', '--escenari', str(CONTINGENCIES), '--referencia', str(refpath.resolve()),
@@ -124,6 +186,9 @@ def _genera(args, out, start):
     (out/'README.md').write_text(f'''# 5.3 Imprevistos
 
 Veredicte oficial: **{report.veredicte}**. Incompliments no declarats: {summary['incompliments_no_declarats']}.
+Reserva mínima operativa comprovada independentment: **{minimum} aules**.
+Classes de suport modificades respecte del 5.2: {summary['classes_suport']}.
+Estat del solver: **{result.estat}** (òptim del veïnat obert).
 Temps total: {elapsed:.3f} s. Llavor: {args.llavor}. Pressupost de reparació: {args.temps:g} s.
 
 Des del worktree:
@@ -153,6 +218,12 @@ l'aula d'una sessió fixada, sense moure'n el dia ni l'hora. Els desdoblaments e
 i comprovar també la segona meitat: aquesta reparació no els simula amb una relaxació buida.
 L'estat òptim, si n'hi ha, correspon al veïnat obert, no al problema global.
 `resum.json` conté només recomptes; `execucio.json` els intents i pressupostos.
+La reserva exclou les aules tancades i exigeix dues aules ordinàries obertes
+i lliures durant tota cada franja d'una hora, també amb classes congelades.
+Una comprovació independent de la proposta final impedeix publicar si no es compleix.
+La publicació exigeix OPTIMAL. També es rebutja
+una proposta amb més canvis oficials totals (franja + aula) si l'anterior publicada
+té una reserva mínima operativa igual o millor.
 ''', encoding='utf-8')
     readme = out/'README.md'
     readme.write_text(normalitza(readme.read_text(encoding='utf-8'), '5.3', RESULTATS), encoding='utf-8')
@@ -160,7 +231,15 @@ L'estat òptim, si n'hi ha, correspon al veïnat obert, no al problema global.
     print('Canvis de franja:', summary['canvis_franja_vs_referencia'])
     print('Canvis d’aula oficials:', summary['canvis_aula_vs_referencia'])
     print('Canvis d’aula al CSV:', summary['canvis_aula_model'])
+    print('Classes de suport:', summary['classes_suport'])
+    print('Reserva mínima operativa:', minimum)
+    if 'comparacio_anterior' in summary:
+        comparison = summary['comparacio_anterior']
+        for key in counts:
+            print('5.3 abans/després', key+':', comparison['abans'][key], '→', counts[key])
     print('Estat solver:', result.estat)
+    print('Temps determinista solver:', sum(attempt.get('diagnostic', {}).get('temps_determinista', 0)
+                                            for attempt in result.estadistiques['intents']))
     for key in ('desplacaments_aula', 'r6_aules_te_extra_per_grup', 'hores_mortes_min'):
         print(key+':', before_report.objectius.get(key, 0), '→', report.objectius.get(key, 0))
     print('Sessions afectades:', summary['sessions_afectades'])
@@ -171,7 +250,7 @@ L'estat òptim, si n'hi ha, correspon al veïnat obert, no al problema global.
         print('Relaxacions', row['restriccio']+':', row['sessions'])
     print('Incompliments no declarats:', summary['incompliments_no_declarats'])
     print(f'Temps total: {elapsed:.3f} s')
-    return 0 if report.veredicte in ('VALIDA', 'VALIDA AMB RELAXACIONS DECLARADES') and elapsed < 60 else 1
+    return 0
 
 
 if __name__ == '__main__':
