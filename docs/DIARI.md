@@ -305,3 +305,9 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
   - **Paquet:** ara inclou el resum de la Junta, el diagnòstic i els resums, i comprova que el resum A4 és al dia. Els informes ja no porten rutes de l'ordinador.
   - **Portada:** el grau nou només surt en verd si l'informe correspon a la proposta actual.
 - Resultat: 5.1 VALIDA; 5.2, 5.3 i 5.4 VALIDA AMB RELAXACIONS DECLARADES; persones CORRECTE; 638 proves correctes. Lliurament a `~/Downloads/lliurament-nivell2.zip`.
+
+### [dg 09:45] DECISIÓ · Targetes que s'entenen soles i «Comprova-ho» al xat
+- Context: revisió fent de jurat de l'app sencera (nota orientativa ≈ 79/100). L'assistent va respondre bé «quina aula de 60 places és lliure dijous a les 10» (10 aules, comprovades amb el CSV), però sense cap prova a la vista, i la rúbrica demana que el que diu es pugui comprovar.
+- Decisió de l'equip: cada targeta segueix el mateix patró (pregunta, resposta gran amb unitat, avui → amb la proposta, què vol dir, botó amb verb) i només tres etiquetes d'estat: «Resolt amb la proposta», «Cal decidir», «Per saber-ho». Fora els termes de l'equip («5.2», «verificador oficial», «2027-W05»…) de la vista principal.
+- Canvia una decisió anterior: sota cada resposta del xat torna a sortir un plegable «Comprova-ho», tancat per defecte, amb què s'ha consultat, els `id_sessio` i la consulta.
+- Especificació: `.plans/simplificacio-targetes-spec.md`. Encàrrecs a Codex (`gpt-6.1-sol`): `s-targetes-1` i `s-xat-1`, en paral·lel.

@@ -128,6 +128,16 @@
 23. [cap @ /part2] Tria GEET (Enginyeria Electrònica de Telecomunicació), 1r, grup 31, setmana típica, i mira el dijous → els subgrups simultanis (dos) van estrets costat per costat, els noms s'escurcen amb «…» sense partir paraules, i el selector de grup diu «Grup 31», el mateix que la graella.
 24. [cap @ /part2] Tria Enginyeria Informàtica, 3r, i mira una classe d'un doble grau → diu «Amb el grup … · Aula …» o «Classe compartida amb un altre grup», mai «Pendent d’assignar aula».
 
+## Part 2 · Verificador oficial al terminal
+
+1. [cap @ terminal] A l'arrel del repositori, executa `python -m nivell2.verificacio 5.1` → surt «5.1 | VALIDA».
+2. [cap @ terminal] Executa `python -m nivell2.verificacio 5.2` → surt «5.2 | VALIDA AMB RELAXACIONS DECLARADES».
+3. [cap @ terminal] Executa `python -m nivell2.verificacio 5.3` → surt «5.3 | VALIDA AMB RELAXACIONS DECLARADES».
+4. [cap @ terminal] Executa `python -m nivell2.verificacio 5.4` → surt «5.4 | VALIDA AMB RELAXACIONS DECLARADES».
+5. [cap @ terminal] Entra a `repte/repte-horaris-escola` i executa `python -m horaris check paquet/proposta_partida.csv --semestre 2` → l'horari d'avui surt NO VALIDA, amb els incompliments per regla.
+6. [cap @ terminal] A la mateixa carpeta, executa l'ordre del jurat amb la nostra proposta: `python -m horaris check ../../resultats/nivell2/5.2/proposta.csv --semestre 2 --relaxacions ../../resultats/nivell2/5.2/relaxacions.csv` → surt VALIDA AMB RELAXACIONS DECLARADES i cap incompliment que compti.
+7. [cap @ terminal] Torna a l'arrel i executa `python -m nivell2.empaqueta --sortida /tmp/lliurament` → torna a passar el verificador per a les quatre propostes, dona CORRECTE a la comprovació de persones i crea `lliurament-nivell2.zip`.
+
 ## Resum per a la Junta
 
 1. [cap @ /junta] Obre «Resum per a la Junta» al menú → surt per defecte «Horari complet (5.2)», sense l'avís antic del 5.2, i cap error vermell.
@@ -178,9 +188,13 @@ Engegar l'app amb la IA de prova: `IA_PROVA=1 .venv/bin/streamlit run app/app.py
 3. [cap @ /] Pregunta «Què passa si moc la sessió <un id_sessio de la resposta 1> a les 16:00?» → comença dient que no ha aplicat ni desat cap canvi, diu què xoca de nou i que és una comprovació ràpida, diferent de la validació oficial (la 5.2 és vàlida amb relaxacions declarades).
 4. [cap @ /] Pregunta «Em recomanes un restaurant?» → diu en una frase que només ajuda amb l'horari i proposa una pregunta.
 5. [cap @ /] Pregunta «¿Qué aulas hay libres el lunes a las 9?» → respon en castellà, i sota la resposta no surt cap intent fallit.
-6. [cap @ /] Mira sota la resposta del pas 1 → no hi ha cap bloc «Com es comprova» ni «Com ho he comprovat»: només el text de la resposta.
+6. [cap @ /] Mira sota la resposta del pas 1 → el text segueix curt, sense SQL ni llistes d'id, i a sota hi ha un plegable «Comprova-ho» tancat. (reprova)
 7. [cap @ /] Pregunta «Quantes sessions de GED 3r comencen després de les 15:00 dimecres?» → respon en una frase amb el període: 14 al 2n semestre (i, si en dona dues, 1 a la setmana típica); 42 seria tot el curs.
 8. [cap @ /] Després del pas 1, pregunta «Com ho saps?» → dona els id_sessio de les classes en codi.
+9. [cap @ /] Obre el «Comprova-ho» de la resposta del pas 1 → diu què s'ha consultat en paraules (horari del grup, dia, setmana, horari d'avui), els id_sessio en lletra de codi i la consulta feta. (reprova)
+10. [cap @ /] Prem «Copia» dins el «Comprova-ho» → al costat surt «Copiat», i en enganxar-ho surten els id_sessio separats per comes. (reprova)
+11. [cap @ /] Pregunta «Quina aula de 60 places està lliure dijous a les 10?» i obre'n el «Comprova-ho» → no hi ha id_sessio, però surt què s'ha buscat (aules lliures, dijous, 10:00, 60 places o més) i la consulta. (reprova)
+12. [cap @ /] Recarrega la pàgina i torna a obrir l'assistent → les respostes anteriors continuen tenint el seu «Comprova-ho». (reprova)
 
 ## Demo i flux per a qui no en sap res (auditoria, dg 8-11)
 

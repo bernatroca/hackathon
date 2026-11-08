@@ -30,7 +30,7 @@ Fora d'abast: aplicar canvis, enviar avisos, respondre coses que no siguin de l'
 - Surt del menú l'entrada «Pregunta-ho · aviat» (secció «Ajuda»).
 - Colors amb les variables `--xatia-*`, iguals que l'app.
 - **Respostes curtes i en text planer** (decisió d'en Bernat, dg 8-11 matinada): una o dues frases, sense «Com es comprova», SQL ni llistes d'`id_sessio`, tret que la persona ho demani («com ho saps?»).
-- **Sota les respostes no es mostra cap «Com es comprova»** (decisió d'en Bernat: és un assistent per a gent que no en sap gaire). El servidor continua enviant les consultes fetes al navegador, que les desa però no les mostra.
+- **Sota cada resposta amb eines, un plegable «Comprova-ho» tancat per defecte** (decisió de l'equip, dg 8-11 matí, que substitueix l'anterior de no mostrar-ho): la resposta segueix curta per a gent que no en sap gaire, i el jurat hi troba la consulta i els `id_sessio`. Detall a `.plans/simplificacio-targetes-spec.md`.
 
 ## Com funciona
 
