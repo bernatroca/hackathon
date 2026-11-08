@@ -142,10 +142,6 @@ def _genera(args, out, start):
     if report.veredicte not in ('VALIDA', 'VALIDA AMB RELAXACIONS DECLARADES') or report.compten():
         print('ERROR: verificació oficial:', report.veredicte, '; no es publica el 5.3')
         return 1
-    if report.objectius['canvis_aula_vs_referencia'] > 64:
-        print('ERROR: canvis d’aula oficials:', report.objectius['canvis_aula_vs_referencia'],
-              '; màxim admès: 64; no es publica el 5.3')
-        return 1
     elapsed = time.monotonic()-start
     summary = {k: result.estadistiques[k] for k in
                ('sessions_afectades', 'sessions_afectades_per_imprevist', 'sessions_obertes')}
@@ -225,7 +221,7 @@ L'estat òptim, si n'hi ha, correspon al veïnat obert, no al problema global.
 La reserva exclou les aules tancades i exigeix dues aules ordinàries obertes
 i lliures durant tota cada franja d'una hora, també amb classes congelades.
 Una comprovació independent de la proposta final impedeix publicar si no es compleix.
-La publicació exigeix OPTIMAL i com a màxim 64 canvis d'aula oficials. També es rebutja
+La publicació exigeix OPTIMAL. També es rebutja
 una proposta amb més canvis oficials totals (franja + aula) si l'anterior publicada
 té una reserva mínima operativa igual o millor.
 ''', encoding='utf-8')

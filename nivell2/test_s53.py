@@ -68,7 +68,7 @@ def test_lliura_referencia_relaxacions_i_sortida_només_recomptes(tmp_path, caps
 
 
 @pytest.mark.parametrize('failure', ['sense_proposta', 'invalida', 'excepcio', 'reserva',
-                                     'feasible', 'canvis_aula'])
+                                     'feasible'])
 def test_reparacio_fallida_conserva_lliurament_sencer(tmp_path, failure):
     b = base(sessio('inventada'))
     if failure == 'reserva':
@@ -91,9 +91,6 @@ def test_reparacio_fallida_conserva_lliurament_sencer(tmp_path, failure):
         'sessions_afectades': 1, 'sessions_afectades_per_imprevist': {}, 'sessions_obertes': 1,
         'intents': [], 'canvis_franja_vs_referencia': 0, 'canvis_aula_vs_referencia': 0})
     reports = [good, RuntimeError('fallada inventada')] if failure == 'excepcio' else [good, bad]
-    if failure == 'canvis_aula':
-        reports = [good, Informe(dict(good.json, objectius={
-            'canvis_franja_vs_referencia': 0, 'canvis_aula_vs_referencia': 65}), '')]
     with patch.object(s53, 'RESULTATS', out), patch.object(s53, 'RESULTATS_PRINCIPAL', principal), \
          patch.object(s53, 'carrega_model', return_value=b), patch.object(s53, 'repara', return_value=result), \
          patch.object(s53, 'verifica', side_effect=reports):
@@ -104,6 +101,46 @@ def test_reparacio_fallida_conserva_lliurament_sencer(tmp_path, failure):
             assert s53.main([]) == 1
     assert {p.name: p.read_bytes() for p in previous.iterdir()} == expected
     assert sorted(p.name for p in out.iterdir()) == ['5.3']
+
+
+@pytest.mark.parametrize('canvis_anteriors', [None, 65, 66, 64])
+def test_canvis_superiors_a_64_depenen_nomes_de_la_proposta_anterior(tmp_path, capsys, canvis_anteriors):
+    import datetime as dt
+    b = base(*(sessio(f'inventada-{i}', data=DATE+dt.timedelta(weeks=i)) for i in range(66)))
+    out = tmp_path/'resultats'
+    reference = Proposta.de_base(b)
+    reference.escriu(out/'5.2'/'proposta.csv')
+    s53.escriu_csv(out/'5.2'/'relaxacions.csv', [], ['restriccio', 'sessions', 'justificacio'])
+    if canvis_anteriors is not None:
+        previous = Proposta.de_base(b)
+        for i in range(canvis_anteriors):
+            previous.files[f'inventada-{i}'].aula = 'Q9/0002'
+        previous.escriu(out/'5.3'/'proposta.csv')
+        (out/'5.3'/'resum.json').write_text('resum anterior')
+        frozen = {p.name: p.read_bytes() for p in (out/'5.3').iterdir()}
+    proposal = Proposta.de_base(b)
+    for i in range(65):
+        proposal.files[f'inventada-{i}'].aula = 'Q9/0002'
+    result = Reparacio(proposal, 'OPTIMAL', {'sessions_afectades': 0,
+        'sessions_afectades_per_imprevist': {}, 'sessions_obertes': 65, 'intents': [],
+        'canvis_franja_vs_referencia': 0, 'canvis_aula_vs_referencia': 65})
+    report = Informe({'veredicte': 'VALIDA', 'restriccions': {}, 'objectius': {
+        'canvis_franja_vs_referencia': 0, 'canvis_aula_vs_referencia': 65}}, '')
+    blocked = canvis_anteriors is not None and canvis_anteriors < 65
+    with patch.object(s53, 'RESULTATS', out), patch.object(s53, 'carrega_model', return_value=b), \
+         patch.object(s53, 'repara', return_value=result), patch.object(s53, 'verifica', return_value=report):
+        assert s53.main([]) == int(blocked)
+    if blocked:
+        assert {p.name: p.read_bytes() for p in (out/'5.3').iterdir()} == frozen
+        assert 'regressió' in capsys.readouterr().out
+    else:
+        summary = json.loads((out/'5.3'/'resum.json').read_text())
+        assert summary['canvis_aula_vs_referencia'] == 65
+        assert summary['reserva_minima_operativa'] == 2
+        assert summary['estat_solver'] == 'OPTIMAL'
+        readme = (out/'5.3'/'README.md').read_text()
+        assert "màxim 64" not in readme
+        assert 'La publicació exigeix OPTIMAL.' in readme
 
 
 @pytest.mark.parametrize('canvi, reserva_anterior, reserva_nova, bloqueja', [
