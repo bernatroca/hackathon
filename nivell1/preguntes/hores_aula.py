@@ -6,6 +6,11 @@ ID = 'hores-aula'
 ORDRE = 2
 
 
+def classes(semestre=2):
+    """Classes pendents d'assignació; mateix abast que la xifra principal."""
+    return consulta('hores_aula_classes', semestre=semestre)[0]
+
+
 def calcula(semestre: int, setmana: str | None = None) -> Troballa:
     setmana = setmana if setmana is not None else setmana_tipica(semestre)
     taula, sql = consulta('hores_aula', semestre=semestre, setmana=setmana)

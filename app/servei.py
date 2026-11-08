@@ -6,7 +6,7 @@ from contextlib import closing
 from pathlib import Path
 import streamlit as st
 from nivell1 import troballes
-from nivell1.dades import connexio, AULES_DISPONIBLES
+from nivell1.dades import connexio, consulta, AULES_DISPONIBLES
 from nivell2.base import RESULTATS_PRINCIPAL as RESULTATS_PART2
 
 
@@ -43,7 +43,7 @@ def _una(id_, semestre, setmana, versio):
 def una(id_, semestre, setmana, versio):
     t = _una(id_, semestre, setmana, versio)
     # «Hi cap el matí?» es dona per validat quan la proposta de la part 2 (5.2) passa el verificador oficial.
-    if t is not None and id_ == 'hi-cap-mati' and semestre == 2:
+    if t is not None and id_ != 'marge-grau-nou' and semestre == 2:
         t.extra = dict(t.extra or {}, validat_part2=validacio_part2('5.2'))
     # El grau nou es dona per validat amb el 5.4 (proposta amb el grau nou que passa el verificador).
     if t is not None and id_ == 'marge-grau-nou' and semestre == 2:
@@ -53,6 +53,21 @@ def una(id_, semestre, setmana, versio):
 
 # Buidar la memòria cau d'una() buida la de _una().
 una.clear = _una.clear
+
+
+@st.cache_data(ttl=None, show_spinner=False)
+def classes_detall(id_, semestre, versio):
+    """Carrega la llista només quan s'obre el detall, mai a la portada."""
+    modul = importlib.import_module('nivell1.preguntes.' + {
+        'hores-aula': 'hores_aula', 'fora-torn': 'fora_torn'}[id_])
+    return modul.classes(semestre)
+
+
+@st.cache_data(ttl=None, show_spinner=False)
+def _classes_sense_aula_proposta(proposta, sha):
+    """Mateix criteri de demanda d'aula que al nivell 1; només torna el recompte."""
+    df, _ = consulta('hores_aula_proposta', semestre=2, proposta=proposta)
+    return int(df.pendents.iloc[0])
 
 
 VEREDICTES_VALIDS = ('VALIDA', 'VALIDA AMB RELAXACIONS DECLARADES')
@@ -73,6 +88,14 @@ def validacio_part2(apartat):
     incompliments = int(resum.get('incompliments_no_declarats', 0) or 0)
     resultat = dict(veredicte=veredicte, incompliments=incompliments,
                     valida=veredicte in VEREDICTES_VALIDS and incompliments == 0)
+    # Només agregats de l'informe comprovat; mai files ni identificadors.
+    resultat['restriccions'] = {
+        clau: {camp: int(v.get(camp, 0) or 0) for camp in ('compten', 'declarades', 'heretades')}
+        for clau, v in informe.get('restriccions', {}).items()}
+    resultat['objectius'] = {k: v for k, v in informe.get('objectius', {}).items()
+                            if isinstance(v, (int, float))}
+    if apartat == '5.2' and resultat['valida']:
+        resultat['classes_sense_aula'] = _classes_sense_aula_proposta(str(carpeta / 'proposta.csv'), sha)
     # Només recomptes: resposta del 5.4 (1 hi cap, 2 no sense tocar el 5.2, 3 no trobada, 4 demostrat que no).
     for clau in ('resposta', 'sessions_grau_nou', 'sessions_grau_nou_collocades', 'sessions_grau_nou_fora_franja', 'sessions_52_mogudes'):
         if clau in resum:

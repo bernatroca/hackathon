@@ -4,7 +4,7 @@ from presentacio import ordena_respostes, grup_estat
 from servei import totes
 from errors import mostra_error
 
-ESTATS = ['Cal actuar', 'Vigilar', 'Hi cap']
+ESTATS = ['Cal decidir', 'Resolt amb la proposta', 'Per saber-ho']
 
 
 def mostra():
@@ -30,8 +30,8 @@ def mostra():
             estat_col, respostes_col, recompte_col = st.columns([2.2, 2.2, 1.2])
             with estat_col:
                 estats = st.pills('Estat', ESTATS, selection_mode='multi', default=ESTATS,
-                    key='respostes-estat', help='«Vigilar» inclou les respostes que cal revisar o que encara no s’han comprovat.')
-                st.caption('Prova: deixa només «Vigilar» seleccionat traient «Cal actuar» i «Hi cap». Torna’ls a activar per veure-ho tot.')
+                    key='respostes-estat', help='«Cal decidir» inclou decisions pendents i resultats per comprovar. «Resolt amb la proposta» indica una proposta comprovada. «Per saber-ho» dona context.')
+                st.caption('Prova: deixa només «Cal decidir» seleccionat traient «Resolt amb la proposta» i «Per saber-ho». Torna’ls a activar per veure-ho tot.')
             with respostes_col:
                 triades = st.multiselect('Respostes', list(ambits),
                     format_func=lambda id_:infos[id_]['titol'], default=[],
