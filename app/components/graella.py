@@ -7,7 +7,7 @@ from hashlib import sha256
 import re
 from statistics import median
 
-from nivell2.base import fmt, hm
+from nivell2.base import fmt, hm, Proposta
 from nivell2.comprova_persones import parelles_dobles
 from horaris.model import a_traslladar
 
@@ -75,7 +75,9 @@ def partida(s, referencia=None):
     """Data, inici i aula de la proposta de comparació, o dels originals."""
     if referencia is None:
         return s.data, s.ini, s.aula
-    a = referencia.files[s.id]
+    a = referencia.files.get(s.id)
+    if a is None:
+        return s.data, s.ini, s.aula
     data = date.fromisoformat(a.data) if a.data else dilluns(s.data) + timedelta(days=DIES.index(a.dia))
     return data, hm(a.h_ini), a.aula
 
@@ -155,7 +157,7 @@ def celles_aula(base, proposta, setmana, aula, **kwargs):
 def canvis_grup(base, proposta, actuals, noves, *, referencia=None):
     """Compara les sessions presents en qualsevol de les dues setmanes visibles."""
     ids = {c.id_sessio for c in actuals + noves}
-    franja = aula = torn = assignades = 0
+    canvis = {k: set() for k in ('franja', 'aula', 'torn', 'assignades')}
     for sid in ids:
         if sid.startswith('N'):
             continue
@@ -163,20 +165,42 @@ def canvis_grup(base, proposta, actuals, noves, *, referencia=None):
         data_abans, ini_abans, aula_abans = partida(s, referencia)
         data = date.fromisoformat(a.data) if a.data else dilluns(s.data) + timedelta(days=DIES.index(a.dia))
         inici = hm(a.h_ini)
-        franja += data != data_abans or inici != ini_abans
-        aula += bool(aula_abans and not a_traslladar(aula_abans) and not s.sense_espai and a.aula != aula_abans)
-        assignades += bool(not aula_abans and a.aula and not s.sense_espai)
-        torn += (ini_abans < 870) != (inici < 870)
-    return {'franja': franja, 'aula': aula, 'torn': torn, 'assignades': assignades}
+        clau = (s.compartida or sid, data, inici)
+        condicions = {
+            'franja': data != data_abans or inici != ini_abans,
+            'aula': bool(aula_abans and not a_traslladar(aula_abans) and not s.sense_espai and a.aula != aula_abans),
+            'assignades': bool(not aula_abans and a.aula and not s.sense_espai),
+            'torn': (ini_abans < 870) != (inici < 870),
+        }
+        for tipus, canvia in condicions.items():
+            if canvia:
+                canvis[tipus].add(clau)
+    return {k: len(v) for k, v in canvis.items()}
+
+
+def frase_classes(n, singular, plural):
+    return f'{n} classe {singular}' if n == 1 else f'{n} classes {plural}'
+
+
+def aules_visibles(celles):
+    aules = {c.aula for c in celles if c.aula}
+    for c in celles:
+        if ' · Aula ' in c.ubicacio_compartida:
+            aules.add(c.ubicacio_compartida.rsplit(' · Aula ', 1)[1])
+    return aules
 
 
 def resum_grup(base, proposta, actuals, noves, *, referencia=None, nom_referencia='avui'):
     canvis = canvis_grup(base, proposta, actuals, noves, referencia=referencia)
-    franja, aula, torn, assignades = (canvis[k] for k in ('franja', 'aula', 'torn', 'assignades'))
-    abans = len({c.aula for c in actuals if c.aula})
-    despres = len({c.aula for c in noves if c.aula})
-    return (f'{franja} classes canvien de dia o d’hora · {aula} canvien d’aula · '
-            f'{assignades} amb aula assignada · {torn} canvien de torn · Aules diferents aquesta setmana: {abans} {nom_referencia} → {despres} a la proposta.')
+    parts = [frase_classes(canvis[k], singular, plural)
+             for k, singular, plural in (
+                 ('franja', 'canvia de dia o hora', 'canvien de dia o hora'),
+                 ('aula', 'canvia d’aula', 'canvien d’aula'),
+                 ('assignades', 'rep aula', 'reben aula'),
+                 ('torn', 'canvia de torn', 'canvien de torn')) if canvis[k]]
+    return (' · '.join(parts) if parts else 'Cap classe d’aquest grup canvia') + (
+        f' · Aules diferents aquesta setmana: {len(aules_visibles(actuals))} a {nom_referencia}'
+        f' → {len(aules_visibles(noves))} a la proposta.')
 
 
 def nom_grup(grup, tipus):
@@ -191,14 +215,15 @@ ESTATS = {
     'igual': ('Sense canvis', '#2a78d6', '#eef4fc', '#1d5fae'),
     'aula-nova': ('Aula assignada', '#2f8f46', '#edf6ef', '#1f6b33'),
     'canvi': ('Canvia', '#e8820c', '#fff4e5', '#8f4c00'),
-    'fora-patro': ('Fora del patró', '#b77900', '#fff8df', '#795300'),
+    'fora-patro': ('Fora del patró', '#b77900', '#fbe7a6', '#795300'),
     'relaxada': ('Excepció demostrada', '#d03b3b', '#fdeeee', '#a12c2c'),
 }
 
 
 def estat_cella(c):
     return ('relaxada' if c.excepcio_demostrada else
-            'fora-patro' if (c.relaxacions and c.canvi) or c.setmana_diferent else
+            'fora-patro' if c.setmana_diferent or any(
+                m.startswith('Fora de l’hora habitual') for m in c.relaxacions) else
             'canvi' if c.canvi else 'aula-nova' if c.aula_assignada else 'igual')
 
 
@@ -347,9 +372,9 @@ CSS = """
 .p2-llegenda li{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border:1px solid #e6e5e0;border-radius:999px;background:#fff;}
 .p2-llegenda i{display:inline-block;width:10px;height:10px;border-radius:3px;}
 """ + ''.join(
-    f'.p2-horari .classe.{clau}' + '{background:' + fons + ';}'
+    f'.p2-horari .classe.{clau}' + '{background:' + fons + ';border-left:4px solid ' + color + ';}'
     + f'.p2-horari .classe.{clau} .nota' + '{color:' + text + ';}'
-    for clau, (_, _, fons, text) in ESTATS.items() if clau != 'totes')
+    for clau, (_, color, fons, text) in ESTATS.items() if clau != 'totes')
 
 # La guia compartida encara invoca aquest punt d'entrada. Les línies ara són
 # fons CSS de cada dia i no necessiten mesurar files ni observar redimensions.
@@ -415,8 +440,10 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
     """
     celles = agrupa_compartides(celles)
     estil = f'<style>{CSS}</style>' if estils else ''
-    buit = '' if celles else '<p class="p2-buit" role="status">No hi ha classes aquesta setmana.</p>'
-    inici_dia, final_dia = 510, 1260
+    if not celles:
+        return estil + '<div class="p2-horari"><p class="p2-buit" role="status">No hi ha classes aquesta setmana.</p></div>'
+    inici_dia = min(c.ini for c in celles) // 30 * 30
+    final_dia = (max(c.fi for c in celles) + 29) // 30 * 30
     # Identificadors estables i diferents per a les vistes de grup i d'aula.
     prefix = 'p2-detall-' + sha256(titol.encode()).hexdigest()[:16]
     detalls = []
@@ -440,7 +467,7 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
     primer = '#d9d8d2' if inici_dia % 60 == 0 else '#efeee9'
     segon = '#efeee9' if inici_dia % 60 == 0 else '#d9d8d2'
     linies = f'repeating-linear-gradient(to bottom,{primer} 0 1px,transparent 1px 48px,{segon} 48px 49px,transparent 49px 96px)'
-    html = (estil + '<div class="p2-horari">' + buit + '<div class="p2-setmana">'
+    html = (estil + '<div class="p2-horari"><div class="p2-setmana">'
         f'<div class="horari-scroll" tabindex="0" role="region" aria-label="{escape(titol, quote=True)} · Dilluns – Divendres">'
         f'<div class="horari" style="--ample-mobil:{ample}px;grid-template-columns:{columnes};--files:repeat({final_dia-inici_dia},1.6px);--linies:{linies}">'
         f'<div class="horari-titol">{escape(titol)}</div><div class="dia-cap hora-cap">Hora</div>')
@@ -449,7 +476,8 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
     for inici in range(inici_dia, final_dia, 30):
         plena = ' hora-plena' if inici % 60 == 0 else ''
         html += f'<div class="hora{plena}" data-minut="{inici}" style="grid-row:{inici-inici_dia+1}/span 30">{fmt(inici)}</div>'
-    html += f'<div class="hora hora-plena hora-final" data-minut="{final_dia}">{fmt(final_dia)}</div>'
+    plena = ' hora-plena' if final_dia % 60 == 0 else ''
+    html += f'<div class="hora{plena} hora-final" data-minut="{final_dia}">{fmt(final_dia)}</div>'
     html += '</div>'
     for dia, (n, entrades) in carrils.items():
         html += (f'<section class="dia-horari" aria-label="{NOMS_DIES[DIES.index(dia)]}" '
@@ -475,6 +503,8 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
             nota = ''
             if c.horari_nou:
                 nota = 'Grau nou: horari nou'
+            elif estat in ('relaxada', 'fora-patro'):
+                nota = next((m for m in c.relaxacions if m.startswith('Fora de l’hora habitual')), avisos[0] if avisos else nom)
             elif c.canvi and c.abans:
                 hora_abans, _, aula_abans = c.abans.partition(' · ')
                 aula_abans = re.sub(r' \(\d{2}/\d{2}/\d{4}\)$', '', aula_abans)
@@ -482,8 +512,6 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
                     nota = 'Abans: aula ' + aula_abans
                 else:
                     nota = hora_abans + (' · ' + aula_abans if c.canvi_aula else '')
-            elif estat in ('relaxada', 'fora-patro'):
-                nota = avisos[0] if avisos else nom
             elif estat == 'canvi':
                 nota = c.abans.split(' · ', 1)[0] if c.abans else 'Canvi de dia, hora o aula.'
             if len(nota) > 78:
@@ -539,7 +567,10 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
     return html + '</div></div></div>' + ''.join(detalls) + '</div>'
 
 
-def exporta_aula_html(base, proposta, setmana, aula, *, nom_proposta='Horari d’avui', **kwargs):
+def exporta_aula_html(base, proposta, setmana, aula, *, nom_proposta=None, **kwargs):
+    if nom_proposta is None:
+        nom_proposta = ('Horari d’avui' if proposta.files == Proposta.de_base(base).files
+                        else 'Horari proposat')
     titol = f'Aula {aula} · {nom_proposta} · setmana del {dilluns(setmana):%d/%m/%Y}'
     contingut = taula_html(celles_aula(base, proposta, setmana, aula, **kwargs), titol)
     return '<!doctype html><html lang="ca"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' + escape(titol) + '</title><body><h1>' + escape(titol) + '</h1>' + llegenda_html() + contingut + '</body></html>'
