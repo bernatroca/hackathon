@@ -398,6 +398,90 @@
   // A l'ordinador, en mida normal, es pot treballar a la pàgina alhora.
   const esAcoblat = () => !esMobil() && !estat.gran;
 
+  // Streamlit 1.67 posa el testid de plegar al contenidor i el de desplegar
+  // al botó de la capçalera (fora del menú). Els aria-label són alternatives.
+  const selectorPlegaMenu = '[data-testid="stSidebarCollapseButton"] button, button[data-testid="stSidebarCollapseButton"], [data-testid="stSidebar"] button[aria-label="Collapse sidebar"]';
+  const selectorDesplegaMenu = 'button[data-testid="stExpandSidebarButton"], [data-testid="stExpandSidebarButton"] button, [data-testid="stSidebarCollapsedControl"] button, [data-testid="stHeader"] button[aria-label="Expand sidebar"]';
+  let menuXatObert = false;
+  let menuPlegatPelXat = false;
+  let clicMenuDelXat = false;
+  let observaMenu;
+
+  function menuVisible(node) {
+    if (!node) return false;
+    const rect = node.getBoundingClientRect();
+    const estil = window.getComputedStyle(node);
+    // El menú plegat pot conservar amplada, però estar fora de la pantalla.
+    return rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.bottom > 0 &&
+      rect.left < window.innerWidth && rect.top < window.innerHeight &&
+      estil.display !== 'none' && estil.visibility !== 'hidden' && estil.visibility !== 'collapse';
+  }
+
+  function botoMenu(selector) {
+    return Array.from(document.querySelectorAll(selector)).find((boto) => !boto.disabled && menuVisible(boto));
+  }
+
+  function deixaObservarMenu() {
+    if (observaMenu) observaMenu.disconnect();
+    observaMenu = undefined;
+  }
+
+  function clicaMenu(boto) {
+    clicMenuDelXat = true;
+    try { boto.click(); }
+    finally { clicMenuDelXat = false; }
+  }
+
+  function plegaMenuPelXat() {
+    if (!estat.obert || !esAcoblat()) {
+      deixaObservarMenu();
+      return;
+    }
+    const menu = document.querySelector('[data-testid="stSidebar"]');
+    if (!menu) return; // Pot muntar-se després del widget.
+    if (!menuVisible(menu)) {
+      deixaObservarMenu(); // Ja estava plegat: no ens correspon restaurar-lo.
+      return;
+    }
+    const boto = botoMenu(selectorPlegaMenu);
+    if (!boto) return;
+    deixaObservarMenu();
+    menuPlegatPelXat = true;
+    clicaMenu(boto);
+  }
+
+  function clicManualMenu(e) {
+    if (!menuXatObert || clicMenuDelXat) return;
+    if (e.target.closest && e.target.closest(selectorPlegaMenu + ', ' + selectorDesplegaMenu)) {
+      menuPlegatPelXat = false;
+      deixaObservarMenu();
+    }
+  }
+
+  function sincronitzaMenu() {
+    if (typeof document.querySelector !== 'function') return;
+    if (menuXatObert === estat.obert) return;
+    menuXatObert = estat.obert;
+    deixaObservarMenu();
+    if (estat.obert) {
+      menuPlegatPelXat = false;
+      if (!esAcoblat() || window.innerWidth >= 1440) return;
+      // Només mentre esperem el muntatge inicial; mai replegar un menú manual.
+      if (typeof MutationObserver !== 'undefined') {
+        observaMenu = new MutationObserver(plegaMenuPelXat);
+        observaMenu.observe(document.body, { childList: true, subtree: true, attributes: true });
+      }
+      plegaMenuPelXat();
+    } else {
+      const restaura = menuPlegatPelXat;
+      menuPlegatPelXat = false;
+      if (restaura && !esMobil() && !menuVisible(document.querySelector('[data-testid="stSidebar"]'))) {
+        const boto = botoMenu(selectorDesplegaMenu);
+        if (boto) clicaMenu(boto);
+      }
+    }
+  }
+
   let midaPlafó;
   let resizePendent;
   function avisaAmplada() {
@@ -407,6 +491,7 @@
   }
 
   function sincronitzaPlafó() {
+    sincronitzaMenu();
     const acoblat = estat.obert && esAcoblat();
     document.documentElement.classList.toggle('xatia-obert', acoblat);
     el.fons.hidden = !estat.obert || acoblat;
@@ -440,6 +525,8 @@
   }
 
   function connecta() {
+    // Captura abans dels handlers de React; els clics del xat queden exclosos.
+    document.addEventListener('click', clicManualMenu, true);
     el.boto.addEventListener('click', () => obre());
     el.fons.addEventListener('click', clicFons);
     el.plafo.addEventListener('click', (e) => {
