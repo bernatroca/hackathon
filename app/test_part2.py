@@ -573,7 +573,7 @@ class TestRedisseny(unittest.TestCase):
         for _, attrs in estructura_graella(html).classes:
             assert '--mostra-nota:block;' in attrs['style']
             assert '--mostra-grup:none;' in attrs['style']
-        assert html.count('<small class="nota">Abans: dijous 12:30</small>') == 4
+        assert html.count('<small class="nota"><span class="nota-ampla">Abans: dijous 12:30</span>') == 4
         estret = CSS.split('@container p2-classe (width < 90px)', 1)[1]
         assert '.nota{display:none;}' not in estret
 
@@ -749,14 +749,17 @@ class TestRedisseny(unittest.TestCase):
                   'Assignatura Inventada', 'Problemes', 'PAUL/999', True, False,
                   abans='Abans: dijous 12:30 · Aula anterior inventada (08/03/2027)')
         html = taula_html([c])
-        assert '<b>Assignatura Inventada</b><small class="ubicacio">08:30–10:30 · Aula inventada</small><small>Problemes · Subgrup 999</small><small class="nota">Abans: dijous 12:30</small>' in sense_marques_nom(html)
+        assert '<b>Assignatura Inventada</b><small class="ubicacio">' in sense_marques_nom(html)
+        assert '<span class="hora-inici">08:30</span><span class="hora-separador">–</span><span class="hora-fi">10:30</span>' in html
+        assert '<span class="aula-classe"> · Aula inventada</span></small><small>Problemes · Subgrup 999</small>' in html
+        assert '<small class="nota"><span class="nota-ampla">Abans: dijous 12:30</span>' in html
         assert 'Aula anterior inventada' in html
         igual = taula_html([replace(c, canvi_franja=False)])
         assignada = taula_html([replace(c, canvi_franja=False, aula_assignada=True)])
         assert '<small class="nota">' not in igual and '<small class="nota">' not in assignada
         motiu = 'Motiu inventat amb <etiqueta> i prou paraules per comprovar que el resum és curt i el detall es conserva sencer.'
         especial = taula_html([replace(c, relaxacions=(motiu,))])
-        assert '<small class="nota">Abans: dijous 12:30</small>' in especial
+        assert '<small class="nota"><span class="nota-ampla">Abans: dijous 12:30</span>' in especial
         assert 'Motiu inventat amb &lt;etiqueta&gt;' in especial  # Motiu complet al detall.
         assert motiu.replace('<', '&lt;').replace('>', '&gt;') in especial
         assert '<etiqueta>' not in especial
@@ -1003,6 +1006,69 @@ def test_setmana_densa_cap_en_escriptori_i_dies_iguals():
     assert 'min-width:var(--ample-mobil)' in CSS
     assert 'container:p2-classe / inline-size' in CSS
     assert '@container p2-classe (width < 90px)' in CSS
+
+
+def test_xat_obert_anulla_minim_mobil_nomes_a_partir_de_700px():
+    import re
+    from dataclasses import replace
+    from components.graella import Cella
+    c = Cella('INVENTADA-XAT', 'X', 870, 930, 'Q9/0001', 'Nom inventat',
+              'Problemes', 'PAUL/811', False, False)
+    html = taula_html([c, replace(c, id_sessio='INVENTADA-XAT-2')])
+    css = html.split('<style>', 1)[1].split('</style>', 1)[0]
+    mobil = re.search(r'@container p2-graella \(width < 900px\)\{\s*([^}]+})\s*}', css)[1]
+    assert '.horari{min-width:var(--ample-mobil);}' in mobil
+    xat = re.search(r'@media \(min-width:700px\)\{(.*?)\n}', css, re.S)[1]
+    assert 'html.xatia-obert .p2-horari .horari{min-width:0;' in xat
+    assert css.index('@media (min-width:700px)') > css.index('@container p2-graella')
+    assert 'column-gap:4px;padding-inline:8px;' in xat
+    assert '.dia-horari{column-gap:2px;}' in xat
+    assert '.classe{padding-inline:2px;}' in xat
+    assert '--ample-mobil:888px' in html
+    assert 'grid-template-columns:repeat(2,minmax(0,1fr))' in html
+    # A 470px, dos carrils encara admeten HH:MM a 11px sense el·lipsi.
+    carril = ((470 - 2 * 8 - 56 - 5 * 4) / 5 - 2) / 2
+    assert carril - 2 * 2 >= 32
+
+
+def test_hores_i_abans_compactes_sencers_en_classes_simultanies_duna_hora():
+    import re
+    from dataclasses import replace
+    from components.graella import Cella, pressupost_classe
+    c = Cella('INVENTADA-COMPACTA', 'X', 870, 930, 'Q9/0001',
+              'Nom inventat que es pot abreujar', 'Problemes', 'PAUL/811',
+              True, False, abans='Abans: dimecres 10:30 · Q9/0002')
+    html = taula_html([c, replace(c, id_sessio='INVENTADA-COMPACTA-2')])
+    css = html.split('<style>', 1)[1].split('</style>', 1)[0]
+    estret = re.search(r'@container p2-classe \(width < 90px\)\{(.*?)\n}', css, re.S)[1]
+    assert '.hora-inici,.p2-horari .classe .hora-fi{display:block;}' in estret
+    assert 'font-size:11px;line-height:12px;white-space:nowrap;overflow:visible;text-overflow:clip' in estret
+    assert '.hora-separador,.p2-horari .classe .aula-classe{display:none;}' in estret
+    assert '.resum-classe>small:not([class]){display:none;}' in estret
+    assert '.nota-ampla{display:none;}' in estret
+    assert '.nota-compacta,.p2-horari .classe .abans-hora{display:block;}' in estret
+    assert '.abans-hora{white-space:nowrap;' in estret
+    assert html.count('<span class="hora-inici">14:30</span>') == 2
+    assert html.count('<span class="hora-fi">15:30</span>') == 2
+    assert html.count('aria-hidden="true">Abans dc<span class="abans-hora">10:30</span>') == 2
+    assert 'Abans: dimecres 10:30 · Q9/0002' in html  # Detall complet.
+    for _, attrs in estructura_graella(html).classes:
+        assert '--mostra-nota-estret:block;' in attrs['style']
+        assert '--linies-nom-estret:1;' in attrs['style']
+    for durada in (30, 45, 60, 90, 120):
+        for nota in (False, True):
+            p = pressupost_classe(durada, nota=nota, estret=True)
+            # Dues hores de 12px; Abans pot ocupar tres línies de 12px.
+            files = 1 + bool(p['nom']) + p['nota']
+            visible = (2 * p['padding'] + 24 + p['nom'] * 17.5
+                       + p['nota'] * 36 + (files - 1) * 3)
+            assert visible == p['visible'] <= durada * 1.6 - 6
+            assert p['ubicacio'] and not p['grup']
+            if durada >= 60:
+                assert p['nom'] >= 1 and p['nota'] == nota
+    # Una nota secundària cedeix espai al nom; «Abans» conserva la prioritat.
+    especial = taula_html([replace(c, canvi_franja=False, abans='', relaxacions=('Nota inventada',))])
+    assert '--mostra-nota-estret:none;' in especial
 
 
 def test_paraules_noms_atomiques_amb_abreviacio_marcada():
