@@ -209,7 +209,9 @@ Engegar l'app amb la IA de prova: `IA_PROVA=1 .venv/bin/streamlit run app/app.py
 10. [cap @ /part2] Obre l'Assistent i toca «Quantes aules queden lliures dimarts a les 10?» → respon en una frase amb la proposta, la setmana i el nombre d'aules ordinàries lliures, sense SQL. (reprova)
 11. [cap @ /part2] Després de la resposta, toca «Com ho saps?» → explica d'on surt la mateixa xifra (proposta, dia, hora i què ha comptat) i no en dona una altra. (reprova)
 12. [cap @ /part2] Escriu «Quantes classes canvien de torn amb la proposta 5.2?» → respon en català amb la xifra de la 5.2 (2.007), no amb la d'avui. (reprova)
-13. [cap @ /] A la terminal, des de l'arrel, executa `python -m app.xat.pregunta "Quantes aules queden lliures dimarts a les 10?" --proposta 5.2 --setmana típica` → imprimeix la resposta i, a sota, la consulta feta amb les aules del resultat. (reprova)
+13. [cap @ /] A la terminal, des de l'arrel, executa `python -m app.xat.pregunta "Quantes aules queden lliures dimarts a les 10?" --proposta 5.2 --setmana típica` → imprimeix la resposta i, a sota, la consulta feta amb totes les aules del resultat: tantes com la xifra de la resposta (6, amb la Q4/0011). (reprova)
+14. [cap @ /part2] Pregunta a l'Assistent «Quantes aules queden lliures dimarts a les 10?» i després «Com ho saps?» → la resposta pot dir «de 10 a 11» i a sota no surt «No he pogut comprovar: 10, 11»; el «Comprova-ho» llista les mateixes aules que la xifra. (reprova)
+15. [cap @ /part2] Pregunta «La proposta 5.2 passa el verificador oficial? Quantes relaxacions declara?» → diu que és vàlida amb relaxacions declarades i que declara 459 incompliments en 2 files de relaxació, mai «en declara 2» sol. (reprova)
 
 ## Provar-ho com un jutge (repositori net)
 

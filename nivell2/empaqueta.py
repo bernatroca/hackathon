@@ -105,13 +105,19 @@ def empaqueta(sortida, *, sense_zip=False, arrel=RESULTATS):
                     'Descomprimiu aquest ZIP a l’arrel del repositori. Les propostes i els README amb '
                     'les ordres de generació i verificació són a `resultats/nivell2/5.1/`–`5.4/`.\n\n'
                     'Pregunta | Veredicte | Contracte\n--- | --- | ---\n' + '\n'.join(veredictes) +
-                    '\n\nPersones: CORRECTE.\n\nResum de la Junta: `resultats/nivell2/junta/5.2/junta.html` '
-                    '(també `.md` i `.json`). Graelles: `graelles/index.html`.\n'
+                    '\n\nPersones: CORRECTE.\n\nResums de la Junta: `resultats/nivell2/junta/<proposta>/junta.html` '
+                    '(també `.md` i `.json`): 5.2 sempre; 5.1, 5.3 i 5.4 si existeixen els tres fitxers. '
+                    'Graelles: `graelles/index.html`.\n'
                     'Calen el codi del repositori i el paquet oficial, que es lliuren separadament.\n')
                 for path in sorted(folder.glob('*.html')):
                     archive.write(path, f'graelles/{path.name}')
                 for name in JUNTA:
                     archive.write(arrel / 'junta' / '5.2' / name, f'resultats/nivell2/junta/5.2/{name}')
+                for pregunta in ('5.1', '5.3', '5.4'):
+                    junta = arrel / 'junta' / pregunta
+                    if all((junta / name).is_file() for name in JUNTA):
+                        for name in JUNTA:
+                            archive.write(junta / name, f'resultats/nivell2/junta/{pregunta}/{name}')
                 for pregunta in OPCIONS:
                     for name in (*OBLIGATORIS, *OPCIONALS):
                         path = arrel / pregunta / name

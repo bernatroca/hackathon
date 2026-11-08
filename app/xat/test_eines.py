@@ -594,8 +594,8 @@ def test_b13_reserva_total_sense_filtre_places_i_limit(paquet):
     resultat = r['resultat']
     assert resultat['recomptes'] == {'total_aules': 6, 'ordinaries_lliures': 7,
         'respecta_reserva': True, 'sessions_sense_aula_a_la_franja': 0}
-    assert len(resultat['files']) == 5
-    assert [a['capacitat'] for a in resultat['files']] == [40, 50, 60, 70, 80]
+    assert len(resultat['files']) == resultat['total'] == 6
+    assert [a['capacitat'] for a in resultat['files']] == [40, 50, 60, 70, 80, 90]
     for aula in list(b.aules):
         if aula.startswith('Q9/1') and aula not in ('Q9/1000', 'Q9/1001'):
             del b.aules[aula]
@@ -878,11 +878,17 @@ def test_auditoria_xifres_i_demo_oficials():
     assert r['ok'], 'No s’han pogut consultar les xifres oficials.'
     canvis_torn = next(f['despres'] for f in r['resultat']['xifres'] if f['xifra'] == 'canvis_torn')
     assert canvis_torn == 2007
+    assert r['resultat']['incompliments_declarats'] == 459
+    assert r['resultat']['files_de_relaxacio'] == 2
+    assert 'relaxacions_declarades' not in r['resultat']
+    assert r['resultat']['resum_relaxacions'] == '459 incompliments declarats en 2 files de relaxació'
     r = e.executa('aules_lliures', {'dia': 'M', 'hora_ini': '10', 'durada_min': 60,
                                   'places_min': 0, 'proposta': '5.2'})
     assert r['ok'], 'La consulta de la demo ha fallat.'
     total = r['resultat']['recomptes']['ordinaries_lliures']
     assert total == 6
+    assert len(r['resultat']['files']) == r['resultat']['total'] == total
+    assert 'Q4/0011' in {fila['aula'] for fila in r['resultat']['files']}
     r = e.executa('consulta_sql', {'sql': "SELECT count(*) AS total, count(*) FILTER (WHERE torn_actual = 'tarda') AS tarda FROM proposta_5_4 WHERE id_sessio LIKE 'N%'"})
     assert r['ok'], 'La consulta de torns del grau nou ha fallat.'
     total = r['resultat']['files'][0]['total']
@@ -912,3 +918,25 @@ def test_f12_d7_imprevistos_oficials_inclouen_suport():
     ids.update(f['id_sessio'] for f in resultat['classes_de_suport']['sessions'])
     total = len(ids)
     assert total == 65
+
+
+def test_aules_lliures_conserva_totes_les_files(paquet):
+    b, _ = paquet
+    for i in range(4, 22):
+        aula = f'Q9/{i:04d}'
+        b.aules[aula] = Aula(aula, 'Q9', 'Seminaris', 60)
+    r = e.executa('aules_lliures', dict(dia='L', hora_ini='17', durada_min=60,
+                                      places_min=0, tipus='Seminaris', proposta='5.2'))
+    assert r['ok']
+    assert len(r['resultat']['files']) == r['resultat']['total'] == 21
+    assert r['resultat']['recomptes']['total_aules'] == 21
+
+
+def test_resultat_relaxacions_informe_antic(paquet):
+    informe = {'veredicte': 'VALIDA AMB RELAXACIONS DECLARADES',
+               'relaxacions_declarades': 2,
+               'restriccions': {'R1': {'declarades': 458}, 'R2': {'declarades': 1}}}
+    (e.nb.RESULTATS_PRINCIPAL / '5.2' / 'informe.json').write_text(json.dumps(informe))
+    resultat = e.resultat_proposta('5.2')['resultat']
+    assert resultat['incompliments_declarats'] == 459
+    assert resultat['files_de_relaxacio'] == 2

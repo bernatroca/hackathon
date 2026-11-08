@@ -172,8 +172,8 @@ def peces_fitxes(d, grau=None):
     curs, criteri = afectat.get('curs'), afectat.get('criteri', 'franja')
     if curs:
         canvi = 'de dia o hora' if criteri == 'franja' else 'd’aula'
-        comparacio = (f"Avui: horari actual → amb la proposta: {junta.percentatge(curs[criteri + '_pct'])} "
-                      f"de les classes canvien {canvi} ({curs[criteri]} de {curs['sessions']}).")
+        comparacio = (f"Amb la proposta, el {junta.percentatge(curs[criteri + '_pct'])} "
+                      f"de les seves classes canvien {canvi} ({curs[criteri]} de {curs['sessions']}).")
         explicacio = ('Les classes que canvien d’hora passen al torn que els toca. '
                       if criteri == 'franja' and curs[criteri] and curs.get('torn') == curs[criteri] else '')
         explicacio += 'Ajuda la Junta a identificar el curs que necessita més acompanyament.'
@@ -291,8 +291,10 @@ def mostra():
             for frase in frases[1:]:
                 st.write(frase)
             st.write(junta.explicacio_aulari(d))
-            st.caption(junta.resum_canvis_aula(d))
-            st.write(junta.explicacio_marge(d))
+            if junta.resum_canvis_aula(d) not in frases[1:]:
+                st.caption(junta.resum_canvis_aula(d))
+            if junta.explicacio_marge(d) not in frases[1:]:
+                st.write(junta.explicacio_marge(d))
             if d.get('nota_pics'):
                 st.caption(d['nota_pics'])
             if junta.resum_escenari(d):

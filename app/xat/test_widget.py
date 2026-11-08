@@ -541,6 +541,15 @@ async function flux(fi) {
   assert.ok(seguiment[0].content.includes('Q9/0001'));
   assert.deepEqual(JSON.parse(JSON.stringify(seguiment[1])), {role:'user', content:'Com ho saps?'});
   assert.ok(!p.htmlMissatge(anterior).includes('aules_lliures'));
+  const totesAules = Array.from({length:21}, (_, i) => ({aula:'Q9/' + String(i).padStart(4, '0')}));
+  const htmlAules = p.htmlConsultes([{eina:'aules_lliures', ok:true,
+    resultat:{total:21, files:totesAules}, args:{}, id_sessio:[]}]);
+  for (const fila of totesAules) assert.ok(htmlAules.includes(fila.aula));
+  const htmlEscapat = p.htmlConsultes([{eina:'aules_lliures', ok:true,
+    resultat:{files:[{aula:'<img src=x>'}]}}]);
+  assert.ok(!htmlEscapat.includes('<img'));
+  assert.ok(htmlEscapat.includes('&lt;img'));
+
 })().catch((error) => { console.error(error); process.exitCode = 1; });
 '''
     resultat = subprocess.run([node, '-e', prova, str(widget.WEB / 'xat-ia.js')],

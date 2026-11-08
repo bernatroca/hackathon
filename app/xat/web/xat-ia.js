@@ -744,8 +744,13 @@
       const ids = Array.isArray(c.id_sessio) ? c.id_sessio.filter((id) => typeof id === 'string' && id).slice(0, 10) : [];
       const mes = Math.max(0, (Number(c.total_id) || 0) - ids.length);
       const sessions = ids.length ? `<div class="xatia-consulta-ids"><span>id_sessio: <code>${escapa(ids.join(', '))}</code>${mes ? ` · +${mes} més` : ''}</span><button type="button" data-fa="copia-ids" data-ids="${escapa(ids.join(','))}" aria-label="Copia els identificadors de sessió">Copia</button><span role="status" class="xatia-consulta-estat"></span></div>` : '';
+      const aules = c.eina === 'aules_lliures' && Array.isArray(c.resultat?.files)
+        ? c.resultat.files.filter((fila) => typeof fila?.aula === 'string').slice(0, 25)
+          .map((fila) => fila.aula) : [];
+      const llistaAules = aules.length
+        ? `<p>Aules: <code>${escapa(aules.join(', '))}</code></p>` : '';
       const consulta = c.consulta ? `<pre><code>${escapa(String(c.consulta))}</code></pre>` : '';
-      return `<section class="xatia-consulta"><p>${escapa(descripcio)}</p>${sessions}${consulta}</section>`;
+      return `<section class="xatia-consulta"><p>${escapa(descripcio)}</p>${sessions}${llistaAules}${consulta}</section>`;
     }).join('') + '</details>';
   }
 

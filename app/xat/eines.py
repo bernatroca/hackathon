@@ -260,7 +260,6 @@ def aules_lliures(hora_ini, durada_min, places_min, dia=None, data=None, tipus=N
     rows = [{'aula': a.aula, 'capacitat': a.capacitat, 'tipus': a.tipus, 'data': date, 'h_ini': nb.fmt(ini), 'h_fi': nb.fmt(ini+durada_min)}
             for a in b.aules.values() if a.aula not in ocupades and a.capacitat >= places_min and (a.tipus == tipus if tipus else a.ordinaria)]
     out = _retorn(sorted(rows, key=lambda r: (r['capacitat'], r['aula'])), f'aules_lliures(data={date}, hora_ini={hora_ini}, durada_min={durada_min}, places_min={places_min}, tipus={tipus}, proposta={proposta}); solapament: inici < fi AND final > inici')
-    out['resultat']['files'] = out['resultat']['files'][:5]
     ordinaries = sum(a.ordinaria and a.aula not in ocupades for a in b.aules.values())
     out['resultat']['recomptes'] = {'total_aules': len(rows), 'ordinaries_lliures': ordinaries,
         'respecta_reserva': ordinaries - 1 >= 2}
@@ -386,6 +385,14 @@ def resultat_proposta(apartat):
     # també el mode nomes_aules i qualsevol altra metadada del verificador.
     resultat = dict(informe)
     resultat.setdefault('restriccions', {})
+    # El verificador compta files del CSV i violacions en camps diferents.
+    if 'relaxacions_declarades' in resultat:
+        resultat['files_de_relaxacio'] = resultat.pop('relaxacions_declarades')
+        resultat.setdefault('incompliments_declarats', sum(
+            regla.get('declarades', 0) for regla in resultat['restriccions'].values()))
+        resultat['resum_relaxacions'] = (
+            f"{resultat['incompliments_declarats']} incompliments declarats en "
+            f"{resultat['files_de_relaxacio']} files de relaxació")
     consulta = f'informes nivell2/{apartat}/informe.json'
     resum_path = carpeta / 'resum.json'
     if resum_path.is_file():
