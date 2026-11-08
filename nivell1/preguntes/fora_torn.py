@@ -6,6 +6,11 @@ ID = 'fora-torn'
 ORDRE = 3
 
 
+def classes(semestre=2):
+    """Classes que compten al resum semestral, sense duplicar compartides."""
+    return consulta('fora_torn_classes', semestre=semestre)[0]
+
+
 def _nombre(valor):
     return f'{int(valor):,}'.replace(',', '.')
 

@@ -36,6 +36,13 @@ def dades_inventades(escenari='Validat'):
             'xifra':[24], 'proposta':['Revisar les assignacions inventades.']}),
     ]
     mapa = {t.id:t for t in resultats}
+    for id_, total in (('hores-aula', 30), ('fora-torn', 84)):
+        mapa[id_].extra['classes_detall'] = pd.DataFrame([
+            dict(id_sessio=f'S{90000 + i}', assignatura=f'Assignatura Inventada {i % 3 + 1}',
+                 grup='TE/81', data='2027-02-15', dia='L', h_ini='08:30', h_fi='10:30',
+                 titulacions_curs='GXX:1r' if i % 2 else 'GYY:2n',
+                 **(dict(torn_actual='mati', torn_requerit='tarda') if id_ == 'fora-torn' else {}))
+            for i in range(total)])
     if escenari == 'Pendent de validar':
         for id_ in ('hi-cap-mati', 'marge-grau-nou'):
             mapa[id_].extra['validat_part2'] = None
