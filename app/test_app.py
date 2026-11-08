@@ -206,7 +206,7 @@ preguntes.mostra()
         html = '\n'.join(m.value for m in app.markdown)
         self.assertNotIn('per assignar de debò',html)
         self.assertNotIn('El més ajustat:',html)
-        self.assertIn('Matí 68 % · Tarda 81 %',text(mapa['hi-cap-mati'])['frase'])
+        self.assertIn('Matí ocupat al 68 % de les hores d’aula · Tarda ocupada al 81 % de les hores d’aula',text(mapa['hi-cap-mati'])['frase'])
         marge = text(mapa['marge-grau-nou'])
         self.assertEqual(marge['etiqueta'],'Pendent de comprovar')
         self.assertEqual(marge['estat'],'ambre')
@@ -303,7 +303,7 @@ preguntes.mostra()
         self.assertIn('les aules de més de 88 places',frase)
         t = copy.deepcopy(una('hi-cap-mati'))
         t.extra['torns'] = pd.DataFrame({'torn':['mati','tarda'],'ocupacio_pct':[69.7,42.1]})
-        self.assertIn('Matí 70 % · Tarda 42 %',text(t)['frase'])
+        self.assertIn('Matí ocupat al 70 % de les hores d’aula · Tarda ocupada al 42 % de les hores d’aula',text(t)['frase'])
 
     def test_regressions_portada_ronda6_inventades(self):
         mapa = dades_inventades('Validat')
@@ -385,8 +385,9 @@ targeta_compacta(grau_inventat())
         for peu in peus:
             self.assertEqual(len(peu.button),1)
             self.assertEqual(peu.button[0].label,'Com ho sabem →')
-            self.assertEqual(len(peu.markdown),1)
-            self.assertIn('Proposem',peu.markdown[0].value)
+            propostes = [m for m in peu.markdown if 'class="proposem"' in m.value]
+            self.assertEqual(len(propostes),1)
+            self.assertIn('Proposem',propostes[0].value)
 
     def test_bloc_gran_vermell_quan_falta_mida(self):
         mapa = dades_inventades()
@@ -660,7 +661,7 @@ class TestAuditoriaInventada(unittest.TestCase):
         from presentacio import dates_setmana, etiqueta_setmana
         from components.vistes import franja_context
         self.assertEqual(dates_setmana('2027-W06'), '8/2 – 12/2')
-        self.assertIn('més classes alhora (08/02)', etiqueta_setmana('2027-W06'))
+        self.assertIn('més classes alhora (8/2 – 12/2)', etiqueta_setmana('2027-W06'))
         self.assertIn('més demanda de matí', etiqueta_setmana('2027-W06','demanda_mati'))
         self.assertIn('sense dades', franja_context(2,None))
         html = franja_context(2,('2027-W06', '2027-02-08', 500))
@@ -671,7 +672,7 @@ class TestAuditoriaInventada(unittest.TestCase):
         t = self.troballa('aforament', extra={'sessions_total':101,
             'sessions_heretades':58, 'grups_afectats':6}, xifra='43')
         frase = text(t)['frase']
-        for fragment in ('101 classes', '6 grups', '43 es poden corregir', '58 són de grups fixats'):
+        for fragment in ('101 classes', '6 grups', '43 classes on no hi caben tots els alumnes es poden corregir', '58 són de grups fixats'):
             self.assertIn(fragment, frase)
 
     def test_validats_sense_metode_provisional(self):
@@ -726,6 +727,38 @@ with patch('components.vistes.una', side_effect=RuntimeError('Error inventat')) 
             self.assertAlmostEqual(ocupacio, 100*6/(2*125))
         finally:
             con.close()
+
+
+    def test_propostes_resoltes_nomes_amb_validacio(self):
+        for id_ in ('hores-aula', 'fora-torn', 'aforament', 'ocupacio'):
+            t = self.troballa(id_, extra={'sessions_total':11, 'sessions_heretades':4}, xifra='7')
+            pendent = text(t)
+            t.extra['validat_part2'] = {'valida': True}
+            validada = text(t)
+            self.assertIn('verificador oficial', validada['proposem'])
+            self.assertTrue(validada['c']['proposta_validada'])
+            self.assertEqual(validada['c']['xifra'], pendent['c']['xifra'])
+            self.assertEqual(validada['estat'], pendent['estat'])
+            if id_ == 'aforament':
+                self.assertTrue(validada['frase'].startswith('7 classes'))
+                self.assertIn('corregeix les 7 classes; les 4', validada['proposem'])
+            t.extra['validat_part2'] = {'valida': False}
+            self.assertNotIn('verificador oficial', text(t)['proposem'])
+
+    def test_peus_expliquen_setmana_del_pic_i_del_detall(self):
+        app = portada_inventada()
+        self.assertEqual(list(app.exception), [])
+        self.assertTrue(any('moment més ple, setmana del' in m.value for m in app.markdown))
+        app.button(key='obre-hi-cap-mati').click().run(timeout=30)
+        captions = ' '.join(c.value for c in app.caption)
+        self.assertIn('la comparació mostra la setmana amb més classes alhora', captions)
+        self.assertNotIn('setmana seleccionada', captions)
+
+    def test_docents_expliquen_el_torn_de_cada_classe(self):
+        info = text(self.troballa('docents-cavall', xifra='17'))
+        self.assertIn('segons el torn que li toca a cada classe', info['frase'])
+        self.assertIn('segons el torn que li toca a cada classe', info['metode_planer'])
+        self.assertIn('17 docents', info['frase'])
 
 
 class TestValidacioPart2Inventada(unittest.TestCase):

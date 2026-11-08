@@ -1,9 +1,10 @@
+from dataclasses import replace
 from html import escape
 import streamlit as st
 from components.grafics import grafics
 from mostra import exemples
 from presentacio import text, text_portada, abast, desglos, valor, dates_setmana
-from servei import una, AULES_DISPONIBLES, AULES_RESERVA
+from servei import una, validacio_part2, AULES_DISPONIBLES, AULES_RESERVA
 from textos import PROBLEMES
 from components.taules import mostra_taula
 from errors import mostra_error
@@ -36,6 +37,13 @@ def carrega_grup(ids):
 
 
 def contingut(t):
+    if (t.id in ('hores-aula', 'fora-torn', 'aforament', 'ocupacio')
+            and st.session_state.get('semestre') == 2 and not (t.extra or {}).get('mostra')):
+        # El servei encara no adjunta la validació a aquestes preguntes.
+        referencia = st.session_state.get('resultats', {}).get('hi-cap-mati')
+        validacio = ((referencia.extra or {}).get('validat_part2') if referencia is not None
+                     else validacio_part2('5.2'))
+        t = replace(t, extra=dict(t.extra or {}, validat_part2=validacio))
     return text(t, st.session_state.get('resultats', {}), setmana_triada=st.session_state.get('setmana'))
 
 
@@ -77,7 +85,8 @@ def heroi(t):
             else:
                 icones = ''.join('<i class="' + ('' if n < ocupades else 'l') + '"></i>'
                     for n in range(AULES_DISPONIBLES)) + '<i class="r"></i>' * AULES_RESERVA
-                peu = f'{ocupades} ocupades · {max(0, AULES_DISPONIBLES - ocupades)} lliures · {AULES_RESERVA} de reserva'
+                peu = (f'{ocupades} ocupades · {max(0, AULES_DISPONIBLES - ocupades)} lliures · {AULES_RESERVA} de reserva'
+                       f' · moment més ple, setmana del {dates_setmana((t.extra or {}).get("setmana"))}')
                 st.markdown(f'<figure class="aules-portada"><div class="aules" role="img" aria-label="Aules: {escape(peu)}">'
                     f'{icones}</div><figcaption>{escape(peu)}</figcaption></figure>',unsafe_allow_html=True)
 
@@ -105,6 +114,7 @@ def targeta(t, posicio=0):
         with st.container(key='peu-targeta-'+t.id):
             st.markdown(f'<p class="proposem"><b>Proposem</b><br>{escape(info["proposem"])}</p>', unsafe_allow_html=True)
             obre(t)
+            enllac_proposta(info)
 
 
 def detall(t):
@@ -117,9 +127,13 @@ def detall(t):
     st.header(info['titol'])
     resposta = info['c'].get('resposta',info['c']['xifra'])
     st.markdown(resum_grau(info) if t.id == 'marge-grau-nou' else f'<div class="xifra-targeta resposta-gran">{escape(resposta)}</div>',unsafe_allow_html=True)
+    comparacio = ('la setmana seleccionada' if st.session_state.get('setmana') is not None else
+                  'la setmana amb més classes alhora' if t.id == 'hi-cap-mati' else 'la setmana indicada')
     st.caption(('Semestre complet · Desglossament per titulació i curs.' if t.id == 'fora-torn' else
-                abast(t) + ' · La xifra principal resumeix el semestre; la comparació mostra la setmana seleccionada.')
-               if t.id != 'marge-grau-nou' else abast(t) + ' · Comparació de les hores necessàries i lliures de la mateixa setmana.')
+                abast(t) + f' · La xifra principal resumeix el semestre; la comparació mostra {comparacio}.')
+               if t.id != 'marge-grau-nou' else abast(t) + ' · Comparació de les hores necessàries i lliures de la mateixa setmana. '
+               + ('Setmana seleccionada.' if st.session_state.get('setmana') is not None else
+                  'Setmana amb més demanda de matí.'))
     grafics(t,clau='detall-'+t.id,altres=st.session_state.get('resultats',{}))
     st.subheader('Què vol dir')
     st.write(info['frase'])
@@ -146,6 +160,7 @@ def detall(t):
             st.write(f"Setmana indicada: {numero(t.extra['hores_demanda'])} h d’aula necessàries / {numero(t.extra['hores_disponibles'])} h disponibles.")
     st.subheader('Proposem')
     st.write(info['proposem'])
+    enllac_proposta(info)
     if t.id == 'problemes-millores' and {'problema','proposta'}.issubset(t.taula.columns):
         for fila in t.taula.itertuples():
             nom = PROBLEMES.get(fila.problema, fila.problema)
@@ -253,6 +268,16 @@ def targeta_compacta(t, info=None):
             f'<p class="frase-compacta" title="{escape(info["frase"])}">{escape(info["frase"])}</p></article>',unsafe_allow_html=True)
         with st.container(key='enllac-resposta-'+t.id):
             obre(t)
+            enllac_proposta(info)
+
+
+def enllac_proposta(info):
+    if info['c'].get('proposta_validada'):
+        pagina = st.session_state.get('_pagina_horari')
+        if pagina is not None:
+            st.page_link(pagina, label='Mira l’horari proposat →')
+        else:
+            st.markdown('[Mira l’horari proposat →](/part2)')
 
 
 def pas_seguent():

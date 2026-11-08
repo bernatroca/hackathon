@@ -293,7 +293,7 @@ def test_taula_destaca_aula_motiu_i_no_repeteix_la_franja_sense_canvi():
     assert app.button(key='imp-boto-totes').label == 'Totes les classes (6)'
     taula = app.dataframe[0].value
     assert 'Q9/0001 → Q9/1003' in set(taula['Aula'])
-    assert 'Per fer lloc' in set(taula['Motiu'])
+    assert 'Canvi per reorganitzar les aules arran dels imprevistos.' in set(taula['Motiu'])
     app.button(key='imp-boto-grup_creix').click().run(timeout=30)
     assert not app.error
     assert 'Dia/hora nous' not in app.dataframe[0].value
@@ -432,3 +432,68 @@ p.run()
 ''').run(timeout=30)
     assert not app.exception and not app.error
     assert app.get('page_link')[0].proto.label == 'Pas següent: el resum per a la Junta →'
+
+
+
+def test_motius_identifiquen_imprevist_i_classe_que_rep_aula():
+    from nivell2.test_imprevistos import escenari
+    from nivell2.imprevistos import calcula
+    b, c, p, q, noms = escenari()
+    # Solapament parcial: no cal que les hores d’inici siguin idèntiques.
+    c.sessions['suport-inventada'].ini = 525
+    p.files['suport-inventada'].h_ini = '08:45'
+    q.files['suport-inventada'].h_ini = '08:45'
+    p.files['suport-inventada'].aula = 'Q9/0002'
+    q.files['suport-inventada'].aula = 'Q9/0004'
+    originals = calcula(b, c, p, q, [], noms=noms)
+    resum = deepcopy(originals['resum'])
+    dades = imprevistos.afegeix_motius(originals, b, c, p, q, noms)
+    assert dades['resum'] == resum
+    suport = next(r for r in dades['files'] if not r['imprevistos'])
+    assert 'Per fer lloc a ' + noms[c.sessions['creix-inventada'].codi] in suport['motiu']
+    assert '20 a 70 alumnes durant tot el semestre' in suport['motiu']
+    targeta = next(t for t in dades['imprevistos'] if t['clau'] == 'grup_creix')
+    assert targeta['suport_text'] == '1 classe més es mou per deixar l’aula a les afectades.'
+    app = obre(dades)
+    taula = app.dataframe[0].value
+    assert any('Per fer lloc a ' in motiu for motiu in taula['Motiu'])
+    assert any('avariada el 17/02/2027' in motiu for motiu in taula['Motiu'])
+    assert '1 classe més es mou per deixar l’aula' in contingut(app)
+    app.button(key='imp-boto-suport').click().run(timeout=30)
+    assert not app.error
+    assert len(app.dataframe[0].value) == 1
+    assert 'Per fer lloc a ' in app.dataframe[0].value.iloc[0]['Motiu']
+
+
+def test_tria_semestre_i_setmana_sobreviu_pagines_de_la_proposta(tmp_path):
+    from datetime import date
+    import os
+    from types import SimpleNamespace as NS
+    import servei
+    (tmp_path / 'paquet').mkdir()
+    (tmp_path / 'paquet' / 'sessions.csv').touch()
+    (tmp_path / 'horaris').mkdir()
+    pagina = NS(url_path='avui', title='Pàgina inventada', run=lambda: None)
+    app = AppTest.from_file(str(ARREL / 'app.py'))
+    with patch.dict(os.environ, {'REPTE_DIR': str(tmp_path)}), \
+            patch('streamlit.navigation', return_value=pagina), \
+            patch.object(servei, 'versio_registre', return_value=()), \
+            patch.object(servei, 'setmanes', return_value=[('2027-W07', date(2027, 2, 15), 250)]), \
+            patch('xat.widget.posa_widget'), patch('xat.widget.pantalla_actual', return_value={}):
+        app.run(timeout=30)
+        app.selectbox[0].select(1).run(timeout=30)
+        app.selectbox[1].select('2027-W07').run(timeout=30)
+        for ruta in ('part2', 'junta', 'imprevistos'):
+            pagina.url_path = ruta
+            app.run(timeout=30)
+            assert not app.exception and not app.error
+            assert not app.selectbox
+            assert app.session_state['semestre_triat'] == 1
+            assert app.session_state['setmana_triada'] == '2027-W07'
+        pagina.url_path = 'avui'
+        app.run(timeout=30)
+        assert not app.exception and not app.error
+        assert app.selectbox[0].value == 1
+        assert app.selectbox[1].value == '2027-W07'
+        assert app.session_state['semestre'] == 1
+        assert app.session_state['setmana'] == '2027-W07'

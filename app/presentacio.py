@@ -52,8 +52,7 @@ def dates_setmana(setmana):
 
 
 def etiqueta_setmana(setmana, criteri='pic', seleccionada=False):
-    dilluns = dilluns_setmana(setmana)
-    data = dilluns.strftime('%d/%m') if dilluns else 'sense dades'
+    data = dates_setmana(setmana)
     if seleccionada:
         return f'a la setmana seleccionada ({dates_setmana(setmana)})'
     nom = 'amb més demanda de matí' if criteri == 'demanda_mati' else 'amb més classes alhora'
@@ -151,12 +150,12 @@ def context(t, altres=None):
             totes_mides = totes_mides[totes_mides.variant == 'oficial']
         c['falla'] = c['falla'] or ('falla' in totes_mides and bool(totes_mides.falla.any()))
         c['resposta'] = 'Falten aules d’algunes mides' if c['falla'] else 'Hi ha marge d’hores'
-        c['torns'] = f"Matí {c['ocupacio']} %. Cal comprovar que les classes encaixen a l’horari proposat."
+        c['torns'] = f"Matí ocupat al {c['ocupacio']} % de les hores d’aula. Cal comprovar que les classes encaixen a l’horari proposat."
         torns = taula_extra(extra.get('torns', []))
         if {'torn', 'ocupacio_pct'}.issubset(torns.columns):
             noms = torns.torn.astype(str).str.lower().str.replace('í', 'i', regex=False)
             valors = dict(zip(noms, torns.ocupacio_pct))
-            parts = [f"{nom} {numero(round(float(valors[torn])))} %" for torn, nom, acord in
+            parts = [f"{nom} {acord} al {numero(round(float(valors[torn])))} % de les hores d’aula" for torn, nom, acord in
                      [('mati', 'Matí', 'ocupat'), ('tarda', 'Tarda', 'ocupada')] if torn in valors]
             if parts:
                 c['torns'] = ' · '.join(parts) + '. Cal comprovar que les classes encaixen a l’horari proposat.'
@@ -222,8 +221,17 @@ def text(t, altres=None, *, setmana_triada=None):
             c['resposta'] = 'Sí, hi cap'
             resultat.update(etiqueta='Hi cap', estat='verd',
                 proposem='Aplicar l’horari proposat (Torns nous).',
-                frase=c['torns'].split('.')[0] + '. Confirmat amb l’horari proposat i el verificador oficial: '
+                frase=c['torns'].split('. Cal comprovar')[0] + '. Confirmat amb l’horari proposat i el verificador oficial: '
                       'només queden fora de torn les classes que no es poden moure.')
+    validacio = (t.extra or {}).get('validat_part2') or {}
+    if t.id in ('hores-aula', 'fora-torn', 'aforament', 'ocupacio') and validacio.get('valida'):
+        c['proposta_validada'] = True
+        resultat['proposem'] = {
+            'hores-aula': 'Resolt a l’horari proposat (Torns nous): les classes que necessiten aula ja en tenen. Ho confirma el verificador oficial.',
+            'fora-torn': 'Resolt a l’horari proposat (Torns nous): les classes passen al torn que els toca, excepte les que no es poden moure. Ho confirma el verificador oficial.',
+            'aforament': f'L’horari proposat ja corregeix les {c["xifra"]} classes; les {c.get("aforament_heretades", "—")} de grups fixats es queden igual. Ho confirma el verificador oficial.',
+            'ocupacio': 'Mira l’ocupació amb l’horari proposat, on les classes que necessiten aula ja en tenen. Ho confirma el verificador oficial.',
+        }[t.id]
     if t.id == 'marge-grau-nou':
         v = t.extra.get('validat_part2')
         v = v if isinstance(v, dict) else {}

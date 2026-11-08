@@ -1,5 +1,6 @@
 """Imprevistos sobre l'horari proposat; admet dades inventades injectades."""
 import csv
+from datetime import date, timedelta
 import hashlib
 from html import escape
 import json
@@ -9,7 +10,7 @@ import pandas as pd
 import streamlit as st
 
 from components.vistes import estat
-from nivell2.imprevistos import ORDRE, calcula, motiu_planer
+from nivell2.imprevistos import ORDRE, calcula, motiu_planer, nom_grup
 
 
 def normalitza_assignatura(text):
@@ -99,12 +100,101 @@ def _carrega(paths, versions):
     informe = _informe_validat(informe_path, despres)
     with (PAQUET / 'activitats.csv').open(encoding='utf-8-sig', newline='') as f:
         noms = {r['codi']: r['assignatura'] for r in csv.DictReader(f)}
-    return calcula(carrega_oficial(), carrega_oficial(CONTINGENCIES),
-                   Proposta.llegeix(abans), Proposta.llegeix(despres),
-                   _llegeix_relaxacions(relax_despres),
-                   relaxacions_referencia=_llegeix_relaxacions(relax_abans),
-                   resum=json.loads(resum.read_text(encoding='utf-8')) if resum.is_file() else {},
-                   informe=informe, noms=noms)
+    base, contingencies = carrega_oficial(), carrega_oficial(CONTINGENCIES)
+    proposta_52, proposta_53 = Proposta.llegeix(abans), Proposta.llegeix(despres)
+    dades = calcula(base, contingencies, proposta_52, proposta_53,
+                    _llegeix_relaxacions(relax_despres),
+                    relaxacions_referencia=_llegeix_relaxacions(relax_abans),
+                    resum=json.loads(resum.read_text(encoding='utf-8')) if resum.is_file() else {},
+                    informe=informe, noms=noms)
+    return afegeix_motius(dades, base, contingencies, proposta_52, proposta_53, noms)
+
+
+def afegeix_motius(dades, base, contingencies, proposta_52, proposta_53, noms):
+    """Relaciona les aules alliberades amb les classes que les necessiten.
+
+    Només afegeix explicacions; conserva tots els recomptes de calcula().
+    """
+    def moment(sessio, assignacio):
+        dia = (date.fromisoformat(assignacio.data) if assignacio.data else
+               sessio.data - timedelta(days=sessio.data.weekday())
+               + timedelta(days='LMXJV'.index(assignacio.dia)))
+        h, m = map(int, assignacio.h_ini.split(':'))
+        return dia, h * 60 + m
+
+    def nom(s):
+        return noms.get(s.codi) or getattr(s, 'assignatura', '') or 'Assignatura sense nom'
+
+    motius, claus, abans, despres = {}, {}, {}, {}
+    for sid, s in contingencies.sessions.items():
+        p, q = proposta_52.files[sid], proposta_53.files[sid]
+        dia, inici = abans[sid] = moment(s, p)
+        despres[sid] = moment(s, q)
+        causes, imprevistos = [], set()
+        anterior = base.sessions[sid].alumnes
+        if s.alumnes > anterior:
+            causes.append(f'El grup passa de {anterior} a {s.alumnes} alumnes durant tot el semestre; cal canviar l’aula {p.aula or "no indicada"}.')
+            imprevistos.add('grup_creix')
+        for t in contingencies.tancaments:
+            if (not s.sense_espai and p.aula == t.aula and t.data_ini <= dia <= t.data_fi
+                    and inici < t.fi and inici + s.durada > t.ini):
+                reservada = t.data_ini != t.data_fi
+                causa = 'reservada' if reservada else 'avariada'
+                periode = (f'del {t.data_ini:%d/%m/%Y} al {t.data_fi:%d/%m/%Y}'
+                           if reservada else f'el {t.data_ini:%d/%m/%Y}')
+                causes.append(f'L’aula {t.aula} està {causa} {periode}.')
+                imprevistos.add('aula_reservada' if reservada else 'aula_avariada')
+        if sid in contingencies.cancellades:
+            causes.append('Recuperem la classe cancel·lada en una altra data.')
+            imprevistos.add('recuperacio')
+        if causes:
+            motius[sid], claus[sid] = ' '.join(causes), imprevistos
+
+    directes = set(motius)
+    mogudes = {sid for sid in abans if abans[sid] != despres[sid]
+               or proposta_52.files[sid].aula != proposta_53.files[sid].aula}
+    beneficiaris = {}
+    for sid in mogudes - directes:
+        s = contingencies.sessions[sid]
+        dia, inici = abans[sid]
+        aula = proposta_52.files[sid].aula
+        beneficiaris[sid] = [altre for altre in sorted(mogudes) if altre != sid and aula
+                            and proposta_53.files[altre].aula == aula
+                            and despres[altre][0] == dia
+                            and despres[altre][1] < inici + s.durada
+                            and despres[altre][1] + contingencies.sessions[altre].durada > inici]
+    # També propaguem el motiu quan hi ha una cadena d’intercanvis d’aula.
+    pendents = set(beneficiaris)
+    while pendents:
+        resoltes = set()
+        for sid in sorted(pendents):
+            destinataris = [altre for altre in beneficiaris[sid] if altre in motius]
+            if destinataris:
+                motius[sid] = '; '.join(
+                    f'Per fer lloc a {nom(contingencies.sessions[altre])} · '
+                    f'{nom_grup(contingencies.sessions[altre].grup, contingencies.sessions[altre].tipus)} '
+                    f'({motius[altre]})' for altre in destinataris)
+                claus[sid] = set().union(*(claus[altre] for altre in destinataris))
+                resoltes.add(sid)
+        if not resoltes:
+            break
+        pendents -= resoltes
+    # Clau de presentació: evita dependre de l’ordre de les files o exposar identificadors.
+    per_fila = {}
+    for sid in mogudes:
+        s = contingencies.sessions[sid]
+        dia, inici = abans[sid]
+        clau = (nom(s), nom_grup(s.grup, s.tipus), dia.isoformat(),
+                f'{inici // 60:02}:{inici % 60:02}', proposta_52.files[sid].aula)
+        per_fila.setdefault(clau, []).append(motius.get(sid, 'Canvi per reorganitzar les aules arran dels imprevistos.'))
+    for r in dades['files']:
+        clau = tuple(r[k] for k in ('assignatura', 'grup', 'data', 'hora', 'aula_abans'))
+        r['motiu'] = '; '.join(dict.fromkeys(per_fila.get(clau, [r.get('motiu') or 'Canvi per reorganitzar les aules arran dels imprevistos.'])))
+    for t in dades['imprevistos']:
+        n = sum(t['clau'] in claus.get(sid, set()) for sid in mogudes - directes)
+        if n:
+            t['suport_text'] = (f'{n} classe més es mou' if n == 1 else f'{n} classes més es mouen') + ' per deixar l’aula a les afectades.'
+    return dades
 
 
 def carrega():
@@ -191,6 +281,7 @@ def targetes_html(targetes, validada=True):
                      f'<h3>{escape(t["titol"])}</h3><p>{escape(t["descripcio"])}</p>'
                      f'<p><strong>{classes_afectades(t["sessions_afectades"])}</strong></p>'
                      f'<p class="imp-accio">{accio(t["canvis_aula"], t["canvis_franja"])}</p>'
+                     + (f'<p>{escape(t["suport_text"])}</p>' if t.get('suport_text') else '')
                      + ''.join(f'<p>{escape(m)}</p>' for m in t['motius'])
                      + estat({'estat': color, 'etiqueta': text}) + '</article>')
     return '<div class="imp-targetes">' + ''.join(peces) + '</div>'
@@ -292,7 +383,8 @@ def mostra(dades=None):
                                     if abans != despres else 'sense canvi'}
                     if hi_ha_franja:
                         fila['Dia/hora nous'] = r['dia_hora_nous'] or 'sense canvi'
-                    fila['Motiu'] = '; '.join(titols[k] for k in r['imprevistos']) or 'Per fer lloc'
+                    fila['Motiu'] = r.get('motiu') or '; '.join(
+                        titols[k] for k in r['imprevistos']) or 'Canvi per reorganitzar les aules arran dels imprevistos.'
                     taula.append(fila)
                 st.dataframe(pd.DataFrame(taula), hide_index=True, width='stretch',
                              column_config={
@@ -306,6 +398,7 @@ def mostra(dades=None):
                              })
             else:
                 st.info('No hi ha classes que canviïn amb aquest filtre.')
+            st.caption('Les aules tancades afecten les dates indicades; el creixement del grup i les classes que li deixen lloc afecten tot el semestre.')
             with st.expander('Detall tècnic', expanded=False):
                 st.write('Excepcions declarades per motiu, incloses les que ja tenia l’horari proposat:')
                 relaxacions = resum.get('relaxacions_per_motiu', [])

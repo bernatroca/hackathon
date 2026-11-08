@@ -22,7 +22,7 @@ TEXTOS = {
         proposem="Revisar els canvis de torn amb la proposta d’horari."),
     'hores-aula': dict(estat='vermell', etiqueta='Cal actuar', titol='Classes sense aula',
         frase='Sense aula assignada a les dades: {proporcio} ({sense_aula} classes).',
-        proposem='Assignació automàtica prevista a la proposta d’horari.'),
+        proposem='Consultar l’assignació d’aules a l’horari proposat.'),
     'marge-grau-nou': dict(estat='ambre', etiqueta='Pendent de validar', titol='Un grau nou de {places} places',
         frase="{hores_noves} h a la setmana que necessita; {hores_lliures} h lliures {etiqueta_setmana}. Cal validar l’horari.",
         proposem='Comprovar si es pot incorporar a la proposta nova.'),
@@ -30,11 +30,11 @@ TEXTOS = {
         frase="Hi ha {xifra} de problemes al semestre: classes sense aula, professorat amb classes alhora i altres desajustos.",
         proposem='Revisar una possible millora per a cadascun.'),
     'aforament': dict(estat='ambre', etiqueta='Vigilar', titol='Més alumnes que places',
-        frase='En {aforament_total} classes del semestre ({grups_afectats} grups) no hi caben tots els alumnes: {xifra} es poden corregir canviant l’aula; {aforament_heretades} són de grups fixats.',
+        frase='{xifra} classes on no hi caben tots els alumnes es poden corregir canviant l’aula ({aforament_total} classes en total, {grups_afectats} grups); {aforament_heretades} són de grups fixats.',
         proposem='Una aula més gran del mateix passadís.'),
     'ocupacio': dict(estat='ambre', etiqueta='Vigilar', titol='Com fem servir les aules?',
         frase='L’aula més ocupada arriba al {xifra} del temps disponible a les setmanes lectives del semestre. Les aules que semblen buides poden tenir classes pendents d’assignar.',
-        proposem='Assignar les classes sense aula abans de decidir on queda espai.'),
+        proposem='Consultar l’ocupació de les aules a l’horari proposat.'),
     'hores-mortes': dict(estat='ambre', etiqueta='Vigilar', titol='Temps entre classes',
         frase='Els grups acumulen {xifra} d’espera per setmana lectiva de mitjana. És la suma dels grups, no el temps de cada estudiant.',
         proposem='Agrupar les classes de cada grup dins del seu torn.'),
@@ -45,7 +45,7 @@ TEXTOS = {
         frase='Hi ha {xifra} classes de cursos superiors de doble titulació al matí per setmana lectiva de mitjana; els correspondria la tarda.',
         proposem='Revisar amb cada titulació quines classes es poden separar.'),
     'docents-cavall': dict(estat='ambre', etiqueta='Vigilar', titol='Professorat amb matí i tarda',
-        frase='Amb el model nou, {xifra} docents tindrien classes al matí i a la tarda d’un mateix dia del semestre.',
+        frase='{xifra} docents tindrien classes al matí i a la tarda d’un mateix dia del semestre, segons el torn que li toca a cada classe.',
         proposem='Concentrar les classes de cada docent quan sigui compatible amb els grups.'),
 }
 
@@ -75,7 +75,7 @@ METODES_PLANERS = {
     'hores-mortes': 'Sumem els buits entre classes compatibles de cada grup dins del mateix torn, sense duplicar les classes que comparteix. Repartim el total del semestre entre les setmanes lectives; són hores de grup, no de cada estudiant. El gràfic mostra els grups de la setmana indicada.',
     'canvis-aula': 'Comptem els canvis de passadís entre classes consecutives de cada grup quan coneixem les dues aules. Repartim el total del semestre entre les setmanes lectives. El gràfic mostra els grups de la setmana indicada.',
     'dobles-mati': 'Comptem les classes de doble titulació de cursos superiors que avui es fan al matí i haurien d’anar a la tarda. Repartim el total del semestre entre les setmanes lectives i el gràfic mostra la setmana indicada. Cal revisar amb les titulacions si aquestes classes es poden separar.',
-    'docents-cavall': 'Mirem quins docents farien classe al matí i a la tarda d’un mateix dia si s’apliquessin els torns nous als dies actuals. La xifra principal cobreix el semestre. El gràfic agrupa el recompte de docents pel nombre de dies amb matí i tarda de la setmana indicada, sense mostrar identificadors.',
+    'docents-cavall': 'Mirem quins docents farien classe al matí i a la tarda d’un mateix dia segons el torn que li toca a cada classe, mantenint els dies actuals (1r i 2n al matí; cursos superiors, dobles titulacions i màsters a la tarda). La xifra principal cobreix el semestre. El gràfic agrupa el recompte de docents pel nombre de dies amb matí i tarda de la setmana indicada, sense mostrar identificadors.',
 }
 for id_, metode in METODES_PLANERS.items():
     TEXTOS[id_]['metode_planer'] = metode

@@ -70,7 +70,13 @@ with zona.container():
         with st.sidebar:
             if pagina.url_path in ('', 'avui', 'respostes'):
                 with st.expander('Opcions',expanded=False):
-                    semestre = st.selectbox('Semestre',[2,1],format_func=lambda s:'2n' if s == 2 else '1r',key='semestre')
+                    semestre_desat = st.session_state.get('semestre_triat', 2)
+                    semestre = st.selectbox('Semestre',[2,1], index=[2,1].index(semestre_desat),
+                        format_func=lambda s:'2n' if s == 2 else '1r', key='_selector_semestre')
+                    if semestre != semestre_desat:
+                        st.session_state.setmana_triada = None
+                    st.session_state.semestre_triat = semestre
+                    st.session_state.semestre = semestre
                     try:
                         disponibles = setmanes(semestre)
                     except Exception:
@@ -82,14 +88,18 @@ with zona.container():
                                  + ('d’' if dilluns.month in (4, 8, 10) else 'de ')
                                  + f'{mesos[dilluns.month - 1]} · {n} classes'
                                  for codi, dilluns, n in disponibles}
-                    setmana = st.selectbox('Setmana',[None]+list(etiquetes),
-                        format_func=lambda s:'Típica' if s is None else etiquetes[s],key=f'setmana-{semestre}')
+                    opcions_setmana = [None] + list(etiquetes)
+                    setmana_desada = st.session_state.get('setmana_triada')
+                    setmana = st.selectbox('Setmana', opcions_setmana,
+                        index=opcions_setmana.index(setmana_desada) if setmana_desada in opcions_setmana else 0,
+                        format_func=lambda s:'Típica' if s is None else etiquetes[s], key=f'setmana-{semestre}')
+                    if not error_setmanes:
+                        st.session_state.setmana_triada = setmana
                     st.session_state.setmana = setmana
                     st.caption('Setmana típica: la que té un nombre de classes normal, sense les setmanes de menys de 200 classes. '
                                '«Hi cap el matí?» fa servir la setmana amb més classes alhora si no en tries cap.')
             else:
-                st.session_state.semestre = 2
-                st.session_state.setmana = None
+                semestre, setmana = 2, None
                 st.caption('La proposta és del 2n semestre')
             if st.button('Actualitza les dades'):
                 actualitza_dades()
