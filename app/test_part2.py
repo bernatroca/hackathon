@@ -1073,9 +1073,10 @@ def test_padding_i_hora_de_10px_per_carrils_de_30_a_45px():
     compacte = re.search(r'@container p2-classe \(width < 180px\)\{(.*?)\n}', css, re.S)[1]
     assert '.resum-classe{padding-inline:0;}' in compacte
     curt = re.search(r'@container p2-classe \(width < 60px\)\{(.*?)\n}', css, re.S)[1]
-    assert '.abans-etiqueta{display:none;}' in curt
+    assert '.abans-etiqueta{display:block;white-space:nowrap;}' in curt
     petit = re.search(r'@container p2-classe \(width < 32px\)\{(.*?)\n}', css, re.S)[1]
     assert '.hora-inici,.p2-horari .classe .hora-fi,.p2-horari .classe .abans-hora{font-size:10px;letter-spacing:-.5px;}' in petit
+    assert '.abans-etiqueta{font-size:10px;letter-spacing:-1px;}' in petit
     assert '>dc<span class="abans-hora">11:30</span>' in html
     assert '<b>' + nom_assignatura_html(c.assignatura) + '</b>' in html
     assert '--mostra-nom-estret:-webkit-box;' in html
@@ -1111,10 +1112,10 @@ def test_hores_i_abans_compactes_sencers_en_classes_simultanies_duna_hora():
     for durada in (30, 45, 60, 90, 120):
         for nota in (False, True):
             p = pressupost_classe(durada, nota=nota, estret=True)
-            # Dues línies de 12px per a l’interval i dues per a dia/hora anteriors.
+            # Dues línies de 12px per a l’interval i tres per a Abans/dia/hora.
             files = 1 + bool(p['nom']) + p['nota']
             visible = (2 * p['padding'] + 24 + p['nom'] * 17.5
-                       + p['nota'] * 24 + (files - 1) * 3)
+                       + p['nota'] * 36 + (files - 1) * 3)
             assert visible == p['visible'] <= durada * 1.6 - 6
             assert p['ubicacio'] and not p['grup']
             if durada >= 60:
@@ -1122,6 +1123,31 @@ def test_hores_i_abans_compactes_sencers_en_classes_simultanies_duna_hora():
     # Una nota secundària cedeix espai al nom; «Abans» conserva la prioritat.
     especial = taula_html([replace(c, canvi_franja=False, abans='', relaxacions=('Nota inventada',))])
     assert '--mostra-nota-estret:none;' in especial
+
+
+def test_abans_visible_en_tres_linies_dins_duna_hora_en_carrils_estrets():
+    import re
+    from components.graella import Cella, pressupost_classe
+    c = Cella('INVENTADA-ABANS-VISIBLE', 'X', 870, 930, 'Q9/0001',
+              'Assignatura inventada amb un nom llarg', 'Problemes', 'PAUL/811',
+              True, False, abans='Abans: dimecres 11:30 · Q9/0002')
+    html = taula_html([c])
+    css = html.split('<style>', 1)[1].split('</style>', 1)[0]
+    estret = re.search(r'@container p2-classe \(width < 60px\)\{(.*?)\n}', css, re.S)[1]
+    assert '.abans-etiqueta{display:block;white-space:nowrap;}' in estret
+    assert not re.search(r'\.abans-etiqueta\{[^}]*display:none', css)
+    assert '<span class="abans-etiqueta">Abans </span>dc<span class="abans-hora">11:30</span>' in html
+    _, attrs = estructura_graella(html).classes[0]
+    assert '--mostra-nota-estret:block;' in attrs['style']
+    assert '--mostra-nom-estret:-webkit-box;' in attrs['style']
+    assert '--linies-nom-estret:1;' in attrs['style']
+    p = pressupost_classe(60, nota=True, estret=True)
+    assert p['nota'] and p['ubicacio'] and not p['grup'] and p['nom'] == 1
+    # Nom: 17.5px; interval: 2 × 12px; Abans/dia/hora: 3 × 12px;
+    # dos gaps de 3px i dos paddings de 2px: 87.5px dins els 90px útils.
+    alçada = 17.5 + 2 * 12 + 3 * 12 + 2 * 3 + 2 * 2
+    assert p['visible'] == alçada == 87.5
+    assert alçada <= p['caixa'] == 60 * 1.6 - 6 == 90
 
 
 def test_paraules_noms_atomiques_amb_abreviacio_marcada():

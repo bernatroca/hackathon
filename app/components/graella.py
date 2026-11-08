@@ -304,13 +304,14 @@ CSS = """
   .p2-horari .classe .nota-compacta,.p2-horari .classe .abans-hora{display:block;}
   .p2-horari .classe .abans-hora{white-space:nowrap;font-variant-numeric:tabular-nums;}
 }
-/* Sense l'etiqueta, dia curt i hora caben en dues línies fins a 30px
-   de carril (26px de contingut després dels 2px laterals). */
+/* Conservem sempre «Abans»: etiqueta, dia curt i hora en tres línies.
+   El pressupost reserva aquestes tres línies també en blocs d'una hora. */
 @container p2-classe (width < 60px){
-  .p2-horari .classe .abans-etiqueta{display:none;}
+  .p2-horari .classe .abans-etiqueta{display:block;white-space:nowrap;}
 }
 @container p2-classe (width < 32px){
   .p2-horari .classe .hora-inici,.p2-horari .classe .hora-fi,.p2-horari .classe .abans-hora{font-size:10px;letter-spacing:-.5px;}
+  .p2-horari .classe .abans-etiqueta{font-size:10px;letter-spacing:-1px;}
 }
 
 .p2-llegenda{display:flex;flex-wrap:wrap;gap:8px;padding:0;list-style:none;font:13px/1.35 system-ui;color:#1a1a18;}
@@ -341,8 +342,8 @@ def pressupost_classe(durada, *, nota=False, estret=False):
 
     En ample normal, cada secundària ocupa una línia. Prioritzem una línia
     de nom, l'hora i «Abans»; després ampliem el nom i afegim el grup.
-    En estret, reservem dues línies de 12px per l'hora i dues per
-    «Abans dc / 10:30» (o «dc / 10:30»), abans d'ampliar el nom.
+    En estret, reservem dues línies de 12px per l'hora i fins a tres per
+    «Abans / dc / 10:30», abans d'ampliar el nom.
     Altres notes s'amaguen.
     Els 6px de marge vertical es resten de l'àrea de la graella.
     """
@@ -351,8 +352,8 @@ def pressupost_classe(durada, *, nota=False, estret=False):
     disponible = max(0, caixa - 2 * padding)
     if estret:
         visible = 24  # Inici i final, sense el·lipsi.
-        mostra_nota = nota and visible + 24 + 3 <= disponible
-        visible += 27 if mostra_nota else 0
+        mostra_nota = nota and visible + 36 + 3 <= disponible
+        visible += 39 if mostra_nota else 0
         nom = min(3, max(0, int((disponible - visible - 3) // 17.5)))
         visible += nom * 17.5 + (3 if nom else 0)
         return dict(padding=padding, nom=nom, ubicacio=True, grup=False,
