@@ -68,6 +68,38 @@ es lliuren separadament i no es versionen. Aquest JSON aporta les estimacions d�
 el resum de la Junta. Sense el fitxer, consulteu el `junta.json` ja generat que inclou el ZIP;
 el resum HTML es pot obrir directament sense recalcular el model.
 
+## Preguntes des de la terminal
+
+Des de l'arrel del repositori, amb `REPTE_DIR` exportat. Totes s'han provat a `main`.
+
+**Part 2 · el verificador oficial.** Torna el veredicte de cada proposta:
+
+```bash
+python -m nivell2.verificacio 5.1   # 5.1 | VALIDA
+python -m nivell2.verificacio 5.2   # 5.2 | VALIDA AMB RELAXACIONS DECLARADES
+python -m nivell2.verificacio 5.3   # 5.3 | VALIDA AMB RELAXACIONS DECLARADES
+python -m nivell2.verificacio 5.4   # 5.4 | VALIDA AMB RELAXACIONS DECLARADES
+```
+
+L'ordre del jurat, amb l'horari d'avui (surt NO VALIDA) i amb la nostra 5.2:
+
+```bash
+cd "$REPTE_DIR"
+python -m horaris check paquet/proposta_partida.csv --semestre 2
+python -m horaris check "$OLDPWD/resultats/nivell2/5.2/proposta.csv" --semestre 2 --relaxacions "$OLDPWD/resultats/nivell2/5.2/relaxacions.csv"
+cd "$OLDPWD"
+```
+
+**Part 3 · preguntes a l'assistent.** Cal la clau de la IA al `.env`. Imprimeix la resposta i, a sota, les consultes que ha fet, per comprovar-les:
+
+```bash
+python -m app.xat.pregunta "Quantes aules queden lliures dimarts a les 10?" --proposta 5.2 --setmana típica
+python -m app.xat.pregunta "Quantes classes canvien d'aula amb els imprevistos del 5.3?" --proposta 5.3
+python -m app.xat.pregunta "El grau nou de 40 places hi cap? Quantes classes del 5.2 es mouen?" --proposta 5.4
+```
+
+Respostes de referència: 6 aules ordinàries lliures, respectant les dues de reserva; 65 classes canvien d'aula al CSV i el verificador en compta 64, perquè no hi compta la classe cancel·lada; el grau nou hi cap i no es mou cap classe del 5.2. Per executar una eina sense la IA: `python -m app.xat.pregunta --sense-ia --eina aules_lliures --args '{"dia":"dimarts","hora_ini":"10","durada_min":60,"places_min":0,"proposta":"5.2","setmana":"típica"}'`.
+
 ## Què hi ha
 
 | On | Què és |
@@ -90,6 +122,5 @@ el resum HTML es pot obrir directament sense recalcular el model.
 | --- | --- | --- |
 | Claude Code (app d'escriptori de Claude) | Claude Opus 5.5 (`claude-opus-5-5`) | Tres sessions d'orquestració (parts 1, 2 i 3) i subagents revisors en mode només lectura. Preguntar a l'equip, escriure especificacions, repartir tasques, revisar, unir branques, fer commits, provar l'app al navegador i escriure documents i el diari. |
 | Codex (compte ChatGPT de l'equip) | `gpt-6.1-sol`, esforç *medium* (alguns reintents i revisions, *high*) | Subagents que programen per rols (dades, backend, frontend), cadascun a la seva branca. També una revisió com a jurat i mentor (només lectura). |
-| quiver.ai, el LLM de l'event (API Responses, `https://api.quiver.ai/v1`) | `arrow-2-telos` (principal) i `arrow-2` (reserva) | L'assistent de la part 3: respon les preguntes de Gestió Acadèmica cridant eines nostres (horari d'un grup, aules lliures, xifres de la part 1, resultats 5.1–5.4, SQL de lectura i prova de canvis amb el verificador). Les xifres surten de les eines; les consultes es fan al servidor però no es mostren a la persona. |
+| quiver.ai, el LLM de l'event (API Responses, `https://api.quiver.ai/v1`) | `arrow-2-telos` (principal) i `arrow-2` (reserva) | L'assistent de la part 3: respon les preguntes de Gestió Acadèmica cridant eines nostres (horari d'un grup, aules lliures, xifres de la part 1, resultats 5.1–5.4, SQL de lectura i prova de canvis amb el verificador). Les xifres surten de les eines, i el servidor comprova cada xifra, aula i sessió de la resposta abans d'enviar-la. Sota cada resposta, «Comprova-ho» mostra les consultes fetes. |
 
-Guia de l'equip: https://claude.ai/artifact/VeteakMwu7Rejbfu4uDqzL
