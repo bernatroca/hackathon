@@ -94,7 +94,9 @@ def test_limit(monkeypatch):
     monkeypatch.setattr(s, '_trossos_api', api)
     resultat = events()
     assert api.call_count == 6
-    assert 'No he pogut acabar' in resultat[-3]['tros']
+    assert s._LIMIT_VOLTES['ca'] in [e.get('tros') for e in resultat]
+    assert sum('eina' in e for e in resultat) == 5
+    assert api.call_args.args[0]['sense_eines'] is True
     assert resultat[-1]['fi']
 
 
@@ -293,12 +295,12 @@ def test_arrenca_altre_error_bind(monkeypatch):
     (b'{"error":"sense missatge"}', ''),
 ])
 def test_detall_http_ia(monkeypatch, cos, detall):
-    error = s.urllib.error.HTTPError('http://ia.invalid', 404, 'Not Found', {}, io.BytesIO(cos))
+    error = s.urllib.error.HTTPError('http://ia.invalid', 400, 'Bad Request', {}, io.BytesIO(cos))
     monkeypatch.setattr(s.urllib.request, 'urlopen', Mock(side_effect=error))
     with pytest.raises(s.ErrorXat) as exc:
         s.flux(conversa())
     assert exc.value.estat == 502
-    assert exc.value.missatge == 'La IA ha respost HTTP 404' + (f': {detall}' if detall else '.')
+    assert exc.value.missatge == 'La IA ha respost HTTP 400' + (f': {detall}' if detall else '.')
     assert 'secret-de-prova' not in exc.value.missatge
 
 
@@ -738,3 +740,102 @@ def test_b12_llengua_ultima_pregunta_i_limit(monkeypatch, pregunta, llengua, api
     monkeypatch.setattr(s, '_trossos_api', lambda *a: iter([('tools', [crida()])]))
     resultat = [json.loads(e[6:]) for e in s.flux(missatges)]
     assert s._LIMIT_VOLTES[llengua] in [e.get('tros') for e in resultat]
+
+
+def test_f2_b1_d1_totes_les_preguntes_del_widget_en_catala():
+    import ast
+    # Llegeix les constants sense importar Streamlit ni executar el widget.
+    arbre = ast.parse(s.AQUI.joinpath('widget.py').read_text(encoding='utf-8'))
+    constants = {}
+    for node in arbre.body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1:
+            target = node.targets[0]
+            if isinstance(target, ast.Name) and target.id in ('PREGUNTES', 'PREGUNTA_DEMO', 'PER_DEFECTE'):
+                constants[target.id] = eval(compile(ast.Expression(node.value), '<constants widget>', 'eval'),
+                                            {'__builtins__': {}}, constants)
+    preguntes = [*constants['PER_DEFECTE'],
+                 *(p for grup in constants['PREGUNTES'].values() for p in grup)]
+    assert len(preguntes) >= 16
+    for pregunta in preguntes:
+        assert s._llengua([{'role': 'user', 'content': pregunta}]) == 'ca', pregunta
+
+
+@pytest.mark.parametrize('pregunta,llengua', [
+    ('Quantes classes hi ha dilluns a la tarda?', 'ca'),
+    ('Hi ha classes sense aula?', 'ca'),
+    ('Quines classes afecta l’avaria de la Q1/1003 el 10/03?', 'ca'),
+    ('Hay alguna aula libre el lunes a las 10 para 60 personas?', 'es'),
+    ('Who teaches group 21?', 'en'),
+    ('Which classes are free?', 'en'),
+    ('Can Roca té classes dilluns?', 'ca'),
+    ('classes', 'ca'),
+    ('grup group', 'ca'),
+])
+def test_f2_b1_d1_llengua(pregunta, llengua):
+    assert s._llengua([{'role': 'user', 'content': pregunta}]) == llengua
+
+
+@pytest.mark.parametrize('api', ['chat', 'responses'])
+def test_b10_darrera_peticio_sense_eines_i_amb_resultats(monkeypatch, api):
+    monkeypatch.setenv('IA_API', api)
+    peticions = []
+    executa = Mock(return_value={'ok': True, 'resultat': {'total': 7}})
+    disponibles = s._eines()
+    disponibles.executa = executa
+    monkeypatch.setattr(s, '_eines', lambda: disponibles)
+    def obre(req, **kwargs):
+        cos = json.loads(req.data)
+        peticions.append(cos)
+        if len(peticions) == 6:
+            blocs = text_responses() if api == 'responses' else [
+                {'choices': [{'delta': {'content': 'Resposta final'}, 'finish_reason': 'stop'}]}]
+        elif api == 'responses':
+            blocs = [{'type': 'response.output_item.done', 'output_index': 0, 'item': {
+                'type': 'function_call', 'call_id': f'c{len(peticions)}',
+                'name': 'consulta', 'arguments': '{}'}},
+                {'type': 'response.completed', 'response': {'status': 'completed'}}]
+        else:
+            blocs = [{'choices': [{'delta': {'tool_calls': [crida(id=f'c{len(peticions)}')]},
+                                   'finish_reason': 'tool_calls'}]}]
+        return resposta_sse(blocs)
+    monkeypatch.setattr(s.urllib.request, 'urlopen', obre)
+    resultat = events()
+    assert executa.call_count == 5
+    assert len(peticions) == 6
+    assert 'tools' not in peticions[-1] and 'tool_choice' not in peticions[-1]
+    if api == 'responses':
+        assert sum(m.get('type') == 'function_call_output' for m in peticions[-1]['input']) == 5
+    else:
+        assert sum(m['role'] == 'tool' for m in peticions[-1]['messages']) == 5
+    assert any(e.get('tros') for e in resultat)
+    assert s._LIMIT_VOLTES['ca'] not in [e.get('tros') for e in resultat]
+    assert resultat[-1]['fi']
+
+
+@pytest.mark.parametrize('codi', [401, 403, 404])
+def test_b11_configuracio_error_424(monkeypatch, codi):
+    def obre(req, **kwargs):
+        raise s.urllib.error.HTTPError(req.full_url, codi, 'Error', {}, io.BytesIO(b'{}'))
+    monkeypatch.setattr(s.urllib.request, 'urlopen', obre)
+    with pytest.raises(s.ErrorXat) as exc:
+        s.flux(conversa())
+    assert exc.value.estat == 424
+    assert 'no està ben configurat' in str(exc.value)
+    assert 'Torna' not in str(exc.value)
+
+
+def test_b11_configuracio_encara_prova_reserva(monkeypatch):
+    monkeypatch.setenv('IA_RESERVA_MODEL', 'reserva')
+    def obre(req, **kwargs):
+        if json.loads(req.data)['model'] != 'reserva':
+            raise s.urllib.error.HTTPError(req.full_url, 401, 'Error', {}, io.BytesIO(b'{}'))
+        return resposta_sse(text_responses())
+    monkeypatch.setattr(s.urllib.request, 'urlopen', obre)
+    assert events()[-1]['fi']
+
+
+def test_b14_instruccions_reconsulta_mateixa_eina():
+    text = s.instruccions()
+    assert 'MATEIXA eina' in text and 'MATEIXOS paràmetres' in text
+    assert '(torna a cridar horari_grup amb els mateixos paràmetres' in text
+    assert '(torna a cridar aules_lliures amb la mateixa proposta' in text
