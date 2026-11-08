@@ -208,9 +208,9 @@ preguntes.mostra()
         self.assertNotIn('El més ajustat:',html)
         self.assertIn('Matí 68 % · Tarda 81 %',text(mapa['hi-cap-mati'])['frase'])
         marge = text(mapa['marge-grau-nou'])
-        self.assertEqual(marge['etiqueta'],'Pendent de validar')
+        self.assertEqual(marge['etiqueta'],'Pendent de comprovar')
         self.assertEqual(marge['estat'],'ambre')
-        self.assertIn('Pendent de validar',html)
+        self.assertIn('Pendent de comprovar',html)
         app.button(key='obre-hores-aula').click().run(timeout=90)
         self.comprova(app)
         detall = '\n'.join(m.value for m in app.markdown)
@@ -229,7 +229,7 @@ preguntes.mostra()
             self.assertIsNone(re.search(r'\b(cohort|PLAB|llindar|cota|heretades|bloc)\b',info['metode_planer'],re.I))
         marge = copy.deepcopy(una('marge-grau-nou'))
         marge.extra.pop('estat_provisional',None)
-        self.assertEqual(text(marge)['etiqueta'],'Pendent de validar')
+        self.assertEqual(text(marge)['etiqueta'],'Pendent de comprovar')
 
     def test_figures_sense_manipulacio(self):
         from servei import totes, versio_registre
@@ -319,8 +319,8 @@ preguntes.mostra()
         self.assertTrue(any('estat verd' in m.value and 'Hi cap' in m.value for m in hero.markdown))
         caixa = next(b for b in app.get('flex_container') if b.proto.id.endswith('targeta-marge-grau-nou'))
         html = '\n'.join(m.value for m in caixa.markdown)
-        self.assertIn('317 sessions noves: 29 canvien d’hora', html)
-        self.assertIn('0 classes de l’horari proposat es mouen', html)
+        self.assertIn('317 sessions: 29 sessions noves fora de la seva franja original', html)
+        self.assertIn('0 classes del 5.2 mogudes', html)
         self.assertIn('Incorporar-lo a l’horari proposat: ja hi cap.', html)
         self.assertNotIn('sense moure cap classe', html)
         from components.vistes import targeta_compacta
@@ -593,6 +593,44 @@ with patch('pagines.preguntes.totes',return_value=respostes_inventades()), patch
         self.assertEqual(len([b for b in app.button if b.label == 'Com ho sabem →']),len(PORTADA))
         app.selectbox[1].select_index(1).run(timeout=90)
         self.comprova(app)
+
+
+class TestValidacioPart2Inventada(unittest.TestCase):
+    def test_sha_i_recomptes_del_servei(self):
+        import hashlib
+        import json
+        import tempfile
+        import servei
+        from components.vistes import frase_grau
+        with tempfile.TemporaryDirectory() as temporal:
+            arrel = Path(temporal)
+            carpeta = arrel / '5.4'
+            carpeta.mkdir()
+            proposta = b'sessio,aula\nINVENTADA,AULA-INVENTADA\n'
+            (carpeta / 'proposta.csv').write_bytes(proposta)
+            informe = dict(veredicte='VALIDA', context=dict(
+                proposta_sha256=hashlib.sha256(proposta).hexdigest()))
+            (carpeta / 'informe.json').write_text(json.dumps(informe))
+            (carpeta / 'resum.json').write_text(json.dumps(dict(
+                resposta=1, sessions_grau_nou_collocades=235,
+                sessions_grau_nou_fora_franja=29, sessions_52_mogudes=0)))
+            with patch.object(servei, 'RESULTATS_PART2', arrel):
+                t = grau_inventat()
+                t.extra['validat_part2'] = servei.validacio_part2('5.4')
+                self.assertEqual(t.extra['validat_part2']['sessions_grau_nou_fora_franja'], 29)
+                self.assertEqual(t.extra['validat_part2']['sessions_52_mogudes'], 0)
+                # La presentació no torna a llegir el resum.
+                with patch.object(Path, 'read_text', side_effect=AssertionError('Lectura duplicada')):
+                    info = text(t)
+                    frase = frase_grau(t, info)
+                self.assertIn('235 sessions', frase)
+                self.assertIn('29 sessions noves fora de la seva franja original', frase)
+                self.assertIn('0 classes del 5.2 mogudes', frase)
+                (carpeta / 'proposta.csv').write_bytes(proposta + b'CANVIADA,AULA\n')
+                t.extra['validat_part2'] = servei.validacio_part2('5.4')
+                info = text(t)
+                self.assertNotEqual(info['estat'], 'verd')
+                self.assertEqual(info['etiqueta'], 'Pendent de comprovar')
 
 
 if __name__ == '__main__':
