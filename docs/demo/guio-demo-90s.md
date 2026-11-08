@@ -1,6 +1,6 @@
 # Vídeo demo de 90 s per a la presentació
 
-Vídeo de la diapositiva 5 i de la carpeta `demo/` de l'entrega: [`demo-90s.mp4`](demo-90s.mp4), **94,5 s**, gravat amb el codi de `main` 0556bc7. Tots els rètols, amb imatge i temps: [`retols-demo-90s.html`](retols-demo-90s.html). Segueix [`docs/GUIO-VIDEO-DEMO.md`](../GUIO-VIDEO-DEMO.md).
+Vídeo de la diapositiva 5 i de la carpeta `demo/` de l'entrega: [`demo-90s.mp4`](demo-90s.mp4), **82,1 s**, gravat amb el codi de `main` 0556bc7. Tots els rètols, amb imatge i temps: [`retols-demo-90s.html`](retols-demo-90s.html). Segueix [`docs/GUIO-VIDEO-DEMO.md`](../GUIO-VIDEO-DEMO.md).
 
 - **Un sol pla continu de l'app de debò,** arrencada just abans de gravar amb el codi de `main`. La finestra de terminal entra i surt amb una fosa de 0,45 s.
 - **El cursor es mou a poc a poc i el desplaçament és suau.** Es veu canviar la pantalla a cada clic: el detall que s'obre, un altre grup que es redibuixa, «Mira l'exemple», la pastilla «Canvia», el detall d'una classe, l'imprevist que filtra la taula la resposta de l'assistent i el seu «Comprova-ho».
@@ -20,8 +20,7 @@ Vídeo de la diapositiva 5 i de la carpeta `demo/` de l'entrega: [`demo-90s.mp4`
 | Imprevistos | Resum dels quatre imprevistos i «Mira l'exemple» | Nivell 2 · 5.3 Imprevistos | «Quatre imprevistos alhora, pocs canvis». «Aula avariada un dia: 6 classes canvien d'aula» · mateix dia i hora |
 | Junta | Les quatre targetes | Nivell 2 · Resum per a la Junta (5.2 i 5.4) | «La Junta decideix amb una pàgina» · matí 15 de 19, tarda 18 de 19, i el grau nou de 40 places també hi cap |
 | Assistent | Pregunta escrita i «Comprova-ho» obert | Nivell 3 · Intel·ligència artificial | «Pregunta amb les teves paraules» · respon només amb dades de l'horari, i a «Comprova-ho» hi ha la consulta i les aules que ha trobat |
-| Comprova-ho tu | Pàgina «Comprova-ho tu» (`/comprova`), botó «Executa» del verificador de la 5.2 | Nivell 2 · Comprova-ho tu | «Les ordres del terminal, des de l'app» · un botó per comprovació: es veu l'ordre, el veredicte del verificador oficial i la sortida real |
-| Tancament | Torna a «Com estem avui» i fosa a negre | — | «Espais de l'Escola · Equip Neo» |
+| Tancament | Fosa de 0,4 s a «Com estem avui» i fosa a negre | — | «Espais de l'Escola · Equip Neo» |
 
 ## Les ordres de la terminal
 
@@ -35,7 +34,6 @@ python -m horaris check paquet/proposta_partida.csv --semestre 2
 python -m horaris check ../../resultats/nivell2/5.2/proposta.csv --semestre 2 --relaxacions ../../resultats/nivell2/5.2/relaxacions.csv
 ```
 
-Al final, la pàgina «Comprova-ho tu» de l'app executa la mateixa ordre del verificador per a la 5.2 amb un botó. Hi surten l'ordre, el veredicte i la sortida.
 
 Quan la sortida és més llarga que la pantalla, el terminal puja suaument fins a l'ordre perquè es llegeixi el veredicte.
 
@@ -51,3 +49,13 @@ python docs/demo/eines/grava_demo90.py
 - [`eines/grava_demo90.py`](eines/grava_demo90.py): el recorregut, amb els rètols i les ordres.
 - **Esperes:** les de la IA i de les càrregues de pàgina es veuen, però al muntatge duren menys: com a molt 0,9 s per a la IA i 0,5 s per a una pàgina.
 - **Control de l'assistent:** la gravació només es dona per bona si el nombre d'aules de la resposta és el mateix que el d'aules que llista «Comprova-ho», i la resposta no diu «No ho puc». Si no, es torna a gravar, fins a 4 vegades.
+
+## Muntatge de la versió lliurada
+
+La presa es va gravar amb una pàgina «Comprova-ho tu» que l'equip va decidir no ensenyar. El tram s'ha tret de la presa sense tornar a gravar. La resta del vídeo és la presa tal com es va gravar:
+
+- **Tall:** de 80,6 s a 92,6 s de la presa, amb una fosa de 0,4 s de l'assistent a la portada.
+- **Menú lateral:** l'entrada del menú s'ha tapat amb el fons del mateix menú.
+- **Durada final:** 82,1 s.
+
+El gravador (`eines/grava_demo90.py`) encara té aquest tram. Si es torna a gravar quan la pàgina ja no sigui a l'app, cal treure el tram «Comprova-ho tu» del recorregut.
