@@ -167,7 +167,9 @@ def valida(entrada: object) -> list[dict]:
 # Responses per defecte; IA_API=chat conserva Chat Completions.
 
 class ErrorIA(Exception):
-    pass
+    def __init__(self, missatge, estat=502):
+        super().__init__(missatge)
+        self.estat = estat
 
 
 def _input_responses(missatges):
@@ -202,7 +204,7 @@ def _trossos_api(p: dict, missatges: list[dict]) -> Iterator[tuple[str, object]]
                    input=_input_responses(missatges), max_output_tokens=4000)
     else:
         cos["messages"] = missatges
-    disponibles = _eines()
+    disponibles = None if p.get('sense_eines') else _eines()
     if disponibles is not None and disponibles.EINES:
         tools = disponibles.EINES
         if responses:
@@ -237,6 +239,9 @@ def _trossos_api(p: dict, missatges: list[dict]) -> Iterator[tuple[str, object]]
                     time.sleep(2)
                     continue
                 raise ErrorIA("La IA està saturada; torna-ho a provar d’aquí a uns segons.") from None
+            if e.code in (401, 403, 404):
+                raise ErrorIA("L’assistent no està ben configurat (clau o model del fitxer .env). Avisa qui manté l’app.",
+                              estat=424) from None
             raise ErrorIA(_sense_claus(
                 f"La IA ha respost HTTP {e.code}" + (f": {detall}" if detall else ".")
             )) from None
@@ -430,16 +435,29 @@ def _llengua(missatges):
     text = ultima if isinstance(ultima, str) else " ".join(
         p.get("text", "") for p in ultima if p.get("type") == "text")
     text = re.sub(r"<(pantalla|context)>.*?</\1>", "", text, flags=re.S).lower()
-    castella = len(re.findall(r"[¿¡ñ]|\b(?:qué|cuántas?|cuántos?|aulas|clases|dónde|horario|tiene|quiero|puedes)\b", text))
-    angles = len(re.findall(r"\b(?:what|which|where|when|how|rooms?|free|classes|schedule|please|available|can|the)\b", text))
-    return 'es' if castella > angles else 'en' if angles else 'ca'
+    paraules = set(re.findall(r'\w+', text))
+    catala = len(paraules & set(('quantes quants quines quins què quina quin aula aules hi ha té tenen '
+        'dilluns dimarts dimecres dijous divendres matí tarda lliures lliure grup avui proposta '
+        'aquesta aquest canvien canvis alumnes places sense més com ho saps').split()))
+    castella = len(paraules & set(('qué cuántas cuántos cuál cuáles cuantas cuantos cual cuales aulas '
+        'clases dónde donde horario tiene quiero puedes libre libres hay lunes martes miércoles '
+        'miercoles jueves viernes personas grupo clase enseña ensena').split()))
+    angles = len(paraules & set(('what which who where when how many room rooms free schedule please '
+        'available teaches group monday tuesday wednesday thursday friday students seats').split()))
+    if re.search(r'[¿¡ñ]', text):
+        return 'es'
+    if castella >= 2 and castella > max(catala, angles):
+        return 'es'
+    if angles >= 2 and angles > max(catala, castella):
+        return 'en'
+    return 'ca'
 
 
 _IDIOMES = {'ca': 'Respon en català.', 'es': 'Respon en castellà.', 'en': 'Answer in English.'}
 _LIMIT_VOLTES = {
-    'ca': 'No he pogut acabar la consulta en sis voltes. Pots concretar la pregunta?',
-    'es': 'No he podido terminar la consulta en seis intentos. Prueba una pregunta más concreta.',
-    'en': 'I could not finish the query in six attempts. Try a more specific question.',
+    'ca': 'No he pogut trobar la resposta amb les dades. Pots concretar més la pregunta?',
+    'es': 'No he podido encontrar la respuesta con los datos. ¿Puedes concretar más la pregunta?',
+    'en': 'I could not find the answer in the data. Could you make the question more specific?',
 }
 
 
@@ -449,10 +467,10 @@ def _trossos(p: dict, missatges: list[dict]):
         return
     llengua = _llengua(missatges)
     conversa = [*missatges, {"role": "system", "content": _IDIOMES[llengua]}]
-    for _ in range(6):
+    for i in range(6):
         crides, contingut = [], []
         final = {"tallada": False, "model": p["model"]}
-        for tipus, valor in _trossos_api(p, conversa):
+        for tipus, valor in _trossos_api({**p, 'sense_eines': True} if i == 5 else p, conversa):
             if tipus == "tools":
                 crides.extend(valor)
             elif tipus == "tros":
@@ -460,6 +478,11 @@ def _trossos(p: dict, missatges: list[dict]):
                 yield tipus, valor
             elif tipus == "fi":
                 final = valor
+        if i == 5:
+            if not contingut:
+                yield 'tros', _LIMIT_VOLTES[llengua]
+            yield 'fi', final
+            return
         if not crides:
             yield "fi", final
             return
@@ -512,12 +535,12 @@ def flux(missatges: list[dict]) -> Iterator[str]:
     try:
         primer = next(trossos)
     except (ErrorIA, StopIteration) as exc:
-        raise ErrorXat(502, str(exc) or "Cap IA configurada.") from None
+        raise ErrorXat(getattr(exc, 'estat', 502), str(exc) or "Cap IA configurada.") from None
     return _segueix(primer, trossos)
 
 
 def _amb_reserva(missatges):
-    error = "Cap IA configurada."
+    error = ErrorIA("Cap IA configurada.")
     for p in proveidors():
         escrit = False
         try:
@@ -527,10 +550,10 @@ def _amb_reserva(missatges):
                 yield tipus, valor
             return
         except ErrorIA as exc:
-            error = _sense_claus(str(exc)) or "No s’ha pogut obtenir una resposta de la IA."
+            error = ErrorIA(_sense_claus(str(exc)) or "No s’ha pogut obtenir una resposta de la IA.", exc.estat)
             if escrit:
-                raise ErrorIA(error) from None
-    raise ErrorIA(error)
+                raise error from None
+    raise error
 
 
 def _filtra_consultes(consultes):
