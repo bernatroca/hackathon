@@ -1000,7 +1000,7 @@ assert.equal(host.listeners.resize.size,1);
         pagines = [n for n in ast.walk(crida) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == 'Page']
         titols = [next(k.value.value for k in n.keywords if k.arg == 'title') for n in pagines]
         assert 'Horari proposat' in titols
-        assert [k.value.value for n in pagines for k in n.keywords if k.arg == 'url_path'] == ['avui', 'respostes', 'part2', 'imprevistos', 'junta']
+        assert [k.value.value for n in pagines for k in n.keywords if k.arg == 'url_path'] == ['avui', 'respostes', 'part2', 'imprevistos', 'junta', 'comprova']
 
 
 def test_setmana_densa_cap_en_escriptori_i_dies_iguals():

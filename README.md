@@ -22,6 +22,8 @@ export REPTE_DIR="$PWD/repte/repte-horaris-escola"
 streamlit run app/app.py          # obre http://localhost:8501
 ```
 
+La primera vegada, la portada pot trigar un minut a sortir mentre es carreguen les dades; si queda en blanc, espereu i recarregueu la pàgina.
+
 Per comprovar-ho tot:
 
 ```bash
@@ -69,6 +71,8 @@ el resum de la Junta. Sense el fitxer, consulteu el `junta.json` ja generat que 
 el resum HTML es pot obrir directament sense recalcular el model.
 
 ## Preguntes des de la terminal
+
+Les mateixes comprovacions es poden fer des de l'app, sense terminal: la pàgina «Comprova-ho tu» (menú «La proposta») té un botó per a cada ordre (verificador oficial d'avui i de 5.1–5.4, `nivell1.comprova` i preguntes a l'Assistent) i mostra l'ordre i la sortida.
 
 Des de l'arrel del repositori, amb `REPTE_DIR` exportat. Totes s'han provat a `main`.
 
