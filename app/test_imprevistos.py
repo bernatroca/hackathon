@@ -45,7 +45,8 @@ def test_pagina_resum_quatre_targetes_i_taula_llegible():
     html = contingut(app)
     assert [t.value for t in app.title] == ['Imprevistos']
     assert 'Comprovat amb el verificador oficial' in html
-    assert 'en 1,24 segons' in html
+    assert 'Temps de càlcul: 1,24 segons' in html
+    assert 'segons' not in imprevistos.resum_html(dades_inventades()['resum'])
     assert html.count('<article class="imp-targeta">') == 4
     assert html.count('Resolt amb excepció') == 1
     assert html.count('class="estat verd"') == 4  # Veredicte i tres targetes.
@@ -200,9 +201,10 @@ def test_filtres_sense_canvis_diuen_cap():
 def test_temps_un_segon_en_singular():
     dades = dades_inventades()
     dades['resum']['temps_s'] = 1
-    html = contingut(obre(dades))
-    assert 'en 1,00 segon<' in html
-    assert 'en 1,00 segons' not in html
+    app = obre(dades)
+    detall = next(e for e in app.expander if e.label == 'Detall tècnic')
+    assert any(m.value == 'Temps de càlcul: 1,00 segon' for m in detall.markdown)
+    assert 'segon' not in imprevistos.resum_html(dades['resum'])
 
 
 def test_informe_ha_de_correspondre_al_csv(tmp_path):
@@ -497,3 +499,17 @@ def test_tria_semestre_i_setmana_sobreviu_pagines_de_la_proposta(tmp_path):
         assert app.selectbox[1].value == '2027-W07'
         assert app.session_state['semestre'] == 1
         assert app.session_state['setmana'] == '2027-W07'
+
+
+def test_temps_nomes_al_detall_tecnic_tancat():
+    for temps, text in ((28.53, '28,53 segons'), (1, '1,00 segon'), (None, 'Temps no disponible')):
+        dades = dades_inventades()
+        dades['resum']['temps_s'] = temps
+        app = obre(dades)
+        detall = next(e for e in app.expander if e.label == 'Detall tècnic')
+        assert not detall.proto.expanded
+        assert any(m.value == 'Temps de càlcul: ' + text for m in detall.markdown)
+        nodes_detall = {id(node) for node in detall}
+        assert all('Temps de càlcul' not in m.value and text not in m.value
+                   for m in app.markdown if id(m) not in nodes_detall)
+        assert 'temps de càlcul' not in imprevistos.resum_html(dades['resum'])
