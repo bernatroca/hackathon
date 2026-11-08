@@ -41,7 +41,7 @@ CSS = """<style>
 .st-key-imp-pagina .imp-intro{color:var(--tinta-2);margin:0;}
 .st-key-imp-pagina .imp-resum{background:var(--targeta);border:1px solid var(--linia);border-radius:16px;padding:20px;}
 .st-key-imp-pagina .imp-resum p{margin:4px 0 16px;color:var(--tinta-2);}
-.st-key-imp-pagina .imp-xifres{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;}
+.st-key-imp-pagina .imp-xifres{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;}
 .st-key-imp-pagina .imp-xifres b{display:block;font-size:30px;line-height:1.2;}
 .st-key-imp-pagina .imp-xifres span{font-size:15px;color:var(--tinta-2);}
 .st-key-imp-pagina .imp-targetes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;}
@@ -238,16 +238,12 @@ def suport(n):
 
 def resum_html(resum):
     color, text = veredicte(resum)
-    temps = resum.get('temps_s')
-    durada = (f'en {temps:.2f} {"segon" if temps == 1 else "segons"}'.replace('.', ',')
-              if temps is not None else 'Temps no disponible')
     xifres = []
     for clau, canvi in (('canvis_aula_vs_referencia', 'd’aula'),
                         ('canvis_franja_vs_referencia', 'de dia o hora')):
         n = resum[clau]
         etiqueta = ('classe canvia' if n <= 1 else 'classes canvien') + ' ' + canvi
         xifres.append((quantitat(n), etiqueta))
-    xifres.append((durada, 'temps de càlcul'))
     excepcions = (' Amb les excepcions declarades.'
                   if resum.get('veredicte') == 'VALIDA AMB RELAXACIONS DECLARADES' else '')
     oficials = resum.get('canvis_aula_oficials')
@@ -398,6 +394,10 @@ def mostra(dades=None):
                 st.info('No hi ha classes que canviïn amb aquest filtre.')
             st.caption('Les aules tancades afecten les dates indicades; el creixement del grup i les classes que li deixen lloc afecten tot el semestre.')
             with st.expander('Detall tècnic', expanded=False):
+                temps = resum.get('temps_s')
+                durada = (f'{temps:.2f} {"segon" if temps == 1 else "segons"}'.replace('.', ',')
+                          if temps is not None else 'Temps no disponible')
+                st.write('Temps de càlcul: ' + durada)
                 st.write('Excepcions declarades per motiu, incloses les que ja tenia l’horari proposat:')
                 relaxacions = resum.get('relaxacions_per_motiu', [])
                 if relaxacions:

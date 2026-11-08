@@ -36,6 +36,24 @@ def dades():
             'com_ho_hem_calculat': 'Segon semestre; canvi de dia, hora o aula.'}
 
 
+@pytest.fixture(autouse=True)
+def resultats_inventats(tmp_path, monkeypatch):
+    # També les consultes auxiliars del grau nou queden dins l’escenari inventat.
+    monkeypatch.setattr(junta, 'RESULTATS', tmp_path)
+    monkeypatch.setattr(junta, 'SORTIDA', tmp_path)
+
+
+def html_fitxes(app):
+    return ''.join(m.value for m in app.markdown if '<section class="junta-fitxa">' in m.value)
+
+
+def text_visible(app):
+    plegats = {id(node) for expander in app.expander for node in expander}
+    return '\n'.join(node.value for node in app
+                     if id(node) not in plegats and node.type in ('markdown', 'caption', 'subheader', 'info')
+                     and not node.value.startswith('<style>'))
+
+
 def obre(d, opcions):
     with patch.object(junta, 'disponibles', return_value=opcions), patch.object(junta, 'carrega', return_value=d):
         app = AppTest.from_string("""
@@ -52,8 +70,8 @@ junta.mostra()
 def test_junta_obre_sense_errors_i_zero_sense_grafic():
     app = obre(dades(), ['Avui', '5.1', '5.2', '5.3', '5.4'])
     assert app.selectbox[0].value == '5.2'
-    assert app.selectbox[0].options == ['Avui', 'Aules assignades (5.1)', 'Torns nous (5.2)',
-                                       'Resoldre els imprevistos (5.3)', 'Incorporar el grau nou (5.4)']
+    assert app.selectbox[0].options == ['Avui', 'Aules assignades', 'Torns nous',
+                                       'Resoldre els imprevistos', 'Incorporar el grau nou']
     assert any('Cap curs canvia' in m.value for m in app.markdown)
     assert not app.get('plotly_chart')
     assert app.get('download_button')
@@ -102,7 +120,8 @@ def test_excepcions_agrupades_i_pic_vermell():
         torn_requerit='mati', motiu='Motiu compartit', prova='2027-03-08 15:00',
         prova_impossibilitat=None) for i in range(2)]
     app = obre(d, ['Avui'])
-    assert any('estat vermell' in m.value for m in app.markdown)
+    assert '>No</div>' in html_fitxes(app)
+    assert 'calen 22 aules de 19' in text_visible(app)
     assert any(e.label == 'Detall tècnic' for e in app.expander)
     assert len(app.dataframe[0].value) == 2
 
@@ -180,24 +199,21 @@ def test_textos_principals_sense_codis_i_detall_tancat():
     assert 'regla de torn laboratori' in detall.dataframe[-1].value.to_string(index=False)
 
 
-def test_quatre_fitxes_i_colors():
-    for n, color, text in ((19, 'ambre', 'Sense marge'), (18, 'verd', 'Hi cap'),
-                           (17, 'verd', 'Hi cap'), (13, 'verd', 'Hi cap'),
-                           (21, 'vermell', 'Falten aules')):
+def test_tres_fitxes_essencials_i_estats_planers():
+    for n, resposta in ((19, 'Sí'), (18, 'Sí'), (17, 'Sí'), (13, 'Sí'), (21, 'No')):
         d = dades()
         d['pics']['mati']['pitjor'] = dict(d['pics']['mati']['pitjor'], classes=n)
         app = obre(d, ['Avui', '5.2'])
-        html = next(m.value for m in app.markdown if '<div class="junta-fitxes">' in m.value)
-        assert html.count('<section class="junta-fitxa">') == 4
-        for titol in ('Matí, hora més plena', 'Tarda, hora més plena', 'Curs més afectat', 'Excepcions noves als torns'):
+        html = html_fitxes(app)
+        assert html.count('<section class="junta-fitxa">') == 3
+        for titol in ('Hi cabem a l’hora més plena?', 'Quantes classes queden fora del seu torn?', 'Quin curs canvia més?'):
             assert titol in html
-        assert f'{n} <small>de 19 aules' in html
-        assert f'estat {color}' in html and text in html
-        assert html.count('L&#x27;aulari té 21 aules ordinàries; en guardem 2 de reserva per a imprevistos.') == 1
-        assert ('Si una aula falla, cal fer servir la reserva.' in html) == (n == 19)
-        assert 'Va just' not in html
-        assert 'grid-template-columns:repeat(auto-fit,minmax(200px,1fr))' in junta.ESTIL
-    assert junta.ocupacio(19, 19)[2] == '#e8820c'
+        assert f'Matí {n} de 19 aules' in html
+        assert f'>{resposta}</div>' in html
+        assert 'Per saber-ho' in html
+        assert 'Cal decidir' in html if n > 19 else 'Resolt amb la proposta' in html
+        assert 'aules ordinàries' not in html
+        assert len([b for b in app.button if b.label.startswith('Mira ')]) == 3
     assert '#9a5200' in junta.ESTIL
 
 
@@ -207,9 +223,10 @@ def test_marge_al_detall_i_fitxes_amb_inventari_diferent():
     for torn in d['pics'].values():
         torn['pitjor'] = dict(torn['pitjor'], classes=7, aules_disponibles=7)
     app = obre(d, ['Avui'])
-    html = next(m.value for m in app.markdown if '<div class="junta-fitxes">' in m.value)
-    assert html.count('9 aules ordinàries') == 1
-    assert html.count('Sense marge') == 2
+    html = html_fitxes(app)
+    assert html.count('7 de 7 aules') == 2
+    calcul = next(e for e in app.expander if e.label == 'Com ho hem calculat')
+    assert any('9 aules ordinàries' in m.value for m in calcul.markdown)
     detall = next(e for e in app.expander if e.label == 'Detall tècnic')
     assert any(s.value == 'Al matí no queda cap aula lliure a l’hora punta' for s in detall.subheader)
     assert any('Recomanem mantenir almenys 1–2 aules lliures' in m.value for m in detall.markdown)
@@ -297,15 +314,16 @@ def test_estats_mides_acumulades_i_canvi_de_torn():
         assert '4 de 7' in html and '0 de 1' not in html
 
 
-def test_excepcions_noves_i_heretades():
+def test_excepcions_noves_i_classes_que_es_mantenen():
     d = dades()
     d['fora_torn_ja_avui'] = 6
     html = junta.fitxes(d)
     assert '6 classes ja es fan avui fora del seu torn i no es toquen.' in html
-    ultima = html.split('<section')[-1]
-    assert 'estat verd' in ultima and '>Cap<' in ultima
+    assert '0 classes noves' in html
+    assert 'heretad' not in html
     d['excepcions'] = [{}]
-    assert 'estat ambre' in junta.fitxes(d).split('<section')[-1]
+    html = junta.fitxes(d)
+    assert '1 classe nova' in html and 'Cal decidir' in html
 
 
 def test_cap_curs_sense_barres_i_decimals():
@@ -401,7 +419,7 @@ def test_curs_mes_afectat_només_horari():
                             dict(d['sessions_mogudes'][0], nom='Horari', franja_pct=20)]
     html = junta.fitxes(d)
     assert '20 %' in html and '90 %' not in html
-    assert '<small>Horari</small>' in html
+    assert '>Horari</div>' in html
 
 
 def test_fitxa_excepcio_demostrada_i_fixades():
@@ -427,17 +445,18 @@ def test_genera_avui_publica_tres_formats(tmp_path):
         assert d['empremta'] in (tmp_path / 'junta' / 'junta.md').read_text()
 
 
-def test_fitxa_mes_afectat_amb_classes_empats_i_guany():
+def test_fitxa_mes_afectat_amb_classes_i_comparacio():
     d = dades()
     fila = dict(d['sessions_mogudes'][0], sessions=10, mogudes=10, mogudes_pct=100,
                 franja=10, franja_pct=100, torn=10)
     d['sessions_mogudes'] = [dict(fila, cohort=f'GXX:{i}r', nom=f'Grau inventat, {i}r') for i in range(1, 4)]
-    d['pitjor_cohort'] = [r['cohort'] for r in d['sessions_mogudes']]
+    d['curs_mes_afectat'] = {'criteri': 'franja', 'curs': d['sessions_mogudes'][0]}
     d.update(fora_torn_avui=30, fora_torn_proposta=1)
     html = junta.fitxes(d)
-    assert 'de les classes canvien de dia o hora (10 de 10), per passar al torn que els toca' in html
-    assert 'i 2 cursos més' in html
-    assert 'Classes fora del seu torn: 30 avui → 1 amb aquesta proposta.' in html
+    assert '100 % de les classes canvien de dia o hora (10 de 10)' in html
+    assert 'passen al torn que els toca' in html
+    assert 'Avui 30 → 1 amb la proposta, en total.' in html
+    assert '>Grau inventat, 1r</div>' in html
 
 
 def test_mida_exacta_insuficient_amb_aules_grans_lliures():
@@ -487,8 +506,11 @@ def test_descarrega_identifica_proposta(nom):
                 'canvis_aula_vs_referencia': 3, 'imprevistos': 4}},
      '1 classe canvien de dia o hora i 3 classes més canvien d’aula per 4 imprevistos'),
 ])
-def test_fitxes_mostren_diferencia_escenari(bloc, text):
-    assert text in junta.fitxes(dict(dades(), **bloc))
+def test_detall_mostra_diferencia_escenari(bloc, text):
+    app = obre(dict(dades(), **bloc), ['5.4' if 'grau_nou' in bloc else '5.3'])
+    calcul = next(e for e in app.expander if e.label == 'Com ho hem calculat')
+    assert not calcul.proto.expanded
+    assert text in ''.join(m.value for m in calcul.markdown)
 
 
 def test_canvi_referencia_invalida_resum(tmp_path):
@@ -518,10 +540,11 @@ def test_demo_52_mostra_pics_i_grau_nou_sense_canviar_proposta():
         app = obre(d, ['Avui', '5.2', '5.4'])
     assert app.selectbox[0].value == '5.2'
     assert not next(e for e in app.expander if e.label == 'Més opcions').proto.expanded
-    html = ''.join(m.value for m in app.markdown)
-    assert '15 <small>de 19 aules' in html
-    assert '18 <small>de 19 aules' in html
-    assert '235 classes col·locades' in app.success[0].value
+    html = html_fitxes(app)
+    assert html.count('<section class="junta-fitxa">') == 4
+    assert 'Matí 15 de 19 aules' in html and 'Tarda 18 de 19 aules' in html
+    assert '235 classes col·locades; cap classe de la resta no es mou.' in html
+    assert 'Hi cap el grau nou de 40 places?' in html
     assert any('Pas següent: pregunta-ho' in m.value for m in app.markdown)
 
 
@@ -543,7 +566,8 @@ def test_camps_nous_junta_i_avui_sense_taules_canvis():
     app = obre(d, ['Avui'])
     text = '\n'.join(m.value for m in app.markdown)
     assert 'Conclusió inventada per decidir.' in text
-    assert '32 = 20 que compten + 12 heretades' in text
+    assert '20 classes que compten i 12 classes fixades que es mantenen' in text
+    assert 'classes que compten' not in text_visible(app)
     assert 'Una classe inventada canvia només d’aula.' in text
     assert not app.dataframe
 
@@ -553,3 +577,73 @@ def test_barres_nomes_cursos_afectats():
     html = junta.barres_cursos([fila, dict(fila, nom='Inventat afectat', afectades_pct=10)])
     assert html.count('class="junta-fila"') == 1
     assert 'Inventat afectat' in html
+
+
+def test_vista_principal_curta_i_detalls_tancats():
+    d = dades()
+    d.update(conclusio=['VALIDA AMB RELAXACIONS DECLARADES.',
+                        'Incompliments R3-AFORAMENT: 9 → 0.'],
+             fora_torn_avui=30, fora_torn_proposta=7,
+             fora_torn_avui_compten=24, fora_torn_avui_heretades=6,
+             fixades_tarda=6)
+    d['excepcions'] = [dict(id_sessio='inventada', cohorts=['GXX:1r'],
+                            motiu=junta.junta.MOTIU_S04526,
+                            torn_requerit='tarda', prova='2027-04-09')]
+    app = obre(d, ['5.2'])
+    visible = text_visible(app)
+    assert 'Aquí tens el resum per decidir si la Junta aprova l’horari proposat' in visible
+    assert 'Conclusió: La proposta està comprovada amb les excepcions indicades.' in visible
+    assert '1 classe nova' in visible and 'Avui 30 → 7 amb la proposta, en total.' in visible
+    assert '6 classes fixades es queden a la tarda' in visible
+    assert all(not e.proto.expanded for e in app.expander)
+    assert '<table' not in visible and 'junta-fila' not in visible
+    assert 'Aules per mida' not in visible and 'Incompliments' not in visible
+    for paraula in ('5.1', '5.2', '5.3', '5.4', 'verificador oficial', 'franja original',
+                    'heretat', 'heretad', 'sessió', 'R1', 'R3', 'R8', '2027-W'):
+        assert paraula not in visible
+    calcul = next(e for e in app.expander if e.label == 'Com ho hem calculat')
+    assert any('Incompliments R3-AFORAMENT: 9 → 0.' == m.value for m in calcul.markdown)
+    assert calcul.radio[0].label == 'Torn'
+    assert next(e for e in app.expander if e.label == 'Detall per cursos').dataframe
+    assert app.get('download_button')
+
+
+@pytest.mark.parametrize('boto,detall', [
+    ('Mira les aules →', 'Com ho hem calculat'),
+    ('Mira les excepcions →', 'Detall tècnic'),
+    ('Mira els cursos →', 'Detall per cursos'),
+    ('Mira el grau nou →', 'Com ho hem calculat'),
+])
+def test_botons_obren_el_detall_promes(boto, detall):
+    with patch.object(junta, 'disponibles', return_value=['5.2']), \
+         patch.object(junta, 'carrega', return_value=dades()), \
+         patch.object(junta, 'grau_nou_preparat', return_value={
+             'hi_cap': True, 'sessions_collocades': 2, 'sessions_52_mogudes': 0}):
+        app = AppTest.from_string('from pagines import junta; junta.mostra()').run(timeout=90)
+        assert all(not e.proto.expanded for e in app.expander)
+        next(b for b in app.button if b.label == boto).click().run()
+    assert not app.exception and not app.error
+    assert [e.label for e in app.expander if e.proto.expanded] == [detall]
+    assert app.selectbox[0].value == '5.2'
+    assert app.get('download_button')
+
+
+def test_curs_mes_afectat_respecta_el_camp_del_resum_sense_inventar_motiu():
+    d = dades()
+    d['sessions_mogudes'][0].update(franja=10, franja_pct=100)
+    d['curs_mes_afectat'] = {'criteri': 'aula', 'curs': dict(d['sessions_mogudes'][0],
+        nom='Curs del resum', sessions=4, aula=3, aula_pct=75)}
+    html = junta.fitxes(d)
+    assert '>Curs del resum</div>' in html
+    assert '75 % de les classes canvien d’aula (3 de 4)' in html
+    assert '100 %' not in html
+    assert 'passen al torn' not in html and 'per fer encaixar' not in html
+
+
+def test_grau_nou_sense_cabuda_no_es_presenta_com_a_resolt():
+    grau = {'hi_cap': False, 'sessions_collocades': 1, 'sessions_52_mogudes': 2}
+    html = junta.peces_fitxes(dades(), grau)[-1]['html']
+    assert '>No</div>' in html and 'Cal decidir' in html
+    assert '1 classe col·locada' in html
+    assert '2 classes de la resta es mouen' in html
+    assert 'Resolt amb la proposta' not in html
