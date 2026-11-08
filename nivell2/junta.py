@@ -5,6 +5,8 @@ import argparse
 import json
 import hashlib
 import os
+import re
+import shutil
 import tempfile
 from collections import Counter, defaultdict
 from datetime import datetime
@@ -56,14 +58,16 @@ DETALL_TECNIC += (
     'no garantia d’encaix. No se sumen els marges.')
 
 
-VERSIO_RESUM = 3
-VERSIO_CALCUL = 2
-MOTIU_S04526 = ("A la setmana d’avaluació no hi ha cap franja de tarda lliure "
-                "per a aquesta classe; ho demostra el càlcul.")
+VERSIO_RESUM = 5
+VERSIO_CALCUL = 4
+MOTIU_S04526 = ("S04526 és el divendres 9/4, l’únic dia lectiu de la setmana "
+                "d’avaluació: del 5 al 8/4 és avaluació. Aquell dia no hi ha cap "
+                "franja de tarda lliure per a aquesta classe; ho demostra el càlcul.")
 
 
-EXPLICACIO_PICS = ('Les aules es compten durant tota la franja d’una hora, inclosos els laboratoris en aules ordinàries; '
-                   'les classes alhora es compten per instant, sense laboratoris. Per això les xifres poden diferir.')
+EXPLICACIO_PICS = ('Les aules es compten durant tota la franja d’una hora; '
+                   'les classes alhora es compten per instant. Tots dos recomptes inclouen '
+                   'els laboratoris en aules ordinàries. Per això les xifres poden diferir.')
 
 
 def resum_canvis_aula(d):
@@ -101,15 +105,23 @@ def escriu_atomic(path, text):
             temporal.unlink(missing_ok=True)
 
 
+
+def es_motiu_avaluacio(text):
+    normalitzat = re.sub(r'(?:\.\./5\.2/)?diagnostic\.md', 'diagnostic.md',
+                         text.replace("'", '’').strip())
+    return normalitzat == ('Setmana d’avaluació: impossibilitat demostrada '
+                           'amb R1 dura; vegeu diagnostic.md.')
+
+
 def motiu_planer(text):
-    if 'diagnostic.md' in text or 'S04526' in text:
+    if text == MOTIU_S04526:
         return MOTIU_S04526
     for tecnic, planer in [('R1-TORN', 'regla de torn'), ('PLAB', 'laboratori'),
                            ('TE/', 'grup '), ('PAUL', 'problemes'), ('SEM', 'seminari'),
                            (' J ', ' d’un altre edifici '), ('R8', 'reserva d’aules'),
                            ('llindar', 'mínim'), ('cota', 'estimació')]:
         text = text.replace(tecnic, planer)
-    return text
+    return text.replace('diagnostic.md', 'el diagnòstic tècnic')
 
 
 def percentatge(valor):
@@ -134,10 +146,16 @@ def explicacio_aulari(d):
 
 def titol_marge(d):
     n = d['aulari']['disponibles']
-    return f'Per què {n} de {n} no és prou'
+    pic = d['pics']['tarda']['pitjor']['classes']
+    if pic >= n:
+        return f'Per què {pic} de {n} no és prou'
+    marge = n - pic
+    return f"A la tarda {'queda' if marge == 1 else 'queden'} {marge} {'aula lliure' if marge == 1 else 'aules lliures'} a l’hora punta"
 
 
 def explicacio_marge(d):
+    if d['pics']['tarda']['pitjor']['classes'] < d['aulari']['disponibles']:
+        return "Aquest marge permet absorbir imprevistos, a més de les aules de reserva."
     return ("Ocupar totes les aules disponibles a l'hora punta vol dir que qualsevol avaria, "
             f"reserva o grup que creix obliga a fer servir les {d['aulari']['reserva']} aules "
             'de reserva o a moure classes. Recomanem mantenir almenys 1–2 aules lliures '
@@ -207,7 +225,7 @@ def pics_i_mides(base, model, col, nomes_mati_requerit=False):
     # Escombrat per instant, amb finals abans dels inicis i compartides un cop.
     simultanies = defaultdict(list)
     for c in col.values():
-        if c.s.sense_espai or c.s.tipus == 'PLAB':
+        if c.s.sense_espai or (c.s.tipus == 'PLAB' and c.aula not in ordinaries):
             continue
         if c.aula not in ordinaries and not (not c.aula and
                 (not c.s.aula or c.s.aula in ordinaries or a_traslladar(c.s.aula))):
@@ -266,6 +284,7 @@ def calcula(proposta, base, model, col, relaxacions=None):
     mogudes, canvis_aula, assignades = Counter(), Counter(), Counter()
     excepcions, grups = [], Counter()
     fora_torn_ja_avui = 0
+    fixades_tarda = 0
     afectades = Counter()
     relax = llegeix_relaxacions(relaxacions)
     informe = avalua(base, proposta.a_files(), relaxacions=relax)
@@ -283,6 +302,11 @@ def calcula(proposta, base, model, col, relaxacions=None):
             canvis_aula.update(set(s.cohorts))
         if not s.aula and c.aula and not s.sense_espai:
             assignades.update(set(s.cohorts))
+        if (s.fixada.startswith('R1')
+                and any(r.restriccio == 'R1-TORN' and (not r.sessions or sid in r.sessions) for r in relax)
+                and _torn_ok(s.torn, c.ini, c.fi) is False):
+            fixades_tarda += 1
+            continue
         if _torn_ok(s.torn, c.ini, c.fi) is False:
             if (c.data, c.ini) == (s.data, s.ini) and sid not in declarades:
                 fora_torn_ja_avui += 1
@@ -291,6 +315,7 @@ def calcula(proposta, base, model, col, relaxacions=None):
             motius = list(dict.fromkeys(r.justificacio for r in relax
                           if r.restriccio == 'R1-TORN' and (not r.sessions or sid in r.sessions)
                           and r.justificacio))
+            motius = [MOTIU_S04526 if es_motiu_avaluacio(m) else m for m in motius]
             motiu = '; '.join(motius) or "No s'ha explicat per què"
             excepcions.append({'id_sessio': sid, 'cohorts': list(s.cohorts),
                                'torn_requerit': s.torn, 'motiu': motiu,
@@ -313,6 +338,7 @@ def calcula(proposta, base, model, col, relaxacions=None):
             'pics': pics_i_mides(base, model, col), 'sessions_mogudes': cohorts,
             'pitjor_cohort': [r['cohort'] for r in cohorts if r['mogudes_pct'] == pitjor],
             'excepcions': excepcions, 'fora_torn_ja_avui': fora_torn_ja_avui,
+            'fixades_tarda': fixades_tarda,
             'excepcions_resum': [{'motiu': m, 'cohort': c, 'nom': nom(c), 'sessions': n,
                                   'percentatge': 100 * n / totals[c]}
                                  for (m, c), n in sorted(grups.items())],
@@ -324,6 +350,7 @@ def calcula(proposta, base, model, col, relaxacions=None):
 def documents(d):
     """Una mateixa pàgina de contingut per al Markdown i l’HTML imprimible."""
     md = ['# Resum per a la Junta', f"Data: {d['data'][:10]}",
+          'Empremta: ' + empremta_resum(d),
           '## Aules ocupades a l’hora punta (per a la reserva)',
           'Mostrem quantes aules calen en el moment de més ocupació. Si falta assignar una aula, en fem una estimació.', explicacio_aulari(d),
           '| Torn | Màxim de la setmana més plena | Màxim d’una setmana habitual |', '|---|---|---|']
@@ -357,15 +384,16 @@ def documents(d):
     if not d['excepcions']:
         md.append('No hi ha excepcions noves als torns.')
     else:
-        md.append(f"{len(d['excepcions'])} {classe(len(d['excepcions']))} amb una excepció declarada al torn que els toca. Sabem a quina hora es fan, però això no demostra que sigui impossible canviar-les. Els motius consten al detall tècnic.")
+        md.append(f"{len(d['excepcions'])} {classe(len(d['excepcions']))} amb una excepció declarada al torn que els toca. Els motius consten al detall tècnic.")
         motius = defaultdict(list)
         for r in d['excepcions_resum']:
             motius[r['motiu']].append(f"{r['nom']}: {percentatge(r['percentatge'])} ({r['sessions']})")
         for motiu, files in motius.items():
             n = sum(e.get('motiu') == motiu for e in d['excepcions'])
             md.append(motiu_planer(motiu) + f' ({n} {classe(n)}): ' + '; '.join(files) + '.')
+    md.append(resum_excepcions(d))
     for e in d['excepcions']:
-        if e.get('id_sessio') == 'S04526':
+        if e.get('id_sessio') == 'S04526' and e.get('motiu') == MOTIU_S04526:
             md.append('Cas S04526: ' + MOTIU_S04526)
     if d['fora_torn_ja_avui']:
         md.append(f"{d['fora_torn_ja_avui']} {classe(d['fora_torn_ja_avui'])} ja es {'fa' if d['fora_torn_ja_avui'] == 1 else 'fan'} avui fora del seu torn i no es {'toca' if d['fora_torn_ja_avui'] == 1 else 'toquen'}.")
@@ -420,6 +448,38 @@ def documents(d):
     return markdown + '\n', '<!doctype html><html lang="ca"><meta charset="utf-8"><title>Resum per a la Junta</title><style>' + css + '</style><div id="page"><main>' + '\n'.join(html) + '</main></div>' + '</html>\n'
 
 
+
+def resum_excepcions(d):
+    n = len(d['excepcions'])
+    noves = f"{n} excepció nova, demostrada" if n == 1 and d['excepcions'][0].get('motiu') == MOTIU_S04526 else f"{n} excepcions noves"
+    return noves + f"; {d.get('fixades_tarda', 0)} classes fixades que ja són a la tarda (regla 1)."
+
+
+def empremta_resum(d):
+    return hashlib.sha256(json.dumps({k: v for k, v in d.items() if k != 'empremta'}, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+
+
+def publica(desti, dades):
+    """Escriu els tres formats amb la mateixa empremta i reemplaç atòmic per fitxer."""
+    desti = Path(desti)
+    desti.mkdir(parents=True, exist_ok=True)
+    dades['empremta'] = empremta_resum(dades)
+    md, html = documents(dades)
+    for ext, contingut in [('md', md), ('html', html),
+                           ('json', json.dumps(dades, ensure_ascii=False, indent=2))]:
+        escriu_atomic(desti / f'junta.{ext}', contingut)
+    # Migració de la publicació antiga: os.replace ja ha substituït els
+    # enllaços públics per fitxers reals, sense seguir-los.
+    actual = desti / '.actual'
+    if actual.is_symlink():
+        actual.unlink()
+    for vell in desti.glob('.generacio-*'):
+        if vell.is_symlink() or vell.is_file():
+            vell.unlink()
+        elif vell.is_dir():
+            shutil.rmtree(vell)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('proposta', type=Path)
@@ -435,11 +495,7 @@ def main(argv=None):
         if empremtes(args.proposta) != abans:
             raise ValueError('Les fonts han canviat durant el càlcul')
         dades['empremtes'] = abans
-        md, html = documents(dades)
-        args.sortida.mkdir(parents=True, exist_ok=True)
-        for nom_fitxer, text in [('junta.json', json.dumps(dades, ensure_ascii=False, indent=2)),
-                                 ('junta.md', md), ('junta.html', html)]:
-            escriu_atomic(args.sortida / nom_fitxer, text)
+        publica(args.sortida, dades)
         for torn in ('mati', 'tarda'):
             resum = dades['pics'][torn]
             etiqueta = ' (estimació)' if resum['pitjor']['estimacio'] else ''

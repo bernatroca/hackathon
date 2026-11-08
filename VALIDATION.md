@@ -134,14 +134,14 @@
 2. [cap @ /junta] Mira les fitxes de matí i tarda → «X de 19 aules» amb la frase «L'aulari té 21 aules ordinàries; en guardem 2 de reserva per a imprevistos.»; si és 19 de 19, etiqueta taronja «Sense marge» i «Si una aula falla, cal fer servir la reserva.».
 3. [cap @ /junta] Tria «Aules assignades (5.1)» i mira «Curs més afectat» → diu «Cap» i «Cap curs canvia de dia ni d'hora.», perquè la 5.1 no mou cap hora; els canvis d'aula surten a part, en un indicador propi.
 4. [cap @ /junta] Tria «Aules assignades (5.1)» i mira «Excepcions noves als torns» → 0 classes amb pastilla verda «Cap», i a sota quantes classes ja es fan avui fora del seu torn i no es toquen.
-5. [cap @ /junta] Amb «Horari complet (5.2)», mira «Excepcions noves als torns» → 459 classes, i a sota l'apartat «Excepcions als torns» amb cada motiu, quantes classes i quines titulacions; el cas S04526 surt destacat.
+5. [cap @ /junta] Amb «Horari complet (5.2)», mira «Excepcions noves als torns» → «1 excepció nova, demostrada» (la de la setmana d'avaluació) separada de les 458 classes fixades que ja són a la tarda per la regla 1; a sota, cada motiu amb quantes classes i quines titulacions. (reprova)
 6. [cap @ /junta] Llegeix sota les fitxes → «màxim de classes alhora» del matí i de la tarda (tarda 17 a les 15:00), separat de les aules ocupades a l'hora punta (18 a la tarda), amb una frase que explica per què difereixen (un laboratori en aula ordinària ocupa aula però no compta com a classe).
 7. [cap @ /junta] Tria «Aules assignades (5.1)» i mira «Classes que canvien d'horari o d'aula, per curs» → compta també els canvis d'aula, no només els de dia o hora.
 8. [cap @ /junta] Mira la taula «Aules per mida a l'hora més plena» amb «Matí» → «Hi cap» on queden aules lliures (0 de 1, 6 de 7), «Just» on estan totes ocupades (4 de 4) i «Falten» només si n'hi ha més que aules.
 9. [cap @ /junta] Tria «Tarda» a sobre de la taula → la taula canvia a les xifres de la tarda.
 10. [cap @ /junta] Clica «Descarrega el resum A4» → es baixa un HTML; obre'l amb doble clic des de Baixades i imprimeix-lo en PDF: cap en un sol A4 i separa les excepcions noves de les d'avui.
 11. [cap @ /junta] Llegeix tota la pàgina com si fossis de la Junta → frases curtes i planeres, sense sigles tècniques; el detall tècnic queda tancat dins «Detall tècnic».
-12. [cap @ /junta] Obre «Detall tècnic» → hi ha el paràgraf «Per què 19 de 19 no és prou», en paraules planeres, i també surt a l'A4 descarregat.
+12. [cap @ /junta] Obre «Detall tècnic» → el títol del paràgraf surt del pic real: amb «Horari complet (5.2)» diu que a la tarda queda 1 aula lliure a l'hora punta (18 de 19), i no «19 de 19»; el mateix text surt a l'A4 descarregat. (reprova)
 13. [cap @ /junta] Obre la Junta en dues pestanyes alhora i canvia de proposta a totes dues → cap mostra l'error genèric; si el resum s'ha de tornar a calcular, surt al cap d'uns segons amb les xifres de la proposta actual.
 14. [cap @ /junta] Amb «Horari complet (5.2)» llegeix les excepcions → «1 classe» (no «1 classes»), «sense curs a les dades» (no «curs desconegut») i el cas de la setmana d'avaluació en paraules planeres, sense «diagnostic.md». — també dins «Detall tècnic».
 

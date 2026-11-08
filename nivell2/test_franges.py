@@ -179,6 +179,27 @@ def test_cost_canvi_es_per_sessio_i_optimitza_hores_mortes():
     assert result[moved.id] == (fixed.data,930)
 
 
+def test_rutina_setmanal_te_prioritat_sobre_canvis_i_hores_mortes():
+    import copy
+    import time
+    from nivell2.franges import _problema, _resol_torn, _patrons_franges
+    from horaris.model import TARDA
+    rows = [sessio(f'inventat-{i}', activitat='A', ini=870,
+                   data=dt.date(2031,2,3)+dt.timedelta(weeks=i)) for i in range(3)]
+    fixed = sessio('inventat-fix',ini=930,fixada='R1',data=rows[0].data)
+    base = base_petita(*rows,fixed)
+    ref = Proposta.de_base(base)
+    current = {r.id:(r.data,1170 if r in rows[1:] else r.ini) for r in [*rows,fixed]}
+    patterns = _patrons_franges(base,current)
+    sub = copy.copy(base)
+    sub.sessions = {r.id:r for r in (rows[0],fixed)}
+    units,weeks,edges,groups = _problema(sub,ref,{})
+    result,state = _resol_torn(sub,units,weeks,edges,groups,{rows[0].unitat},current,
+        ref,{},TARDA,time.monotonic()+5,0,reparacio=True,patrons=patterns)
+    assert state == 'OPTIMAL'
+    assert result[rows[0].id][1] == 1170  # Canvi i més buit; menys excepcions.
+
+
 class TestFranges(unittest.TestCase):
     pass
 

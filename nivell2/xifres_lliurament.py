@@ -1,5 +1,6 @@
 """Artifacts de lliurament calculats exclusivament dels CSV finals."""
 import csv
+import json
 from html import escape
 
 from nivell2.base import Proposta, carrega_oficial, GRAU_NOU
@@ -13,10 +14,28 @@ def genera(pregunta, arrel):
     comparison = compara(Proposta.llegeix(out / 'proposta.csv'),
                          proposta_path=out / 'proposta.csv',
                          **opcions_pregunta(pregunta, arrel))
+    rows = list(comparison.files)
+    seen = {row['xifra'] for row in rows}
+    if pregunta == '5.4' and (out / 'resum.json').is_file():
+        summary = json.loads((out / 'resum.json').read_text(encoding='utf-8'))
+        for key in ('sessions_grau_nou_fora_franja', 'sessions_52_mogudes'):
+            if key not in seen and key in summary:
+                rows.append({'xifra': key, 'abans': 0, 'despres': summary[key]})
+                seen.add(key)
+    # Migra també els lliuraments ja generats sense tornar a executar el solver.
+    summary_path = out / 'resum.json'
+    if pregunta == '5.3' and summary_path.is_file():
+        summary = json.loads(summary_path.read_text(encoding='utf-8'))
+        if 'comparacio_anterior' in summary:
+            execution_path = out / 'execucio.json'
+            execution = json.loads(execution_path.read_text(encoding='utf-8')) if execution_path.is_file() else {}
+            execution['comparacio_anterior'] = summary.pop('comparacio_anterior')
+            execution_path.write_text(json.dumps(execution, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
+            summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
     with (out / 'xifres.csv').open('w', encoding='utf-8', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=['xifra', 'abans', 'despres'])
         writer.writeheader()
-        writer.writerows(comparison.files)
+        writer.writerows(rows)
     path = out / 'README.md'
     text = path.read_text(encoding='utf-8')
     import re

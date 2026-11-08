@@ -75,14 +75,14 @@ def test_rebutja_relaxacio_fora_w14_i_fora_original():
     a = sessio('a')
     b = base_petita(a)
     with pytest.raises(ValueError):
-        valida_excepcions(b,Proposta.de_base(b),['a'])
+        valida_excepcions(b,Proposta.de_base(b),['a'],setmanes=set())
     a.data = dt.date(2027,4,9)
     a.dia = 'V'
     p = Proposta.de_base(b)
-    valida_excepcions(b,p,['a'])
+    valida_excepcions(b,p,['a'],setmanes={a.data-dt.timedelta(days=a.data.weekday())})
     p.files['a'].h_ini = '10:00'
     with pytest.raises(ValueError):
-        valida_excepcions(b,p,['a'])
+        valida_excepcions(b,p,['a'],setmanes={a.data-dt.timedelta(days=a.data.weekday())})
 
 
 def test_doble_i_host_mouen_junts_sense_mutar_base():
@@ -227,18 +227,21 @@ def test_candidata_invalida_o_pitjor_no_publica(tmp_path):
     base = base_petita(sessio('inventat',ini=870))
     out = tmp_path/'5.2'
     out.mkdir()
-    (out/'proposta.csv').write_bytes(b'original')
-    for index,(verdict,declared) in enumerate([('NO VALIDA',0),('VALIDA AMB RELAXACIONS DECLARADES',460)]):
+    Proposta.de_base(base).escriu(out/'proposta.csv')
+    original = (out/'proposta.csv').read_bytes()
+    for index,(verdict,declared) in enumerate([('NO VALIDA',0),('VALIDA AMB RELAXACIONS DECLARADES',460),
+            ('VALIDA AMB RELAXACIONS DECLARADES',459),('VALIDA',0)]):
         stage = tmp_path/f'stage-{index}'
         stage.mkdir()
-        with patch('nivell2.s52.verifica',side_effect=[report('VALIDA AMB RELAXACIONS DECLARADES',459),report(verdict,declared)]), \
+        with patch('nivell2.s52.verifica',side_effect=[report('VALIDA AMB RELAXACIONS DECLARADES',459),
+                 report(verdict,declared),report(verdict,declared)]), \
              patch('nivell2.s52.carrega_model',return_value=base), \
              patch('nivell2.s52.carrega_oficial',return_value=base), \
              patch('nivell2.s52.resol',return_value=(Proposta.de_base(base),[],[{'estadistiques_franges':{}}])), \
              patch('nivell2.s52.publica') as publish:
             assert _executa(SimpleNamespace(temps_franges=1,temps_aules=1,llavor=0),stage,out) == 1
         assert not publish.called
-        assert {p.name:p.read_bytes() for p in out.iterdir()} == {'proposta.csv':b'original'}
+        assert {p.name:p.read_bytes() for p in out.iterdir()} == {'proposta.csv':original}
 
 
 def test_revisio_pista_unknown_no_demostra_excepcio():
@@ -271,3 +274,200 @@ def test_revisio_pista_sense_excepcio_si_r1_dura_es_possible():
     assert 'sessions' not in assigna_franges.estadistiques['proves_torn'][0]
     from nivell2.franges import proposta_franges
     assert not relaxacions_proposta(base,proposta_franges(base,ref,result),set())
+
+
+def test_restauracio_rutina_i_motius_reals(tmp_path):
+    import datetime as dt
+    from nivell2.base import Informe
+    from nivell2.s52 import restaura_rutina, excepcions_rutina
+    rows = [sessio(f'inventat-{i}', activitat='A', ini=870,
+                   data=dt.date(2031,2,3)+dt.timedelta(weeks=i)) for i in range(3)]
+    base = base_petita(*rows)
+    proposal = Proposta.de_base(base)
+    proposal.files[rows[-1].id].h_ini = '16:30'
+    valid = Informe({'veredicte':'VALIDA AMB RELAXACIONS DECLARADES',
+                     'incompliments_declarats':2,'restriccions':{}}, '')
+    bad = Informe({'veredicte':'NO VALIDA','incompliments_declarats':2,
+                   'restriccions':{'R4-AULA':{'compten':1}}}, '')
+    with patch('nivell2.s52.verifica', return_value=valid), \
+         patch('nivell2.s52.persones_correctes',return_value=True):
+        result,_,notes = restaura_rutina(base,proposal,None,tmp_path,valid)
+    assert not notes and not excepcions_rutina(base,result)
+    assert proposal.files[rows[-1].id].h_ini == '16:30'
+    for report, people in [(bad,True), (valid,False),
+            (Informe({**valid.json,'incompliments_declarats':3},''),True)]:
+        with patch('nivell2.s52.verifica',return_value=report), \
+             patch('nivell2.s52.persones_correctes',side_effect=[True,people,people]):
+            result,_,notes = restaura_rutina(base,proposal,None,tmp_path,valid)
+        assert result == proposal and len(notes) == 1
+        assert 'Excepció de calendari' not in notes[0]['motiu']
+        assert any(reason in notes[0]['motiu'] for reason in ('R4-AULA','conflictes nous','augment'))
+
+
+def test_restauracio_aula_actual_si_modal_ocupada(tmp_path):
+    import datetime as dt
+    from nivell2.base import Informe
+    from nivell2.s52 import restaura_rutina
+    rows = [sessio(f'inventat-{i}', activitat='A', ini=870, aula='0',
+                   data=dt.date(2031,2,3)+dt.timedelta(weeks=i)) for i in range(3)]
+    base = base_petita(*rows)
+    proposal = Proposta.de_base(base)
+    proposal.files[rows[-1].id].h_ini = '16:30'
+    valid = Informe({'veredicte':'VALIDA','incompliments_declarats':0,'restriccions':{}},'')
+    bad = Informe({'veredicte':'NO VALIDA','incompliments_declarats':0,
+                   'restriccions':{'R4-AULA':{'compten':1}}},'')
+    proposal.files[rows[-1].id].aula = '1'
+    def check(path, **kwargs):
+        attempt = Proposta.llegeix(path)
+        return bad if attempt.files[rows[-1].id].aula == '0' else valid
+    # L'hora es restaura encara que calgui conservar una excepció d'aula.
+    with patch('nivell2.s52.verifica',side_effect=check), \
+         patch('nivell2.s52.persones_correctes',return_value=True):
+        result,_,notes = restaura_rutina(base,proposal,None,tmp_path,valid)
+    assert result.files[rows[-1].id].h_ini == '14:30'
+    assert result.files[rows[-1].id].aula == '1'
+    assert len(notes) == 1 and 'aula conservada' in notes[0]['motiu']
+
+
+def test_setmanes_avaluacio_es_deriven_del_calendari():
+    import datetime as dt
+    from unittest.mock import mock_open
+    from nivell2.franges import setmanes_avaluacio
+    invented = 'data,tipus\n2031-06-11,avaluacio\n2031-06-12,avaluacio\n2031-06-20,festiu\n'
+    with patch('pathlib.Path.open',mock_open(read_data=invented)):
+        assert setmanes_avaluacio() == {dt.date(2031,6,9)}
+
+
+def test_pista_no_reassigna_aules_ni_franges_globals():
+    base = base_petita(sessio('inventat',ini=870,aula='0'))
+    pista = Proposta.de_base(base)
+    with patch('nivell2.s52.assigna_franges') as franges, \
+         patch('nivell2.s52.assigna_aules') as aules:
+        result,_,history = resol(base,pista=pista)
+    assert result == pista and result is not pista
+    assert not franges.called and not aules.called
+    assert history[0]['mode'] == 'restauracio_local'
+
+
+def test_limits_de_qualitat_no_permeten_mes_2_percent_ni_aula_extra():
+    from nivell2.s52 import qualitat_protegida
+    before = {'desplacaments_aula':100,'r6_aules_te_extra_per_grup':3}
+    assert qualitat_protegida(before,{**before,'desplacaments_aula':102})
+    assert not qualitat_protegida(before,{**before,'desplacaments_aula':103})
+    assert not qualitat_protegida(before,{**before,'r6_aules_te_extra_per_grup':4})
+    assert not qualitat_protegida({**before,'desplacaments_aula':0},
+                                  {**before,'desplacaments_aula':1})
+
+
+def test_reparacio_aules_nomes_dia_afectat_i_amb_la_resta_fixada():
+    import copy
+    import datetime as dt
+    from nivell2.s52 import aules_locals
+    moved = sessio('inventat-mogut',ini=870,aula='0')
+    fixed = sessio('inventat-quiet',ini=990,aula='1')
+    other = sessio('inventat-altre-dia',data=moved.data+dt.timedelta(days=1),dia='M',aula='2')
+    base = base_petita(moved,fixed,other)
+    current = Proposta.de_base(base)
+    candidate = copy.deepcopy(current)
+    candidate.files[moved.id].h_ini = '15:30'
+    with patch('nivell2.s52.assigna_aules',return_value=(
+            {moved.id:'3',fixed.id:'1'},'FEASIBLE')) as solve:
+        result = aules_locals(base,current,candidate,{moved.id})
+    assert set(solve.call_args.args[0].sessions) == {moved.id,fixed.id}
+    assert solve.call_args.kwargs['fixes'] == {fixed.id}
+    assert result.files[fixed.id] == current.files[fixed.id]
+    assert result.files[other.id] == current.files[other.id]
+    assert result.files[moved.id].aula == '3'
+
+
+def test_no_canvia_aules_de_sessions_que_no_es_mouen(tmp_path):
+    import datetime as dt
+    from nivell2.base import Informe
+    from nivell2.s52 import restaura_rutina
+    rows = [sessio(f'inventat-{i}',activitat='A',ini=870,aula='0',
+                   data=dt.date(2031,2,3)+dt.timedelta(weeks=i)) for i in range(3)]
+    base = base_petita(*rows)
+    pista = Proposta.de_base(base)
+    pista.files[rows[-1].id].aula = '1'
+    report = Informe({'veredicte':'VALIDA','incompliments_declarats':0,'restriccions':{}},'')
+    with patch('nivell2.s52.verifica') as check, \
+         patch('nivell2.s52.persones_correctes',return_value=True):
+        result,_,notes = restaura_rutina(base,pista,None,tmp_path,report)
+    assert result == pista and len(notes) == 1 and not check.called
+
+
+def test_publicacio_rebutja_costos_pitjors_amb_menys_excepcions(tmp_path):
+    import datetime as dt
+    from types import SimpleNamespace
+    from nivell2.base import Informe
+    from nivell2.s52 import _executa
+    rows = [sessio(f'inventat-{i}',activitat='A',ini=870,aula='0',
+                   data=dt.date(2031,2,3)+dt.timedelta(weeks=i)) for i in range(3)]
+    base = base_petita(*rows)
+    initial = Proposta.de_base(base)
+    initial.files[rows[-1].id].h_ini = '16:30'
+    improved = Proposta.de_base(base)
+    out = tmp_path/'5.2'
+    out.mkdir()
+    initial.escriu(out/'proposta.csv')
+    original = (out/'proposta.csv').read_bytes()
+    def report(walks, extra):
+        return Informe({'veredicte':'VALIDA AMB RELAXACIONS DECLARADES',
+                        'incompliments_declarats':2,'restriccions':{},
+                        'objectius':{'desplacaments_aula':walks,
+                                     'r6_aules_te_extra_per_grup':extra}},'')
+    for index,(walks,extra) in enumerate([(103,3),(100,4)]):
+        stage = tmp_path/f'stage-{index}'
+        stage.mkdir()
+        after = report(walks,extra)
+        with patch('nivell2.s52.verifica',side_effect=[report(100,3),after,after]), \
+             patch('nivell2.s52.carrega_model',return_value=base), \
+             patch('nivell2.s52.carrega_oficial',return_value=base), \
+             patch('nivell2.s52.resol',return_value=(improved,[],[])), \
+             patch('nivell2.s52.restaura_rutina',return_value=(improved,after,[])), \
+             patch('nivell2.s52.publica') as publish:
+            assert _executa(SimpleNamespace(temps_franges=1,temps_aules=1,llavor=0),stage,out) == 1
+        assert not publish.called and (out/'proposta.csv').read_bytes() == original
+
+
+def test_restaurar_host_no_pot_separar_un_doble(tmp_path):
+    import datetime as dt
+    from nivell2.base import Informe
+    from nivell2.s52 import restaura_rutina, persones_correctes
+    hosts = [sessio(f'inventat-host-{i}',codi='100000',activitat='A',
+                    ini=930 if i == 2 else 870,
+                    data=dt.date(2031,2,3)+dt.timedelta(weeks=i)) for i in range(3)]
+    double = sessio('inventat-doble',codi='100000',activitat='B',sense_espai=True,
+                    ini=930,data=hosts[-1].data,cohorts=('GZZ:3r',))
+    base = base_petita(*hosts,double)
+    initial = Proposta.de_base(base)
+    assert persones_correctes(base,initial)
+    valid = Informe({'veredicte':'VALIDA AMB RELAXACIONS DECLARADES',
+                     'incompliments_declarats':2,'restriccions':{}},'')
+    with patch('nivell2.s52.verifica',return_value=valid):
+        result,_,notes = restaura_rutina(base,initial,None,tmp_path,valid)
+    assert result == initial and len(notes) == 1
+    assert 'vincle de doble separat/duplicat' in notes[0]['motiu']
+
+
+def test_restauracio_conjunta_preserva_aules_i_només_torna_al_patro():
+    import copy
+    import datetime as dt
+    import pytest
+    from nivell2.s52 import restaura_conjunt
+    rows = [sessio(f'inventat-{i}',activitat='A',ini=870,aula='0',
+                   data=dt.date(2031,2,3)+dt.timedelta(weeks=i)) for i in range(3)]
+    base = base_petita(*rows)
+    initial = Proposta.de_base(base)
+    initial.files[rows[-1].id].h_ini = '16:30'
+    variant = Proposta.de_base(base)
+    assert restaura_conjunt(base,initial,variant) == variant
+    assert initial.files[rows[-1].id].h_ini == '16:30'
+    bad = copy.deepcopy(variant)
+    bad.files[rows[0].id].aula = '1'
+    with pytest.raises(ValueError,match='sense moure'):
+        restaura_conjunt(base,initial,bad)
+    bad = copy.deepcopy(variant)
+    bad.files[rows[-1].id].h_ini = '17:30'
+    with pytest.raises(ValueError,match='fora del patró'):
+        restaura_conjunt(base,initial,bad)

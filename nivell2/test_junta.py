@@ -263,10 +263,10 @@ def test_aulari_i_documents_amb_reserva_calculada(total):
     md, html = documents(d)
     assert f"L'aulari té {total} aules ordinàries; en guardem {RESERVA} de reserva per a imprevistos." in md
     for text in (md, html):
-        assert f'Per què {maxim} de {maxim} no és prou' in text
-        assert f'fer servir les {RESERVA} aules de reserva o a moure classes' in text
-        assert 'Recomanem mantenir almenys 1–2 aules lliures' in text
-        paragraf = text.split('no és prou')[1].split('Recomanem')[0]
+        assert f'A la tarda queden {maxim} aules lliures' in text if maxim != 1 else 'A la tarda queda 1 aula lliure' in text
+        assert 'Aquest marge permet absorbir imprevistos' in text
+        assert 'aules de reserva' in text
+        paragraf = text.split('Aquest marge')[1].split('.')[0]
         assert 'R8' not in paragraf and 'PLAB' not in paragraf
     assert f'1/{maxim}' in md and f'1/{maxim}' in html
 
@@ -317,7 +317,8 @@ def test_declarada_sense_canvi_horari_i_heretada_exclosa(tmp_path):
     relax.write_text('restriccio,sessions,justificacio\nR1-TORN,0|1|2,Motiu inventat\n')
     d = calcula(p, b, b, colloca(b, p), relax)
     assert [e['id_sessio'] for e in d['excepcions']] == ['0']
-    assert d['fora_torn_ja_avui'] == 2
+    assert d['fora_torn_ja_avui'] == 0
+    assert d['fixades_tarda'] == 2
     r, = d['sessions_mogudes']
     assert r['afectades'] == r['aula'] == 1
     assert r['franja'] == 0
@@ -357,17 +358,17 @@ def test_textos_planers():
     assert junta.classe(1) == 'classe'
     assert junta.classe(2) == 'classes'
     assert 'sense curs a les dades' in junta.nom('GXX:?')
-    assert junta.motiu_planer('vegeu diagnostic.md') == junta.MOTIU_S04526
+    assert junta.motiu_planer('vegeu diagnostic.md') != junta.MOTIU_S04526
 
 
-def test_laboratori_ocupa_aula_pero_no_es_classe_simultania():
+def test_laboratori_en_aula_ordinaria_es_classe_simultania():
     b = petita()
     for sessio in b.sessions.values():
         sessio.tipus = 'PLAB'
     p = Proposta.de_base(b)
     r = pics_i_mides(b, b, colloca(b, p))['mati']
     assert r['pitjor']['classes'] == 1
-    assert r['simultani']['classes'] == 0
+    assert r['simultani']['classes'] == 1
 
 
 def test_export_sense_fitxers_interns_ni_ajust_javascript():
@@ -380,3 +381,78 @@ def test_export_sense_fitxers_interns_ni_ajust_javascript():
     assert 'beforeprint' not in html
     assert '@page{size:A4;margin:10mm}' in html
     assert '.detall-tecnic{display:none}' in html
+
+
+def test_publicacio_fitxers_reals_i_neteja(tmp_path):
+    from nivell2 import junta
+    b = petita()
+    p = Proposta.de_base(b)
+    d = calcula(p, b, b, colloca(b, p))
+    vell = tmp_path / '.generacio-antiga'
+    vell.mkdir()
+    for ext in ('json', 'md', 'html'):
+        (vell / f'junta.{ext}').write_text('antic')
+        (tmp_path / f'junta.{ext}').symlink_to(f'.actual/junta.{ext}')
+    (tmp_path / '.actual').symlink_to(vell.name, target_is_directory=True)
+    junta.publica(tmp_path, d)
+    guardat = json.loads((tmp_path / 'junta.json').read_text())
+    for ext, document in zip(('md', 'html'), documents(guardat)):
+        path = tmp_path / f'junta.{ext}'
+        assert not path.is_symlink()
+        assert path.read_text() == document
+        assert d['empremta'] in document
+    assert not (tmp_path / 'junta.json').is_symlink()
+    assert {p.name for p in tmp_path.iterdir()} == {'junta.json', 'junta.md', 'junta.html'}
+    junta.publica(tmp_path, dict(d, data='2027-01-01'))
+    assert json.loads((tmp_path / 'junta.json').read_text())['data'] == '2027-01-01'
+
+
+def test_fixades_gei_separades(tmp_path):
+    b = petita()
+    for s in b.sessions.values():
+        s.cohorts, s.fixada, s.ini = ('GXX:?' if s.id == '0' else 'GYY:1r',), 'R1: GEI 1r', 900
+    p = Proposta.de_base(b)
+    relax = tmp_path / 'relaxacions.csv'
+    relax.write_text('restriccio,sessions,justificacio\nR1-TORN,0|1|2,Regla 1\n')
+    d = calcula(p, b, b, colloca(b, p), relax)
+    assert d['fixades_tarda'] == 3 and not d['excepcions']
+    assert '3 classes fixades que ja són a la tarda (regla 1)' in documents(d)[0]
+
+
+def test_marge_real_i_motiu_del_cas(tmp_path):
+    from nivell2 import junta
+    b = petita()
+    s = b.sessions.pop('0')
+    s.id, s.data, s.torn, s.dia = 'inventada-avaluacio', date(2027, 2, 1), 'tarda', 'L'
+    b.sessions[s.id] = s
+    b.ordre[0] = s.id
+    p = Proposta.de_base(b)
+    relax = tmp_path / 'relaxacions.csv'
+    relax.write_text('restriccio,sessions,justificacio\nR1-TORN,inventada-avaluacio,Setmana d’avaluació: impossibilitat demostrada amb R1 dura; vegeu ../5.2/diagnostic.md.\n')
+    d = calcula(p, b, b, colloca(b, p), relax)
+    assert d['excepcions'][0]['motiu'] == junta.MOTIU_S04526
+    assert '1 excepció nova, demostrada' in junta.resum_excepcions(d)
+    d['pics']['tarda']['pitjor']['classes'] = 1
+    assert junta.titol_marge(d) == 'Per què 1 de 1 no és prou'
+    d['aulari']['disponibles'] = 2
+    assert 'queda 1 aula lliure' in junta.titol_marge(d)
+
+
+@pytest.mark.parametrize('aula', ['', 'LAB'])
+def test_plab_sense_aula_ordinaria_no_es_demanda(aula):
+    b = petita()
+    b.aules['LAB'] = Aula('LAB', '', 'Laboratoris docents', 30)
+    s = deepcopy(b.sessions['0'])
+    s.id, s.tipus, s.aula = 'laboratori-inventat', 'PLAB', aula
+    b.sessions[s.id] = s
+    b.ordre.append(s.id)
+    p = Proposta.de_base(b)
+    r = pics_i_mides(b, b, colloca(b, p))['mati']
+    assert r['simultani']['classes'] == 1
+    assert r['pitjor']['classes'] == 1
+
+
+def test_motiu_avaluacio_reconeix_nomes_relaxacio_coneguda():
+    from nivell2 import junta
+    assert junta.es_motiu_avaluacio("Setmana d'avaluació: impossibilitat demostrada amb R1 dura; vegeu diagnostic.md.")
+    assert not junta.es_motiu_avaluacio('Un altre motiu: diagnostic.md')

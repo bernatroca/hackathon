@@ -10,10 +10,10 @@ from components.taules import mostra_taula
 from components.vistes import estat
 from errors import mostra_error
 from nivell2 import junta
-from nivell2.base import RESULTATS as SORTIDA, RESULTATS_PRINCIPAL, Proposta
+from nivell2.base import RESULTATS as SORTIDA, Proposta
 from horaris.check import Informe, _col_loca
 
-RESULTATS = RESULTATS_PRINCIPAL
+RESULTATS = SORTIDA
 NOMS_PROPOSTES = {'5.1': 'Aules assignades (5.1)', '5.2': 'Horari complet (5.2)',
                  '5.3': 'Amb imprevistos (5.3)', '5.4': 'Amb el grau nou (5.4)'}
 
@@ -64,7 +64,7 @@ def genera(nom, versio=None, versio_relax=None):
     desti = SORTIDA / 'junta'
     if nom != 'Avui':
         desti /= nom
-    junta.escriu_atomic(desti / 'junta.json', json.dumps(dades, ensure_ascii=False, indent=2))
+    junta.publica(desti, dades)
     return dades
 
 
@@ -158,6 +158,7 @@ def fitxes(d):
     heretades = d['fora_torn_ja_avui']
     peces.append('<section class="junta-fitxa"><h3>Excepcions noves als torns</h3>'
                  f'<div class="junta-xifra">{n} <small>{junta.classe(n)}</small></div>'
+                 + f'<small>{escape(junta.resum_excepcions(d))}</small>'
                  + estat({'estat': 'ambre' if n else 'verd', 'etiqueta': 'Fora del torn' if n else 'Cap'})
                  + (f'<small>{heretades} {junta.classe(heretades)} ja es {'fa' if heretades == 1 else 'fan'} avui fora del seu torn i no es {'toca' if heretades == 1 else 'toquen'}.</small>' if heretades else '')
                  + '</section>')
@@ -212,13 +213,14 @@ def mostra():
                 st.write(f"{etiqueta}: màxim de classes alhora: {pic['classes']} ({pic['hora']}).")
         st.caption(junta.EXPLICACIO_PICS)
         st.caption("Aules ocupades a l’hora punta (per a la reserva): les dues primeres fitxes.")
+        st.write(junta.resum_excepcions(d))
         if d['excepcions']:
             st.subheader('Excepcions als torns')
             for motiu in dict.fromkeys(e['motiu'] for e in d['excepcions']):
                 casos = [e for e in d['excepcions'] if e['motiu'] == motiu]
                 noms = sorted({junta.nom(c) for e in casos for c in e['cohorts']})
                 st.write(f"{len(casos)} {junta.classe(len(casos))}: {junta.motiu_planer(motiu)} Titulacions: {', '.join(noms)}.")
-                if any(e['id_sessio'] == 'S04526' for e in casos):
+                if any(e['id_sessio'] == 'S04526' and e['motiu'] == junta.MOTIU_S04526 for e in casos):
                     st.write('Cas S04526: ' + junta.MOTIU_S04526)
         format_actual = all('ocupades_al_pic' in m for torn in ('mati', 'tarda')
                             for m in d['pics'][torn]['mides'])

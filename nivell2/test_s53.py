@@ -135,6 +135,9 @@ def test_canvis_superiors_a_64_depenen_nomes_de_la_proposta_anterior(tmp_path, c
         assert 'regressió' in capsys.readouterr().out
     else:
         summary = json.loads((out/'5.3'/'resum.json').read_text())
+        assert 'comparacio_anterior' not in summary
+        execution = json.loads((out/'5.3'/'execucio.json').read_text())
+        assert ('comparacio_anterior' in execution) == (canvis_anteriors is not None)
         assert summary['canvis_aula_vs_referencia'] == 65
         assert summary['reserva_minima_operativa'] == 2
         assert summary['estat_solver'] == 'OPTIMAL'
