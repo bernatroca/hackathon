@@ -50,12 +50,4 @@ python docs/demo/eines/grava_demo90.py
 - **Esperes:** les de la IA i de les càrregues de pàgina es veuen, però al muntatge duren menys: com a molt 0,9 s per a la IA i 0,5 s per a una pàgina.
 - **Control de l'assistent:** la gravació només es dona per bona si el nombre d'aules de la resposta és el mateix que el d'aules que llista «Comprova-ho», i la resposta no diu «No ho puc». Si no, es torna a gravar, fins a 4 vegades.
 
-## Muntatge de la versió lliurada
-
-La presa es va gravar amb una pàgina «Comprova-ho tu» que l'equip va decidir no ensenyar. El tram s'ha tret de la presa sense tornar a gravar. La resta del vídeo és la presa tal com es va gravar:
-
-- **Tall:** de 80,6 s a 92,6 s de la presa, amb una fosa de 0,4 s de l'assistent a la portada.
-- **Menú lateral:** l'entrada del menú s'ha tapat amb el fons del mateix menú.
-- **Durada final:** 82,1 s.
-
-El gravador (`eines/grava_demo90.py`) encara té aquest tram. Si es torna a gravar quan la pàgina ja no sigui a l'app, cal treure el tram «Comprova-ho tu» del recorregut.
+Durada final: 82,1 s.

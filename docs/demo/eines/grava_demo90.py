@@ -150,7 +150,6 @@ NV = '<b>Nivell 2</b> · Verificador oficial'
 N3 = '<b>Nivell 2 · 5.3</b> · Imprevistos'
 NJ = '<b>Nivell 2 · 5.2 i 5.4</b> · Resum per a la Junta'
 NIA = '<b>Nivell 3</b> · Assistent d’IA'
-NC = '<b>Nivell 2</b> · Comprova-ho tu: les ordres, des de l’app'
 
 
 async def recorregut(p):
@@ -260,32 +259,10 @@ async def recorregut(p):
     p.resposta = await p.js("[...document.querySelectorAll('.xatia-missatge--ia')].map(e => e.innerText).join(' || ')")
     p.comprova = await p.js("[...document.querySelectorAll('.xatia-consultes')].pop().innerText")
     await asyncio.sleep(2.6)
-    # 78-87 s · «Comprova-ho tu»: les ordres del terminal, des de l'app
-    p.capitols.append(('Comprova-ho tu', time.time()))
     await r(''); await p.part('')
     tanca = await p.on('.xatia [data-fa=tanca]')  # tanca el plafó de l'assistent
     if tanca:
         await p.clica(tanca[0], tanca[1], 0.6); await asyncio.sleep(0.3)
-    await clica_text(p, 'Comprova-ho tu', segons=0.8)
-    await carrega(p, 'Verificador oficial · Torns nous (5.2)')
-    await p.part(NC)
-    await r('Les ordres del terminal, des de l’app', 'Nivell 2 · Comprova-ho tu',
-            'Un botó per comprovació: es veu l’ordre, el veredicte del verificador oficial i la sortida real')
-    await baixa_fins(p, 'Verificador oficial · Torns nous (5.2)', marge=150, segons=1.2)
-    x, y, *_ = await p.on('.st-key-comprova-executa-5-2 button')
-    await p.clica(x, y, 0.8)
-    t0 = time.time()
-    for _ in range(300):
-        if await p.js("document.querySelector('[data-testid=stMain]').innerText.includes('VALIDA AMB RELAXACIONS DECLARADES')"):
-            break
-        await asyncio.sleep(0.1)
-    await p.quiet(); t1 = time.time()
-    if t1 - t0 > ESPERA_PAGINA:
-        p.marques.append((t0, t1, ESPERA_PAGINA))
-    await p.capa()
-    p.sortida_comprova = await p.js("[...document.querySelectorAll('[data-testid=stMain] [data-testid=stAlertContainer]')].map(e => e.innerText).join(' | ')")
-    await baixa_fins(p, 'VALIDA AMB RELAXACIONS DECLARADES', marge=330, segons=1.0)
-    await asyncio.sleep(2.6)
     # 87-91 s · Tancament
     p.capitols.append(('Tancament', time.time()))
     await r(''); await p.part('')
@@ -322,7 +299,6 @@ async def presa():
             print(f'  {nom}: {temps_video(p, t):.1f} s')
         print('resposta:', p.resposta)
         print('verificador:', [l for l in p.sortida_avui + p.sortida_52 if l.startswith('Veredicte')])
-        print('comprova-ho tu:', p.sortida_comprova)
         print('comprova-ho:', (p.comprova or '').replace(chr(10), ' | '))
         if not resposta_bona(p.resposta, p.comprova):
             return False
