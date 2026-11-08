@@ -6,7 +6,7 @@ import argparse
 from html import escape
 from pathlib import Path
 
-from nivell2.base import Proposta, carrega_oficial, GRAU_NOU, RESULTATS
+from nivell2.base import Proposta, carrega_oficial, GRAU_NOU, RESULTATS, PAQUET
 from nivell2.verificacio import OPCIONS, opcions_pregunta
 from nivell2.xifres import compara
 from nivell2.readmes import normalitza, explica_comptatge, documenta, arrodoneix_text
@@ -34,6 +34,7 @@ EXPLICACIONS_REFERENCIA = {
 }
 
 EXPLICACIONS_54 = {
+    'canvis_franja': '41 sessions noves mogudes amb la regla prudent de subgrups de l’equip; amb la regla oficial hi caben sense moure’n cap; no es mou cap sessió del 5.2.',
     'sessions_canvien_hora': 'Als canvis del 5.2 respecte d’avui s’afegeixen 41 sessions noves mogudes amb la regla prudent de subgrups de l’equip per reduir esperes; amb la regla oficial el grau nou hi cap sense moure’n cap.',
     'sessions_nomes_canvien_aula': 'Es compten les diferències exclusivament d’aula respecte de la partida de cada sessió, incloses les noves; les sessions del 5.2 es conserven.',
 }
@@ -90,9 +91,17 @@ def genera(pregunta, arrel):
             if worse and key not in neutral:
                 explanation = ({'5.1': EXPLICACIONS_51, '5.2': EXPLICACIONS_52,
                                 '5.4': EXPLICACIONS_54}.get(pregunta, {}).get(key))
+                if key.startswith('relaxacio:R1-TORN:') and 'avaluaci' in key:
+                    explanation = 'Vegeu diagnostic.md, «Prova de S04526».'
                 explanation = explanation or explanations.get(key) or EXPLICACIONS_REFERENCIA.get(key)
                 if not explanation or 'per explicar.' in explanation:
                     raise ValueError(f'Falta explicar l’indicador {key} de {pregunta}')
+                if key.startswith('relaxacio:R1-TORN:') and 'avaluaci' in key:
+                    lines.append('- Excepció de torn per la setmana d’avaluació (S04526): '
+                                 f'{format_valor(a)} → {format_valor(d)}; és l’única excepció nova de torn. '
+                                 'La setmana d’avaluació no ofereix una franja de tarda viable amb R1 dura; '
+                                 'vegeu [diagnostic.md, «Prova de S04526»](diagnostic.md#prova-de-s04526).')
+                    continue
                 lines.append(f'- {key}: {format_valor(a)} → {format_valor(d)}; {explanation}')
     text = text.rstrip() + '\n\n## Què empitjora i per què\n\n' + (
         '\n'.join(lines) if lines else 'Cap empitjorament numèric detectat.') + '\n'
@@ -128,14 +137,27 @@ def graelles(sortida, arrel):
     base = carrega_oficial(GRAU_NOU)
     proposta = Proposta.llegeix(arrel / '5.4/proposta.csv')
     setmana = setmana_tipica(base)
+    noms = {}
+    for path in (PAQUET / 'activitats.csv', GRAU_NOU / 'sessions_extra.csv'):
+        with path.open(encoding='utf-8-sig', newline='') as f:
+            noms.update({r['codi']: r['assignatura'] for r in csv.DictReader(f)})
+    # Les sessions noves no existeixen al 5.2: es comparen amb la seva partida.
+    referencia = Proposta.de_base(base)
+    referencia.files.update(Proposta.llegeix(arrel / '5.2/proposta.csv').files)
+    relaxacions = {}
+    with (arrel / '5.4/relaxacions.csv').open(encoding='utf-8-sig', newline='') as f:
+        for row in csv.DictReader(f):
+            for sid in row['sessions'].split('|'):
+                relaxacions.setdefault(sid, []).append(row['justificacio'])
+    nom = 'Incorporar el grau nou (5.4)'
     folder = sortida / 'graelles'
     folder.mkdir(parents=True, exist_ok=True)
     links = []
     for i, aula in enumerate(sorted(base.aules)):
         name = f'aula-{i:03d}.html'
-        (folder / name).write_text(exporta_aula_html(base, proposta, setmana, aula), encoding='utf-8')
+        (folder / name).write_text(exporta_aula_html(base, proposta, setmana, aula, nom_proposta=nom, noms=noms, relaxacions=relaxacions, referencia=referencia), encoding='utf-8')
         links.append(f'<li><a href="{name}">{escape(aula)}</a></li>')
-    (folder / 'index.html').write_text('<!doctype html><html lang="ca"><meta charset="utf-8"><title>Graelles 5.4</title><h1>Graelles 5.4</h1><p>Setmana del ' + str(setmana) + '</p><ul>' + ''.join(links) + '</ul></html>', encoding='utf-8')
+    (folder / 'index.html').write_text('<!doctype html><html lang="ca"><meta charset="utf-8"><title>Graelles per aula · Incorporar el grau nou (5.4)</title><h1>Graelles per aula · Incorporar el grau nou (5.4)</h1><p>Cada fitxer mostra la setmana típica d’una aula.</p><p>Setmana del ' + f'{module.dilluns(setmana):%d/%m/%Y}' + '</p><ul>' + ''.join(links) + '</ul></html>', encoding='utf-8')
     return folder
 
 

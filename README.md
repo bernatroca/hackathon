@@ -16,11 +16,14 @@ Cal **Python 3.11 o més nou** (entorn provat: Python 3.13). `requirements.txt` 
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 export REPTE_DIR="$PWD/repte/repte-horaris-escola"
-python -m nivell1.comprova        # ha d'acabar amb «25/25 comprovacions correctes»
+python -m nivell1.comprova        # ha d'acabar amb «29/29 comprovacions correctes»
+python -m pytest app nivell2 -q -p no:cacheprovider  # cal REPTE_DIR i resultats/; uns 90 s
 streamlit run app/app.py          # http://localhost:8501, només des d'aquest ordinador
 ```
 
-**Assistent (part 3).** El botó «Assistent» surt baix a la dreta de totes les pàgines. Per connectar-lo a la IA de l'event, posa al `.env` de l'arrel `IA_URL=https://api.quiver.ai/v1`, `IA_CLAU=<la clau>`, `IA_MODEL=arrow-2-telos` i, si vols reserva, `IA_RESERVA_MODEL=arrow-2` (vegeu `app/xat/env.exemple`). Sense clau, `IA_PROVA=1 streamlit run app/app.py` respon un text de prova. El servidor del xat arrenca sol dins de Streamlit, al port 8502.
+Resultat de referència de les proves conjuntes: 747 correctes i 1 omesa.
+
+**Assistent (part 3).** El botó «Assistent» surt baix a la dreta de totes les pàgines. Per connectar-lo a la IA de l'event, posa al `.env` de l'arrel `IA_URL=https://api.quiver.ai/v1`, `IA_CLAU=<la clau>`, `IA_MODEL=arrow-2-telos` i, si vols reserva, `IA_RESERVA_MODEL=arrow-2` (vegeu `app/xat/env.exemple`). Sense clau, `IA_PROVA=1 streamlit run app/app.py` respon un text de prova. El servidor del xat arrenca sol dins de Streamlit, en un port local lliure que tria el sistema (només accepta peticions de localhost).
 
 L'esquema de les dades, amb files inventades, és a [docs/esquema-dades.md](docs/esquema-dades.md). Els passos per validar l'app són a [VALIDATION.md](VALIDATION.md).
 
@@ -29,7 +32,7 @@ L'esquema de les dades, amb files inventades, és a [docs/esquema-dades.md](docs
 Descomprimiu `lliurament-nivell2.zip` a l’arrel del repositori: crea `resultats/nivell2/5.1/`–`5.4/`,
 el resum de la Junta a `resultats/nivell2/junta/5.2/` i les graelles a `graelles/`.
 `LLEGEIX-ME.md`, dins el ZIP, recull els veredictes. Cada pregunta inclou el README amb l’ordre exacta
-de generació, temps, llavor, pistes necessàries i ordre oficial del jurat. Les pistes i comparacions
+de reproducció o republicació, temps, llavor, pistes necessàries i ordre oficial del jurat. Les pistes i comparacions
 citades també s’inclouen al ZIP. Generar una proposta executa el solver; regenerar els documents
 derivats conserva les propostes i relaxacions existents:
 

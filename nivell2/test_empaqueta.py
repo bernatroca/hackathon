@@ -233,11 +233,26 @@ def test_graelles_autonomes(tmp_path):
     b.aules = {'A': object(), 'B': object()}
     (tmp_path/'5.4').mkdir()
     Proposta.de_base(b).escriu(tmp_path/'5.4/proposta.csv')
-    with patch.object(delivery, 'carrega_oficial', return_value=b):
+    (tmp_path/'5.2').mkdir()
+    referencia = Proposta.de_base(b)
+    del referencia.files['0']  # sessió nova, absent al 5.2
+    referencia.escriu(tmp_path/'5.2/proposta.csv')
+    (tmp_path/'5.4/relaxacions.csv').write_text('restriccio,sessions,justificacio\n')
+    paquet = tmp_path/'paquet'
+    grau = tmp_path/'grau'
+    paquet.mkdir()
+    grau.mkdir()
+    (paquet/'activitats.csv').write_text('codi,assignatura\n1,Assignatura inventada\n')
+    (grau/'sessions_extra.csv').write_text('codi,assignatura\nN900,Grau inventat\n')
+    with patch.object(delivery, 'carrega_oficial', return_value=b), patch.object(delivery, 'PAQUET', paquet), patch.object(delivery, 'GRAU_NOU', grau):
         folder = delivery.graelles(tmp_path/'sortida', tmp_path)
     assert len(list(folder.glob('*.html'))) == 3
     index = (folder/'index.html').read_text()
     assert 'aula-000.html' in index and 'aula-001.html' in index
+    assert 'Incorporar el grau nou (5.4)' in index and '01/02/2027' in index
+    html = (folder/'aula-000.html').read_text()
+    assert 'Incorporar el grau nou (5.4)' in html
+    assert 'Assignatura' in html
     assert '<!doctype html>' in (folder/'aula-000.html').read_text()
 
 
@@ -533,3 +548,24 @@ def test_contracte_rebutja_relaxacions_canviades(tmp_path, capsys):
     relax.write_text('restriccio,sessions,justificacio\nR9-INVENTADA,S90001,Inventada\n')
     assert not empaqueta.contracte(out, '5.2')
     assert "resum de la Junta desactualitzat; regenera'l" in capsys.readouterr().out
+
+
+def test_auditoria_decimals_i_ordres():
+    from nivell2.readmes import arrodoneix_text
+    text = ('Proposta 5.2; mitjana 2.933; percentatge 4.5 %.\n'
+            'Temps total: 70.233 s\n'
+            '```sh\npython -m nivell2.s52 --temps 70.233\n```\n')
+    result = arrodoneix_text(text)
+    assert '5.2; mitjana 2,93; percentatge 4,5 %' in result
+    assert 'Temps total: 70,2 s' in result
+    assert '--temps 70.233' in result
+
+
+def test_auditoria_explicacions_i_republicacio(tmp_path):
+    from nivell2.readmes import documenta
+    from nivell2.xifres_lliurament import EXPLICACIONS_54
+    text = documenta('5.2', tmp_path, 'Introducció.\n')
+    assert 'variant-referencia.csv és la proposta final desada' in text
+    assert 'sense redescobrir-la' in text
+    assert documenta('5.2', tmp_path, text) == text
+    assert 'regla oficial hi caben sense moure’n cap' in EXPLICACIONS_54['canvis_franja']

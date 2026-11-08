@@ -80,7 +80,7 @@ def calcula(proposta: Proposta, base: Base, informe: Informe,
     x['canvis_torn_sense_regla1'] = sense_regla
     x['aules_grup_setmana_mitjana'] = sum(map(len, aules.values())) / len(aules) if aules else 0
     x['aules_grup_setmana_maxim'] = max(map(len, aules.values()), default=0)
-    relax = Counter((r.restriccio, r.justificacio) for r in llegeix_relaxacions(relaxacions))
+    relax = Counter((r.restriccio, r.justificacio.replace('../5.2/diagnostic.md', 'diagnostic.md')) for r in llegeix_relaxacions(relaxacions))
     x['relaxacions_declarades'] = sum(relax.values())
     for tipus in sorted({k[0] for k in relax}):
         x[f'relaxacions:{tipus}'] = sum(n for (t, _), n in relax.items() if t == tipus)

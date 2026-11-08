@@ -23,7 +23,7 @@ export REPTE_DIR="$PWD/repte/repte-horaris-escola"
 
 ## 3. Instal·la i arrenca
 
-Cal Python 3.10 o més nou.
+Cal Python 3.11 o més nou.
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
@@ -31,7 +31,7 @@ pip install -r requirements.txt
 python -m nivell1.comprova
 ```
 
-L'última ordre ha d'acabar amb `18/18 comprovacions correctes`.
+L'última ordre ha d'acabar amb `29/29 comprovacions correctes`.
 
 ```bash
 streamlit run app/app.py
@@ -43,11 +43,13 @@ S'obre el navegador a http://localhost:8501.
 
 Segueix els passos de [VALIDATION.md](../VALIDATION.md), que és a l'arrel del repositori. Per a cada pas, apunta si surt el que diu després de la fletxa (→). Si no surt, fes una captura i escriu què has vist.
 
-Quatre passos encara surten malament i és normal, perquè són correccions pendents:
+Les propostes 5.1–5.4 són a `resultats/nivell2/`. Amb les dades i els resultats disponibles:
 
-- la resposta gran encara diu «Sí, però just»;
-- la targeta de les classes sense aula no mostra les 4.541 que cal assignar;
-- el grau nou surt en verd;
-- «Totes les respostes» surt en moltes columnes estretes.
+```bash
+python -m pytest app nivell2 -q -p no:cacheprovider
+```
+
+Resultat de referència: 747 correctes i 1 omesa (uns 90 segons).
+El servidor de l’assistent tria un port local lliure i només accepta localhost.
 
 Envia els comentaris a en Bernat.
