@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo Espais de l'Escola</title>
+<style>
+  :root {
+    --tinta: #16181d;
+    --blau: #2b78e4;
+    --verd: #2e8b47;
+    --vermell: #c8372d;
+    --paper: #f4f2ee;
+  }
+  html, body { margin: 0; height: 100%; background: #0e0f12; }
+  body { display: grid; place-items: center; font-family: -apple-system, "SF Pro Display", "Helvetica Neue", Arial, sans-serif; }
+  #escenari { position: relative; width: 1440px; height: 900px; overflow: hidden; background: var(--paper); transform-origin: 0 0; }
+  .capa { position: absolute; inset: 0; overflow: hidden; }
+  .camera { position: absolute; left: 0; top: 0; width: 1440px; height: 900px; transform-origin: 0 0; will-change: transform; }
+  .camera img { position: absolute; inset: 0; width: 1440px; height: 900px; display: block; }
+  .marc { position: absolute; border: 3px solid var(--blau); border-radius: 10px; box-shadow: 0 0 0 6px rgba(43,120,228,.18), 0 0 24px rgba(43,120,228,.35); opacity: 0; }
+  .titol { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; color: #fff; opacity: 0; }
+  .titol .fons { position: absolute; inset: -40px; background: center/cover no-repeat; filter: blur(14px) brightness(.38) saturate(.8); }
+  .titol .text { position: relative; }
+  .titol .kicker { font-size: 22px; letter-spacing: .14em; text-transform: uppercase; color: #9cc3ff; font-weight: 600; }
+  .titol h1 { font-size: 92px; line-height: 1; margin: 18px 0 18px; font-weight: 800; letter-spacing: -.02em; }
+  .titol p { font-size: 30px; margin: 0; color: #e6e9ef; font-weight: 500; }
+  .rotol { position: absolute; left: 40px; bottom: 40px; max-width: 860px; padding: 22px 28px 24px; border-radius: 18px; background: rgba(20,22,28,.88); color: #fff; box-shadow: 0 18px 50px rgba(0,0,0,.28); opacity: 0; backdrop-filter: blur(6px); }
+  .rotol .acte { display: inline-flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #9cc3ff; }
+  .rotol .acte i { width: 10px; height: 10px; border-radius: 50%; background: currentColor; display: inline-block; }
+  .rotol.problema .acte { color: #ff9c92; }
+  .rotol.solucio .acte { color: #8fe0a6; }
+  .rotol .gran { font-size: 44px; font-weight: 800; line-height: 1.08; margin-top: 8px; letter-spacing: -.01em; }
+  .rotol .petit { font-size: 22px; line-height: 1.35; margin-top: 10px; color: #d6dae2; font-weight: 500; }
+  .cursor { position: absolute; width: 30px; height: 30px; opacity: 0; filter: drop-shadow(0 2px 3px rgba(0,0,0,.35)); }
+  .ona { position: absolute; width: 20px; height: 20px; margin: -10px 0 0 -10px; border-radius: 50%; border: 3px solid var(--blau); opacity: 0; }
+  .barra { position: absolute; left: 0; bottom: 0; height: 5px; background: var(--blau); opacity: .9; }
+  #controls { position: fixed; left: 16px; bottom: 16px; display: flex; gap: 10px; align-items: center; color: #cfd3da; font: 14px -apple-system, sans-serif; }
+  #controls button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid #3a3f4a; background: #1d2027; color: #fff; cursor: pointer; }
+  body.render #controls { display: none; }
+  body.render { display: block; }
+</style>
+</head>
+<body>
+<div id="escenari">
+  <div class="capa" id="capaA"><div class="camera"><img alt=""><div class="marc"></div></div></div>
+  <div class="capa" id="capaB"><div class="camera"><img alt=""><div class="marc"></div></div></div>
+  <div class="titol" id="titol">
+    <div class="fons" style="background-image:url(img/02-portada.jpg)"></div>
+    <div class="text">
+      <div class="kicker">UAB The Hack! 2026 · Escola d'Enginyeria</div>
+      <h1>Espais de l'Escola</h1>
+      <p>Horaris i aules 2027-28, per a Gestió Acadèmica</p>
+    </div>
+  </div>
+  <svg class="cursor" id="cursor" viewBox="0 0 24 24"><path d="M3 2l7.5 19 2.6-7.9L21 10.5z" fill="#111" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>
+  <div class="ona" id="ona"></div>
+  <div class="rotol" id="rotol"><div class="acte"><i></i><span></span></div><div class="gran"></div><div class="petit"></div></div>
+  <div class="barra" id="barra"></div>
+</div>
+<div id="controls">
+  <button id="play">▶ Reprodueix</button>
+  <span id="temps">0,0 s / 30,0 s</span>
+</div>
+<audio id="veu" src="veu/veu.m4a" preload="auto"></audio>
+<script>
+/* Tot el muntatge és una funció del temps: mostra(t). Els temps coincideixen amb docs/demo/guio-demo.md. */
+const DURADA = 30.0;
+const FOSA = 0.35;
+const R = (x, y, w, h) => ({ x, y, w, h });
+const ple = R(0, 0, 1440, 900);
+
+const ESCENES = [
+  { ini: 0.0, fi: 2.6, titol: true },
+  { ini: 2.6, fi: 6.8, img: '01-sense-aula-detall', cam: [ple, R(330, 400, 900, 150)], camT: [0.2, 3.2], maxS: 1.45,
+    marc: R(334, 458, 682, 30), marcT: 1.4,
+    rotol: { acte: '1 · El problema', tipus: 'problema', gran: '5.722 classes sense aula', petit: '74 % del semestre, segons les dades d’avui', t: 0.3 } },
+  { ini: 6.8, fi: 9.8, img: '02-portada', cam: [ple, R(340, 170, 1060, 265)], camT: [0, 3.0], maxS: 1.25,
+    rotol: { acte: '1 · El problema', tipus: 'problema', gran: '1r i 2n al matí: hi cabem?', petit: 'El model nou de l’Escola', t: 0.2 } },
+  { ini: 9.8, fi: 13.0, img: '02-portada', cam: [R(340, 170, 1060, 265), R(985, 225, 300, 170)], camT: [0, 1.4], maxS: 2.3, noFosa: true,
+    marc: R(1006, 352, 268, 28), marcT: 1.3,
+    rotol: { acte: '2 · La solució', tipus: 'solucio', gran: 'Sí: 15 de 19 aules a l’hora punta', petit: '21 aules, 2 de reserva per a imprevistos', t: 0.15 } },
+  { ini: 13.0, fi: 15.3, img: '03-horari-grup', cam: [ple, R(340, 330, 1060, 420)], camT: [0, 2.3], maxS: 1.3,
+    marc: R(346, 342, 1050, 78), marcT: 0.6,
+    rotol: { acte: '2 · La solució', tipus: 'solucio', gran: 'Validat amb el verificador oficial', petit: '5.1: 4.541 → 0 classes per assignar · 5.2: torns nous, 459 excepcions declarades', t: 0.3 } },
+  { ini: 15.3, fi: 17.6, img: '04-horari-aula-Q2-1005', cam: [R(330, 0, 1080, 675), R(330, 120, 1080, 675)], camT: [0, 2.3], maxS: 1.33,
+    rotol: { acte: '2 · La solució', tipus: 'solucio', gran: 'Validat amb el verificador oficial', petit: '5.1: 4.541 → 0 classes per assignar · 5.2: torns nous, 459 excepcions declarades', t: -1 } },
+  { ini: 17.6, fi: 19.4, img: '05-imprevistos', cam: [ple, R(340, 150, 1060, 560)], camT: [0, 1.8], maxS: 1.3,
+    marc: R(361, 177, 264, 33), marcT: 0.5,
+    rotol: { acte: '2 · La solució', tipus: 'solucio', gran: 'Imprevistos resolts', petit: '5.3 · 65 classes canvien d’aula, 1 de dia o hora', t: 0.2 } },
+  { ini: 19.4, fi: 21.2, img: '06-portada-grau-nou', cam: [R(340, 270, 1060, 540), R(860, 280, 460, 360)], camT: [0, 1.6], maxS: 1.9,
+    marc: R(898, 432, 200, 140), marcT: 0.9,
+    rotol: { acte: '2 · La solució', tipus: 'solucio', gran: 'Un grau nou hi cap', petit: '5.4 · 235 sessions, 0 classes del 5.2 mogudes', t: 0.15 } },
+  { ini: 21.2, fi: 24.0, img: '07-junta', cam: [ple, R(330, 120, 1080, 330)], camT: [0, 2.2], maxS: 1.33,
+    rotol: { acte: '3 · El valor', tipus: 'valor', gran: 'La Junta decideix en una pàgina', petit: 'Resum A4 descarregable, amb les xifres verificades', t: 0.3 } },
+  { ini: 24.0, fi: 30.0, assistent: true,
+    frames: [[0, '08-assistent-00-boto'], [0.7, '08-assistent-01-obert'],
+      [0.85, '08-assistent-02-escriu'], [1.017, '08-assistent-03-escriu'], [1.183, '08-assistent-04-escriu'], [1.35, '08-assistent-05-escriu'],
+      [1.517, '08-assistent-06-escriu'], [1.683, '08-assistent-07-escriu'], [1.85, '08-assistent-08-escriu'], [2.017, '08-assistent-09-escriu'],
+      [2.183, '08-assistent-10-escriu'], [2.35, '08-assistent-11-pensant'], [2.85, '08-assistent-12-escrivint'], [3.05, '08-assistent-13-escrivint'],
+      [3.25, '08-assistent-14-resposta']],
+    cam: [ple, R(1010, 40, 430, 470)], camT: [3.4, 4.3], maxS: 1.6, origen: 'dreta',
+    marc: R(1064, 236, 160, 18), marcT: 4.1,
+    rotols: [
+      { t: 0.3, acte: '3 · El valor', tipus: 'valor', gran: '«Quina aula de 60 places està lliure dijous a les 10?»', petit: 'Una pregunta real, en català' },
+      { t: 3.35, acte: '3 · El valor', tipus: 'valor', gran: 'Q2/1005, 63 places, i 9 aules més', petit: 'L’assistent consulta les dades de l’horari amb eines' },
+      { t: 4.4, acte: 'Espais de l’Escola', tipus: 'valor', gran: 'Ho entens, ho decideixes, ho preguntes', petit: 'Horaris 2027-28 · proposta verificada amb el verificador oficial' },
+    ] },
+];
+
+const el = (id) => document.getElementById(id);
+const capes = [el('capaA'), el('capaB')].map((c) => ({ c, cam: c.querySelector('.camera'), img: c.querySelector('img'), marc: c.querySelector('.marc') }));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const suau = (u) => { u = clamp(u, 0, 1); return u < .5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2; };
+const lin = (a, b, u) => a + (b - a) * u;
+
+function transformacio(rect, maxS, origen) {
+  let s = Math.min(1440 / rect.w, 900 / rect.h, maxS || 3);
+  s = Math.max(s, 1);
+  let tx = 720 - s * (rect.x + rect.w / 2), ty = 450 - s * (rect.y + rect.h / 2);
+  if (origen === 'dreta') tx = 1440 - s * (rect.x + rect.w);
+  tx = clamp(tx, 1440 - 1440 * s, 0); ty = clamp(ty, 900 - 900 * s, 0);
+  return { s, tx, ty };
+}
+
+function imatgeDe(e, lt) {
+  if (!e.frames) return e.img;
+  let src = e.frames[0][1];
+  for (const [t, f] of e.frames) if (lt >= t) src = f;
+  return src;
+}
+
+function pinta(capa, e, t, opacitat) {
+  const lt = t - e.ini;
+  capa.c.style.opacity = opacitat;
+  const src = 'img/' + imatgeDe(e, lt) + '.jpg';
+  if (capa.img.getAttribute('src') !== src) capa.img.setAttribute('src', src);
+  const u = suau((lt - e.camT[0]) / (e.camT[1] - e.camT[0]));
+  const a = transformacio(e.cam[0], e.maxS, e.origen), b = transformacio(e.cam[1], e.maxS, e.origen);
+  const s = lin(a.s, b.s, u), tx = lin(a.tx, b.tx, u), ty = lin(a.ty, b.ty, u);
+  capa.cam.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
+  if (e.marc) {
+    Object.assign(capa.marc.style, { left: e.marc.x - 6 + 'px', top: e.marc.y - 5 + 'px', width: e.marc.w + 12 + 'px', height: e.marc.h + 10 + 'px' });
+    capa.marc.style.opacity = clamp((lt - e.marcT) / 0.3, 0, 1);
+  } else capa.marc.style.opacity = 0;
+}
+
+function escenaA(t) {
+  let i = ESCENES.findIndex((e) => t >= e.ini && t < e.fi);
+  return i < 0 ? ESCENES.length - 1 : i;
+}
+
+function rotolActual(e, lt) {
+  if (e.rotols) { let r = null; for (const x of e.rotols) if (lt >= x.t) r = x; return r && { ...r, ini: r.t }; }
+  return e.rotol && { ...e.rotol, ini: e.rotol.t };
+}
+
+function mostra(t) {
+  t = clamp(t, 0, DURADA - 1e-6);
+  const i = escenaA(t), e = ESCENES[i], lt = t - e.ini;
+  const titol = el('titol');
+  if (e.titol) {
+    titol.style.opacity = 1;
+    titol.querySelector('.text').style.transform = `scale(${lin(1, 1.04, lt / 2.6)})`;
+    capes.forEach((c) => (c.c.style.opacity = 0));
+  } else {
+    const prev = ESCENES[i - 1];
+    const fosa = !e.noFosa && lt < FOSA;
+    titol.style.opacity = prev && prev.titol && lt < FOSA ? 1 - lt / FOSA : 0;
+    if (fosa && prev && !prev.titol) {
+      pinta(capes[0], prev, prev.fi - 0.001, 1);
+      pinta(capes[1], e, t, suau(lt / FOSA));
+    } else {
+      pinta(capes[1], e, t, 1);
+      capes[0].c.style.opacity = 0;
+    }
+  }
+  // Rètol: entra lliscant, i canvia de text amb una fosa curta.
+  const rot = el('rotol');
+  const r = e.titol ? null : (e.rotol && e.rotol.t < 0 ? ESCENES[i - 1].rotol && { ...ESCENES[i - 1].rotol, ini: -9 } : rotolActual(e, lt));
+  if (r) {
+    rot.className = 'rotol ' + (r.tipus || '');
+    rot.querySelector('.acte span').textContent = r.acte;
+    rot.querySelector('.gran').textContent = r.gran;
+    rot.querySelector('.petit').textContent = r.petit || '';
+    const entra = clamp((lt - r.ini) / 0.35, 0, 1);
+    const surt = clamp((e.fi - t) / 0.25, 0, 1);
+    const seguent = ESCENES[i + 1];
+    const continua = seguent && seguent.rotol && seguent.rotol.t < 0;
+    const o = Math.min(suau(entra), continua ? 1 : surt);
+    rot.style.opacity = o;
+    rot.style.transform = `translateY(${(1 - suau(entra)) * 24}px)`;
+  } else rot.style.opacity = 0;
+  // Cursor i clic al botó «Assistent».
+  const cur = el('cursor'), ona = el('ona');
+  if (e.assistent && lt < 1.0) {
+    const u = suau(lt / 0.55);
+    const x = lin(980, 1352, u), y = lin(560, 806, u);
+    const x2 = lt > 0.75 ? lin(1352, 1225, suau((lt - 0.75) / 0.2)) : x, y2 = lt > 0.75 ? lin(806, 850, suau((lt - 0.75) / 0.2)) : y;
+    Object.assign(cur.style, { left: x2 + 'px', top: y2 + 'px', opacity: lt > 0.9 ? 1 - (lt - 0.9) / 0.1 : 1 });
+    const c = (lt - 0.6) / 0.35;
+    if (c > 0 && c < 1) Object.assign(ona.style, { left: '1360px', top: '812px', opacity: 1 - c, transform: `scale(${1 + c * 3})` });
+    else ona.style.opacity = 0;
+  } else { cur.style.opacity = 0; ona.style.opacity = 0; }
+  el('barra').style.width = (t / DURADA * 100) + '%';
+  el('temps').textContent = t.toFixed(1).replace('.', ',') + ' s / 30,0 s';
+}
+
+// Precàrrega, perquè cada fotograma tingui la imatge a punt.
+const totes = [...new Set(ESCENES.flatMap((e) => e.frames ? e.frames.map((f) => f[1]) : e.img ? [e.img] : []).concat(['02-portada']))];
+window.llest = Promise.all(totes.map((n) => new Promise((ok) => { const im = new Image(); im.onload = im.onerror = ok; im.src = 'img/' + n + '.jpg'; }))).then(() => document.fonts.ready);
+window.mostra = mostra;
+
+const params = new URLSearchParams(location.search);
+if (params.has('render')) document.body.classList.add('render');
+function ajusta() {
+  if (document.body.classList.contains('render')) return;
+  const s = Math.min(innerWidth / 1440, (innerHeight - 60) / 900, 1);
+  const esc = el('escenari');
+  esc.style.transform = `scale(${s})`;
+  esc.style.marginBottom = (900 * s - 900) + 'px';
+  esc.style.marginRight = (1440 * s - 1440) + 'px';
+}
+addEventListener('resize', ajusta); ajusta();
+mostra(params.has('t') ? parseFloat(params.get('t')) : 0);
+
+const veu = el('veu');
+let inici = null;
+function bucle() {
+  if (inici === null) return;
+  const t = veu.paused ? (performance.now() - inici) / 1000 : veu.currentTime;
+  mostra(t);
+  if (t < DURADA) requestAnimationFrame(bucle); else { inici = null; el('play').textContent = '▶ Reprodueix'; }
+}
+el('play').onclick = async () => {
+  await window.llest;
+  veu.currentTime = 0;
+  inici = performance.now();
+  try { await veu.play(); } catch (e) { /* sense so: el muntatge segueix amb el rellotge */ }
+  el('play').textContent = '↺ Torna a començar';
+  requestAnimationFrame(bucle);
+};
+</script>
+</body>
+</html>
