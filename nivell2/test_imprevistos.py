@@ -6,7 +6,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 
-from nivell2.imprevistos import calcula, motiu_planer, MOTIU_DESCONEGUT, MOTIUS_PLANERS
+from nivell2.imprevistos import calcula, motiu_planer, MOTIU_DESCONEGUT, MOTIU_FIXADA, MOTIUS_PLANERS
 
 
 def escenari():
@@ -20,7 +20,7 @@ def escenari():
     sessions = [sessio('reserva-inventada'), sessio('creix-inventada', 1),
                 sessio('creix-seguent-inventada', 8), sessio('avaria-inventada', 2),
                 sessio('cancel-inventada', 3, tipus='PAUL', grup='PAUL/811'),
-                sessio('suport-inventada', 1, inici=630),
+                sessio('suport-inventada', 1, aula='Q9/0002'),
                 sessio('igual-inventada', 4)]
     sessions[2].codi = sessions[1].codi
     base = NS(sessions={s.id: s for s in sessions}, tancaments=[], cancellades={})
@@ -41,6 +41,7 @@ def escenari():
     for sid in ('reserva-inventada', 'creix-inventada', 'creix-seguent-inventada', 'avaria-inventada', 'suport-inventada'):
         final.files[sid].aula = 'Q9/0002'
     final.files['avaria-inventada'].h_ini = '10:30'
+    final.files['suport-inventada'].aula = 'Q9/0004'
     final.files['cancel-inventada'].dia = 'V'
     final.files['cancel-inventada'].data = (dilluns + timedelta(days=4)).isoformat()
     noms = {s.codi: 'Assignatura Inventada ' + str(i) for i, s in enumerate(sessions)}
@@ -168,7 +169,10 @@ def test_recompte_csv_inclou_recuperada_i_ignora_resum_antic():
 def test_traduccions_conegudes_i_original_al_detall(original, planer):
     assert motiu_planer(original) == planer
     assert motiu_planer(original.replace('’', "'").replace('diagnostic.md', '../5.2/diagnostic.md')) == planer
-    d = resultat(relaxacions=[{'restriccio': 'R1-FIXADA',
+    entrades = escenari()
+    if planer == MOTIU_FIXADA:
+        entrades[1].sessions['reserva-inventada'].fixada = 'R1: GXX 1r'
+    d = resultat(entrades, relaxacions=[{'restriccio': 'R1-FIXADA',
                  'sessions': 'reserva-inventada', 'justificacio': original}])
     assert d['imprevistos'][0]['motius'] == [planer]
     assert d['resum']['relaxacions_per_motiu'] == [{'motiu': original, 'sessions': 1}]
@@ -189,6 +193,10 @@ def test_motius_compten_classes_uniques_per_targeta(conegut, n):
     p.files['suport-inventada'].aula = 'Q9/0001'
     original = next(iter(MOTIUS_PLANERS)) if conegut else 'Motiu nou inventat.'
     ids = ['reserva-inventada', 'creix-inventada'][:n]
+    if conegut:
+        for sid in ids + ['avaria-inventada']:
+            c.sessions[sid].fixada = 'R1: GXX 1r'
+        q.files['avaria-inventada'].h_ini = p.files['avaria-inventada'].h_ini
     rows = [{'restriccio': rule, 'sessions': '|'.join(ids + ['avaria-inventada']),
              'justificacio': original} for rule in ('R1-FIXADA', 'R7-PLAB')]
     # La tercera classe ja tenia l’excepció: no és una excepció nova.
@@ -243,9 +251,9 @@ def test_capacitats_i_diferencia_entre_horari_davui_i_proposat_son_dinamiques():
     p.files['creix-inventada'].aula = 'Q9/0001'
     d = resultat((b, c, p, q, noms))
     reserva, creix = d['imprevistos'][:2]
-    assert 'avui n’hi havia 1; a l’horari proposat, 2' in reserva['descripcio']
+    assert 'Aquella setmana, l’aula tenia 1 classe a l’horari d’avui i 2 a l’horari proposat.' in reserva['descripcio']
     assert 'Q9/1003 (24 places)' in creix['descripcio']
-    assert 'Aules de destinació: Q9/0002 (80 places)' in creix['descripcio']
+    assert 'Aules de destinació: dimarts: Q9/0002 (80 places)' in creix['descripcio']
     assert 'passa de 20 a 70 alumnes' in creix['descripcio']
 
 
@@ -255,3 +263,82 @@ def test_detall_associa_les_regles_amb_el_motiu_sense_canviar_els_recomptes():
     d = resultat(relaxacions=rows)
     assert d['resum']['regles_per_motiu'] == {'Motiu inventat.': ['R1-FIXADA', 'R7-PLAB']}
     assert d['resum']['relaxacions_per_motiu'] == [{'motiu': 'Motiu inventat.', 'sessions': 1}]
+
+
+def test_fixades_es_compten_a_les_sessions_no_a_les_relaxacions():
+    b, c, p, q, noms = escenari()
+    for sid in ('reserva-inventada', 'creix-inventada', 'creix-seguent-inventada', 'suport-inventada'):
+        c.sessions[sid].fixada = 'R1: GXX 1r'
+        p.files[sid].aula = 'Q9/0001'
+        p.files[sid].dia = 'L'
+        p.files[sid].data = c.tancaments[0].data_ini.isoformat()
+        q.files[sid].dia = 'L'
+        q.files[sid].data = p.files[sid].data
+    original = next(m for m, planer in MOTIUS_PLANERS.items() if planer == MOTIU_FIXADA)
+    rows = [{'restriccio': 'R1-FIXADA', 'sessions': 'reserva-inventada|creix-inventada',
+             'justificacio': original}]
+    d = resultat((b, c, p, q, noms), relaxacions=rows)
+    assert d['imprevistos'][0]['motius'] == [motiu_planer(original, 4)]
+    assert d['imprevistos'][0]['excepcio']
+    # Les dades de fixació continuen sent certes sense una excepció nova.
+    d = resultat((b, c, p, q, noms), relaxacions=rows, relaxacions_referencia=rows)
+    assert d['imprevistos'][0]['motius'] == [motiu_planer(original, 4)]
+    assert not d['imprevistos'][0]['excepcio']
+
+
+def test_fixada_que_canvia_hora_no_afirma_que_nomes_canvia_aula():
+    b, c, p, q, noms = escenari()
+    c.sessions['avaria-inventada'].fixada = 'R1: GXX 1r'
+    d = resultat((b, c, p, q, noms))
+    assert not d['imprevistos'][2]['motius']
+
+
+def test_aules_de_destinacio_indiquen_dies_de_la_proposta():
+    b, c, p, q, noms = escenari()
+    c.aules = {'Q9/0002': NS(capacitat=80), 'Q9/0005': NS(capacitat=90)}
+    q.files['creix-inventada'].dia = 'L'
+    q.files['creix-seguent-inventada'].dia = 'J'
+    q.files['creix-seguent-inventada'].aula = 'Q9/0005'
+    d = resultat((b, c, p, q, noms))
+    assert 'Aules de destinació: dilluns: Q9/0002 (80 places); dijous: Q9/0005 (90 places).' in d['imprevistos'][1]['descripcio']
+
+
+def test_motius_de_totes_les_mogudes_i_suport_amb_destinatari():
+    b, c, p, q, noms = escenari()
+    c.aules = {'Q9/1003': NS(capacitat=24)}
+    d = resultat((b, c, p, q, noms))
+    assert set(d['motius_per_sessio']) == {r['id_sessio'] for r in d['files']}
+    assert all(r['motiu'] == d['motius_per_sessio'][r['id_sessio']] for r in d['files'])
+    assert 'passa de 20 a 70 alumnes i no cap a Q9/1003' in d['motius_per_sessio']['creix-inventada']
+    assert 'tot el semestre' in d['motius_per_sessio']['creix-inventada']
+    suport = next(r for r in d['files'] if r['id_sessio'] == 'suport-inventada')
+    assert suport['imprevistos'] == []  # Conserva el filtre de classes de suport.
+    assert suport['imprevistos_causants'] == ['grup_creix']
+    assert 'Es mou per deixar l’aula a ' + noms[c.sessions['creix-inventada'].codi] in suport['motiu']
+    assert 'passa de 20 a 70' in suport['motiu']
+    assert '1 classe més es mou per deixar-li l’aula.' in d['imprevistos'][1]['descripcio']
+    assert 'Q9/0003 avariada el 17/02/2027' in d['motius_per_sessio']['avaria-inventada']
+    assert 'reservada per a un acte' in d['motius_per_sessio']['reserva-inventada']
+    assert 'classe cancel·lada del 18/02/2027' in d['motius_per_sessio']['cancel-inventada']
+
+
+@pytest.mark.parametrize('data,inici', [('2027-02-16', '09:30'), ('2027-02-17', '08:30')])
+def test_suport_sense_solapament_no_inventa_destinatari(data, inici):
+    b, c, p, q, noms = escenari()
+    q.files['creix-inventada'].data = data
+    q.files['creix-inventada'].h_ini = inici
+    d = resultat((b, c, p, q, noms))
+    assert d['imprevistos_per_sessio']['suport-inventada'] == []
+    assert 'no s’ha identificat una classe destinatària directa' in d['motius_per_sessio']['suport-inventada']
+
+
+def test_cadena_de_suport_propaga_limprevist():
+    b, c, p, q, noms = escenari()
+    # Una segona classe deixa l'aula on va la primera classe de suport.
+    p.files['igual-inventada'].dia = 'M'
+    p.files['igual-inventada'].aula = 'Q9/0004'
+    q.files['igual-inventada'].dia = 'M'
+    q.files['igual-inventada'].aula = 'Q9/0005'
+    d = resultat((b, c, p, q, noms))
+    assert d['imprevistos_per_sessio']['igual-inventada'] == ['grup_creix']
+    assert 'Es mou per deixar l’aula' in d['motius_per_sessio']['igual-inventada']
