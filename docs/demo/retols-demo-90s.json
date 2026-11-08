@@ -155,36 +155,12 @@
   }
  },
  {
-  "t": 80.78,
+  "t": 80.6,
   "tipus": "rotol",
   "valor": ""
  },
  {
-  "t": 80.79,
-  "tipus": "part",
-  "valor": ""
- },
- {
-  "t": 83.29,
-  "tipus": "part",
-  "valor": "<b>Nivell 2</b> · Comprova-ho tu: les ordres, des de l’app"
- },
- {
-  "t": 83.29,
-  "tipus": "rotol",
-  "valor": {
-   "titol": "Les ordres del terminal, des de l’app",
-   "part": "Nivell 2 · Comprova-ho tu",
-   "detall": "Un botó per comprovació: es veu l’ordre, el veredicte del verificador oficial i la sortida real"
-  }
- },
- {
-  "t": 91.88,
-  "tipus": "rotol",
-  "valor": ""
- },
- {
-  "t": 91.88,
+  "t": 80.6,
   "tipus": "part",
   "valor": ""
  }
