@@ -25,6 +25,8 @@ def normalitza(text, pregunta, arrel=RESULTATS):
                 legacy_python = True
                 found = True
                 continue
+            if re.match(r'^\s*cd\s+', line) and ('horaris check' in content or 'nivell2.verificacio' in content):
+                continue
             kept.append(line)
         if found:
             return ('```sh\n' + ''.join(kept).rstrip() +

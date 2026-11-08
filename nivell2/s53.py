@@ -172,7 +172,11 @@ def _genera(args, out, start):
                   counts['canvis_franja_vs_referencia']+counts['canvis_aula_vs_referencia'])
             print('Reserva mínima operativa:', old['reserva_minima_operativa'], '→', minimum)
             return 1
-    (out/'resum.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
+    public_summary = {k: v for k, v in summary.items() if k != 'comparacio_anterior'}
+    if 'comparacio_anterior' in summary:
+        execution = dict(result.estadistiques, comparacio_anterior=summary['comparacio_anterior'])
+        (out/'execucio.json').write_text(json.dumps(execution, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
+    (out/'resum.json').write_text(json.dumps(public_summary, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
     # Comparació oficial amb avui i, separadament, amb el 5.2 congelat.
     escriu_csv(out/'xifres.csv', [{'xifra': k, 'abans': before_report.objectius.get(k, 0),
                                   'despres': v} for k, v in report.objectius.items()],

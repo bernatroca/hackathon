@@ -40,7 +40,7 @@ def ordre_oficial(pregunta, arrel=RESULTATS):
             opcions[key] = Path('../../resultats/nivell2') / opcions[key].relative_to(arrel)
     if 'escenari' in opcions:
         opcions['escenari'] = opcions['escenari'].relative_to(REPTE)
-    cmd = ordre_verificador(out / 'proposta.csv', **opcions, python='python', absolut=False,
+    cmd = ordre_verificador(out / 'proposta.csv', **opcions, python='python', relatiu_a_repte=False,
                            json_path=out / 'informe.json', violacions_path=out / 'violacions.csv')
     return 'cd repte/repte-horaris-escola\n' + shlex.join(cmd)
 

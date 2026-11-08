@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
+import json
 import re
 import contextlib
 import io
@@ -11,8 +13,14 @@ from pathlib import Path
 
 from nivell2.xifres_lliurament import genera, graelles
 from nivell2.base import RESULTATS
+from nivell2.junta import documents
 from nivell2.comprova_persones import comprova as comprova_persones
 from nivell2.verificacio import OPCIONS, VALIDES, ordre, ordre_oficial, verifica_pregunta
+
+OPCIONALS = ('relaxacions.csv', 'diagnostic.md', 'resum.json', 'execucio.json',
+             'excepcions.csv', 'titulacions.csv')
+
+JUNTA = ('junta.html', 'junta.md', 'junta.json')
 
 OBLIGATORIS = ('proposta.csv', 'informe.json', 'violacions.csv', 'xifres.csv', 'README.md')
 
@@ -20,6 +28,27 @@ OBLIGATORIS = ('proposta.csv', 'informe.json', 'violacions.csv', 'xifres.csv', '
 def contracte(out, pregunta):
     if any(not (out / name).is_file() for name in OBLIGATORIS):
         return False
+    if pregunta == '5.2':
+        junta = out.parent / 'junta' / '5.2'
+        if any(not (junta / name).is_file() for name in JUNTA):
+            return False
+        try:
+            metadata = json.loads((junta / 'junta.json').read_text(encoding='utf-8'))
+            digest = hashlib.sha256((out / 'proposta.csv').read_bytes()).hexdigest()
+            if metadata.get('empremtes', {}).get('proposta') != digest:
+                return False
+            relax = out / 'relaxacions.csv'
+            relax_digest = hashlib.sha256(relax.read_bytes()).hexdigest() if relax.is_file() else None
+            if metadata.get('empremtes', {}).get('relaxacions') != relax_digest:
+                print("resum de la Junta desactualitzat; regenera'l")
+                return False
+            md, html = documents(metadata)
+            for name, content in (('junta.md', md), ('junta.html', html)):
+                if (junta / name).read_bytes() != content.encode('utf-8'):
+                    print("resum de la Junta desactualitzat; regenera'l")
+                    return False
+        except (OSError, ValueError, AttributeError, KeyError, TypeError):
+            return False
     with (out / 'xifres.csv').open(encoding='utf-8-sig', newline='') as f:
         reader = csv.reader(f)
         if next(reader, None) != ['xifra', 'abans', 'despres']:
@@ -70,8 +99,10 @@ def empaqueta(sortida, *, sense_zip=False, arrel=RESULTATS):
             with zipfile.ZipFile(temporary, 'w', zipfile.ZIP_DEFLATED) as archive:
                 for path in sorted(folder.glob('*.html')):
                     archive.write(path, f'graelles/{path.name}')
+                for name in JUNTA:
+                    archive.write(arrel / 'junta' / '5.2' / name, f'junta/5.2/{name}')
                 for pregunta in OPCIONS:
-                    for name in (*OBLIGATORIS, 'relaxacions.csv'):
+                    for name in (*OBLIGATORIS, *OPCIONALS):
                         path = arrel / pregunta / name
                         if path.is_file():
                             archive.write(path, f'nivell2/{pregunta}/{name}')
