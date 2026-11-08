@@ -4,6 +4,7 @@ from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from html import escape
 from hashlib import sha256
+import re
 from statistics import median
 
 from nivell2.base import fmt, hm
@@ -267,6 +268,7 @@ CSS = """
 .p2-horari .classe .ubicacio{display:var(--mostra-ubicacio);}
 .p2-horari .classe .resum-classe>small:not([class]){display:var(--mostra-grup);}
 .p2-horari .classe .nota{display:var(--mostra-nota);}
+.p2-horari .classe .nota-compacta{display:none;}
 /* Cada paraula és atòmica: només saltem de línia entre paraules.
    Si no cap sola, l'el·lipsi marca l'abreviació a l'amplada real disponible. */
 .p2-horari .classe .nom-paraula{display:inline-block;vertical-align:bottom;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -280,11 +282,25 @@ CSS = """
 @container p2-graella (width < 900px){
   .p2-horari .horari{min-width:var(--ample-mobil);}
 }
+/* Amb el xat lateral, els cinc dies caben també en el contenidor reduït.
+   Els carrils ja usen minmax(0,1fr); el mínim mòbil es conserva sota 700px. */
+@media (min-width:700px){
+  html.xatia-obert .p2-horari .horari{min-width:0;column-gap:4px;padding-inline:8px;}
+  html.xatia-obert .p2-horari .dia-horari{column-gap:2px;}
+  html.xatia-obert .p2-horari .classe{padding-inline:2px;}
+}
 /* Amplada real de la casella, també quan una classe ocupa tot el dia.
    Amagar secundàries allibera espai sense excedir el pressupost vertical. */
 @container p2-classe (width < 90px){
   .p2-horari .classe .resum-classe>small:not([class]){display:none;}
-  .p2-horari .classe b{-webkit-line-clamp:min(var(--linies-nom),3);max-height:calc(min(var(--linies-nom),3)*17.5px);}
+  .p2-horari .classe b{display:var(--mostra-nom-estret);-webkit-line-clamp:var(--linies-nom-estret);max-height:calc(var(--linies-nom-estret)*17.5px);}
+  .p2-horari .classe .ubicacio{display:block;font-size:11px;line-height:12px;white-space:nowrap;overflow:visible;text-overflow:clip;font-variant-numeric:tabular-nums;}
+  .p2-horari .classe .hora-inici,.p2-horari .classe .hora-fi{display:block;}
+  .p2-horari .classe .hora-separador,.p2-horari .classe .aula-classe{display:none;}
+  .p2-horari .classe .nota{display:var(--mostra-nota-estret);font-size:11px;line-height:12px;white-space:normal;overflow:visible;text-overflow:clip;}
+  .p2-horari .classe .nota-ampla{display:none;}
+  .p2-horari .classe .nota-compacta,.p2-horari .classe .abans-hora{display:block;}
+  .p2-horari .classe .abans-hora{white-space:nowrap;font-variant-numeric:tabular-nums;}
 }
 
 .p2-llegenda{display:flex;flex-wrap:wrap;gap:8px;padding:0;list-style:none;font:13px/1.35 system-ui;color:#1a1a18;}
@@ -310,16 +326,26 @@ def nom_assignatura_html(nom):
         for paraula in nom.split())
 
 
-def pressupost_classe(durada, *, nota=False):
+def pressupost_classe(durada, *, nota=False, estret=False):
     """Alçades en px, compartides amb el CSS; vàlid per qualsevol ample de carril.
 
-    Cada secundària ocupa una sola línia amb el·lipsi. Prioritzem una línia
+    En ample normal, cada secundària ocupa una línia. Prioritzem una línia
     de nom, l'hora i «Abans»; després ampliem el nom i afegim el grup.
+    En estret, reservem dues línies de 12px per l'hora i fins a tres per
+    «Abans / dc / 10:30», abans d'ampliar el nom. Altres notes s'amaguen.
     Els 6px de marge vertical es resten de l'àrea de la graella.
     """
-    padding = 2 if durada <= 30 else 8
+    padding = 2 if durada <= 60 else 8
     caixa = durada * 1.6 - 6
     disponible = max(0, caixa - 2 * padding)
+    if estret:
+        visible = 24  # Inici i final, sense el·lipsi.
+        mostra_nota = nota and visible + 36 + 3 <= disponible
+        visible += 39 if mostra_nota else 0
+        nom = min(3, max(0, int((disponible - visible - 3) // 17.5)))
+        visible += nom * 17.5 + (3 if nom else 0)
+        return dict(padding=padding, nom=nom, ubicacio=True, grup=False,
+                    nota=mostra_nota, visible=visible + 2 * padding, caixa=caixa)
     nom = 1
     visible = nom * 17.5
     ubicacio = visible + 19.2 <= disponible
@@ -416,13 +442,25 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
             if c.compartida:
                 etiqueta += ' · Classe compartida'
             nom_assignatura = nom_assignatura_html(c.assignatura)
-            contingut = (f'<b>{nom_assignatura}</b><small class="ubicacio">{fmt(c.ini)}–{fmt(c.fi)} · {escape(ubicacio)}</small>'
+            contingut = (f'<b>{nom_assignatura}</b><small class="ubicacio">'
+                        f'<span class="hora-inici">{fmt(c.ini)}</span><span class="hora-separador">–</span>'
+                        f'<span class="hora-fi">{fmt(c.fi)}</span><span class="aula-classe"> · {escape(ubicacio)}</span></small>'
                         f'<small>{escape(tipus)} · {escape(grup)}</small>')
+            abans = re.fullmatch(r'Abans: (dilluns|dimarts|dimecres|dijous|divendres) (\d{2}:\d{2})', nota)
             if nota:
-                contingut += f'<small class="nota">{escape(nota)}</small>'
+                compacta = ''
+                if abans:
+                    dia_curt = dict(zip((d.lower() for d in NOMS_DIES), ('dl', 'dt', 'dc', 'dj', 'dv')))[abans[1]]
+                    compacta = (f'<span class="nota-compacta" aria-hidden="true">Abans {dia_curt}'
+                                f'<span class="abans-hora">{abans[2]}</span></span>')
+                contingut += f'<small class="nota"><span class="nota-ampla">{escape(nota)}</span>{compacta}</small>'
             pressupost = pressupost_classe(c.fi - c.ini, nota=bool(nota))
+            estret = pressupost_classe(c.fi - c.ini, nota=bool(abans), estret=True)
             ajust = (f'--padding-classe:{pressupost["padding"]}px;'
-                     f'--linies-nom:{pressupost["nom"]};' + ''.join(
+                     f'--linies-nom:{pressupost["nom"]};'
+                     f'--linies-nom-estret:{estret["nom"]};'
+                     f'--mostra-nom-estret:{"-webkit-box" if estret["nom"] else "none"};'
+                     f'--mostra-nota-estret:{"block" if estret["nota"] else "none"};' + ''.join(
                          f'--mostra-{camp}:{"block" if pressupost[camp] else "none"};'
                          for camp in ('ubicacio', 'grup', 'nota')))
             detall_id = f'{prefix}-{dia}-{index}'
