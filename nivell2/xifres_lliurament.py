@@ -5,7 +5,7 @@ from html import escape
 from nivell2.base import Proposta, carrega_oficial, GRAU_NOU
 from nivell2.verificacio import opcions_pregunta
 from nivell2.xifres import compara
-from nivell2.readmes import normalitza
+from nivell2.readmes import normalitza, explica_comptatge
 
 
 def genera(pregunta, arrel):
@@ -27,6 +27,7 @@ def genera(pregunta, arrel):
             explanations[(match[1], match[2])] = match[3]
     text = re.sub(r'(?:\A|\n)## Què empitjora i per què\n.*?(?=\n## |\Z)', '', text, flags=re.S)
     text = normalitza(text, pregunta, arrel)
+    text = explica_comptatge(text, comptatge_verificador(pregunta, arrel), pregunta)
     lines = []
     neutral = {'sessions_avaluades', 'aules_assignades', 'relaxacions_declarades'}
     for row in comparison.files:
@@ -62,3 +63,48 @@ def graelles(sortida, arrel):
         links.append(f'<li><a href="{name}">{escape(aula)}</a></li>')
     (folder / 'index.html').write_text('<!doctype html><html lang="ca"><meta charset="utf-8"><title>Graelles 5.4</title><h1>Graelles 5.4</h1><p>Setmana del ' + str(setmana) + '</p><ul>' + ''.join(links) + '</ul></html>', encoding='utf-8')
     return folder
+
+
+def comptatge_verificador(pregunta, arrel):
+    """Només recomptes: mateixa col·locació i ordre estable que check.py."""
+    from collections import defaultdict
+    from horaris.check import Informe, _col_loca, _objectius, _vs_referencia
+
+    opcions = opcions_pregunta(pregunta, arrel)
+    base = carrega_oficial(opcions.get('escenari'))
+    proposta = Proposta.llegeix(arrel / pregunta / 'proposta.csv')
+    # El costat abans és la referència 5.2 si hi és; altrament, l’horari de partida.
+    referencia = (Proposta.llegeix(opcions['referencia']) if opcions.get('referencia')
+                  else Proposta.de_base(carrega_oficial()))
+    col = _col_loca(base, proposta.a_files(), Informe())
+    base_partida = carrega_oficial()
+    partida = _col_loca(base_partida, referencia.a_files(), Informe())
+
+    def simultanis(placements):
+        agenda = defaultdict(list)
+        for c in placements.values():
+            for coh in c.s.cohorts:
+                agenda[coh, c.s.linia, c.data, c.s.num_grup if c.s.tipus != 'TE' else '*'].append(c)
+        linies = defaultdict(set)
+        for coh, linia, data, grup in agenda:
+            linies[coh, linia, data].add(grup)
+        total = 0
+        for key, grups in linies.items():
+            for grup in (grups - {'*'} or {'*'}):
+                classes = agenda.get((*key, '*'), []) + (agenda[(*key, grup)] if grup != '*' else [])
+                classes = sorted({id(c): c for c in classes}.values(), key=lambda c: c.ini)
+                total += sum(a.ini == b.ini and bool(a.aula and b.aula) and a.aula != b.aula
+                             for a, b in zip(classes, classes[1:]))
+        return total
+
+    sense_dobles = {sid: c for sid, c in col.items() if not c.s.sense_espai}
+    x = {'simultanis_proposta': simultanis(col), 'simultanis_partida': simultanis(partida),
+         'te_partida': _objectius(base_partida, partida)['r6_aules_te_extra_per_grup'],
+         'te_partida_sense_dobles': _objectius(base_partida, {sid: c for sid, c in partida.items() if not c.s.sense_espai})['r6_aules_te_extra_per_grup'],
+         'te_oficial': _objectius(base, col)['r6_aules_te_extra_per_grup'],
+         'te_sense_dobles': _objectius(base, sense_dobles)['r6_aules_te_extra_per_grup']}
+    if pregunta == '5.3':
+        x['aula_csv'] = sum(a.aula != referencia.files[sid].aula
+                            for sid, a in proposta.files.items() if sid in referencia.files)
+        x['aula_oficial'] = _vs_referencia(base, col, referencia.a_files())['canvis_aula_vs_referencia']
+    return x

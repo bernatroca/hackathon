@@ -269,3 +269,79 @@ def test_conserva_explicacions_nomes_si_xifra_igual(tmp_path):
     assert 'Explicació conservada.' in first
     assert 'Explicació antiga.' not in first
     assert '- canvis_aula: 0 → 3; per explicar.' in first
+
+
+def test_seccio_comptatge_idempotent():
+    from nivell2.readmes import explica_comptatge
+    x = dict(simultanis_proposta=3, simultanis_partida=4, te_oficial=2,
+             te_sense_dobles=5, te_partida=6, te_partida_sense_dobles=7, aula_csv=7, aula_oficial=6)
+    for q in verificacio.OPCIONS:
+        text = explica_comptatge(normalitza('Introducció\n\n## Final\n\nText.\n', q), x, q)
+        assert text.count('## Com compta el verificador') == 1
+        assert explica_comptatge(text, x, q) == text
+        abans = 'referència 5.2' if q in ('5.3', '5.4') else 'partida'
+        assert f'3 casos a la proposta i 4 a la {abans}' in text
+        assert f'({abans} → proposta)' in text
+        assert 'Aules extra de teoria per grup» (`r6_aules_te_extra_per_grup`)' in text
+        assert '`aules_extra_teoria`' not in text
+        assert '6 → 2 segons el verificador, i 7 → 5' in text
+        assert ('7 canvis d’aula' in text) == (q == '5.3')
+        assert '## Final\n\nText.' in text
+        assert explica_comptatge(normalitza(text, q), x, q) == normalitza(text, q)
+
+
+@pytest.mark.parametrize('q', verificacio.OPCIONS)
+def test_comptatge_independent_i_readme(q):
+    """Contrasta només recomptes; no mostra sessions ni identificadors."""
+    from collections import defaultdict
+    from horaris.check import Informe as Intern, _col_loca
+    from nivell2.base import RESULTATS, Proposta, carrega_oficial
+    from nivell2.xifres_lliurament import comptatge_verificador
+    from nivell2.readmes import explica_comptatge
+    options = verificacio.opcions_pregunta(q, RESULTATS)
+    b = carrega_oficial(options.get('escenari'))
+    p = Proposta.llegeix(RESULTATS/q/'proposta.csv')
+    ref = (Proposta.llegeix(options['referencia']) if 'referencia' in options
+           else Proposta.de_base(carrega_oficial()))
+    col = _col_loca(b, p.a_files(), Intern())
+
+    def independent(placements):
+        # Construeix cada agenda directament des de les claus de subgrup.
+        keys = {(coh, c.s.linia, c.data) for c in placements.values() for coh in c.s.cohorts}
+        count = 0
+        for coh, lin, day in keys:
+            cs = [c for c in placements.values() if coh in c.s.cohorts and c.s.linia == lin and c.data == day]
+            groups = {c.s.num_grup for c in cs if c.s.tipus != 'TE'} or {None}
+            for group in groups:
+                ordered = sorted([c for c in cs if c.s.tipus == 'TE'] +
+                                 [c for c in cs if c.s.tipus != 'TE' and c.s.num_grup == group], key=lambda c: c.ini)
+                count += sum(bool(a.aula and z.aula) and a.aula != z.aula and a.ini == z.ini
+                             for a, z in zip(ordered, ordered[1:]))
+        return count
+
+    x = comptatge_verificador(q, RESULTATS)
+    assert x['simultanis_proposta'] == independent(col)
+    start = _col_loca(carrega_oficial(), ref.a_files(), Intern())
+    assert x['simultanis_partida'] == independent(start)
+    for exclude, key in ((False, 'te_oficial'), (True, 'te_sense_dobles')):
+        rooms = defaultdict(set)
+        for c in col.values():
+            if c.s.tipus == 'TE' and c.aula and not (exclude and c.s.sense_espai):
+                for coh in c.s.cohorts:
+                    rooms[coh, c.s.linia].add(c.aula)
+        assert x[key] == sum(len(v)-1 for v in rooms.values())
+        rooms.clear()
+        for c in start.values():
+            if c.s.tipus == 'TE' and c.aula and not (exclude and c.s.sense_espai):
+                for coh in c.s.cohorts:
+                    rooms[coh, c.s.linia].add(c.aula)
+        assert x['te_partida_sense_dobles' if exclude else 'te_partida'] == sum(len(v)-1 for v in rooms.values())
+    if q == '5.3':
+        assert x['aula_csv'] == sum(p.files[s].aula != ref.files[s].aula for s in p.files.keys() & ref.files.keys())
+        placed_ref = _col_loca(b, ref.a_files(), Intern())
+        assert x['aula_oficial'] == sum(col[s].aula != placed_ref[s].aula for s in col.keys() & placed_ref.keys())
+    if q == '5.1':
+        assert (x['te_partida_sense_dobles'], x['te_sense_dobles']) == (8, 9)
+    text = (RESULTATS/q/'README.md').read_text()
+    assert '## Com compta el verificador' in text
+    assert explica_comptatge(text, x, q).split('## Com compta el verificador')[1].strip() == text.split('## Com compta el verificador')[1].split('\n## ')[0].strip()
