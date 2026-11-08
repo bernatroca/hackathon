@@ -61,6 +61,7 @@
     contextInicial: undefined,
     feina: false,
     parcial: '',
+    eina: '',
     error: '',
     obert: false,
     gran: false,
@@ -149,13 +150,15 @@
     estat.error = '';
     estat.feina = true;
     estat.parcial = '';
+    estat.eina = '';
     desa();
     pinta();
 
     try {
       const r = await pregunta_(perAlServidor());
       estat.missatges = [...estat.missatges, { role: 'assistant', content: r.text, consultes: r.consultes }];
-      if (r.tallada) estat.error = 'La resposta s’ha tallat per llarga.';
+      if (r.error) estat.error = r.error;
+      else if (r.tallada) estat.error = 'La resposta s’ha tallat per llarga. Prova una pregunta més concreta.';
     } catch (e) {
       /* La pregunta que ha fallat no es queda: el text i les captures tornen a la caixa. */
       estat.missatges = abans;
@@ -166,6 +169,7 @@
     } finally {
       estat.feina = false;
       estat.parcial = '';
+      estat.eina = '';
       desa();
       pinta();
       creixCaixa();
@@ -187,7 +191,14 @@
     const tipus = resposta.headers.get('content-type') || '';
     if (resposta.ok && resposta.body && tipus.includes('event-stream')) return llegeixFlux(resposta.body);
     const dades = await resposta.json().catch(() => null);
-    throw new Error((dades && dades.error) || `El servidor ha respost ${resposta.status}.`);
+    throw new Error(missatgeError(dades && dades.error, resposta.status));
+  }
+
+  function missatgeError(missatge, codi) {
+    const text = typeof missatge === 'string' ? missatge : '';
+    if (codi === 429 || /\b429\b/.test(text)) return 'La IA està saturada. Torna-ho a provar d’aquí a uns segons.';
+    if (codi >= 500 || /\bHTTP\s+5\d\d\b/i.test(text)) return 'El servei de l’assistent no està disponible ara mateix. Torna-ho a provar d’aquí a uns segons.';
+    return text || 'No s’ha pogut completar la consulta. Torna-ho a provar.';
   }
 
   async function llegeixFlux(cos) {
@@ -197,8 +208,18 @@
     let consultes = [];
     let pendent = '';
     let darrer = 0;
+    const interromput = (error = 'La connexió s’ha tallat a mig resposta. Torna-ho a provar.') => {
+      if (text) return { text, consultes, tallada: false, error };
+      throw new Error(error);
+    };
     for (;;) {
-      const { value, done } = await lector.read();
+      let lectura;
+      try {
+        lectura = await lector.read();
+      } catch (e) {
+        return interromput();
+      }
+      const { value, done } = lectura;
       if (value) pendent += descodifica.decode(value, { stream: true });
       const blocs = pendent.split('\n\n');
       pendent = done ? '' : blocs.pop() || '';
@@ -211,8 +232,13 @@
         } catch (err) {
           continue;
         }
-        if (e.error) throw new Error(e.error);
+        if (e.error) return interromput(missatgeError(e.error));
         if (Array.isArray(e.consultes)) consultes = e.consultes;
+        if (e.eina) {
+          estat.eina = String(e.eina);
+          estat.parcial = text;
+          pintaConversa();
+        }
         if (typeof e.tros === 'string') {
           text += e.tros;
           /* Com a molt vint cops per segon: pintar-ho a cada tros no cal. */
@@ -223,12 +249,16 @@
             pintaConversa();
           }
         }
-        if (e.fi) return { text, consultes, tallada: !!e.tallada, model: e.model };
+        if (e.fi) {
+          if (!text) throw new Error(e.tallada
+            ? 'La resposta s’ha tallat abans d’escriure res. Prova una pregunta més concreta.'
+            : 'No s’ha pogut obtenir una resposta. Torna-ho a provar.');
+          return { text, consultes, tallada: !!e.tallada, model: e.model };
+        }
       }
       if (done) break;
     }
-    if (text) return { text, consultes, tallada: true };
-    throw new Error('La resposta s’ha tallat abans de començar.');
+    return interromput('La connexió s’ha tallat abans de completar la resposta. Torna-ho a provar.');
   }
 
   /* ---------- captures ---------- */
@@ -333,11 +363,11 @@
     const arrel = document.createElement('div');
     arrel.className = 'xatia';
     arrel.innerHTML = `
-      <button type="button" class="xatia-boto" aria-label="Obre ${escapa(op.titol)}">
+      <button type="button" class="xatia-boto" aria-label="Obre ${escapa(op.titol)}" aria-expanded="false" aria-controls="xatia-plafo">
         ${icona('sparkles', 20)}<span>${escapa(op.titol)}</span>
       </button>
       <div class="xatia-fons" hidden></div>
-      <aside class="xatia-plafo" aria-label="${escapa(op.titol)}" aria-hidden="true" inert>
+      <aside id="xatia-plafo" class="xatia-plafo" aria-label="${escapa(op.titol)}" aria-hidden="true" inert>
         <header class="xatia-cap">
           <span class="xatia-titol">${icona('sparkles', 18)} ${escapa(op.titol)}</span>
           <button type="button" class="xatia-icona" data-fa="nova" aria-label="Conversa nova" title="Conversa nova">${icona('nova', 16)}</button>
@@ -347,7 +377,7 @@
         <div class="xatia-cos">
           <div class="xatia-columna">
             <div class="xatia-missatge xatia-missatge--ia xatia-salutacio"></div>
-            <div class="xatia-conversa"></div>
+            <div class="xatia-conversa" role="log" aria-live="polite" aria-relevant="additions text" aria-busy="false"></div>
             <div class="xatia-final"></div>
           </div>
         </div>
@@ -405,6 +435,7 @@
   let menuXatObert = false;
   let menuPlegatPelXat = false;
   let clicMenuDelXat = false;
+  let menuManual = false;
   let observaMenu;
 
   function menuVisible(node) {
@@ -435,7 +466,7 @@
   }
 
   function plegaMenuPelXat() {
-    if (!estat.obert || !esAcoblat()) {
+    if (!estat.obert || !esAcoblat() || menuManual || menuPlegatPelXat) {
       deixaObservarMenu();
       return;
     }
@@ -443,6 +474,13 @@
     if (!menu) return; // Pot muntar-se després del widget.
     if (!menuVisible(menu)) {
       deixaObservarMenu(); // Ja estava plegat: no ens correspon restaurar-lo.
+      return;
+    }
+    // També a 1440 px: reservem lloc al plafó i almenys 1000 px a la pàgina.
+    const ampladaMenu = menu.getBoundingClientRect().width;
+    const ampladaPlafo = el.plafo.getBoundingClientRect().width;
+    if (window.innerWidth - ampladaMenu - ampladaPlafo >= 1000) {
+      deixaObservarMenu();
       return;
     }
     const boto = botoMenu(selectorPlegaMenu);
@@ -456,18 +494,23 @@
     if (!menuXatObert || clicMenuDelXat) return;
     if (e.target.closest && e.target.closest(selectorPlegaMenu + ', ' + selectorDesplegaMenu)) {
       menuPlegatPelXat = false;
+      menuManual = true;
       deixaObservarMenu();
     }
   }
 
   function sincronitzaMenu() {
     if (typeof document.querySelector !== 'function') return;
-    if (menuXatObert === estat.obert) return;
+    if (menuXatObert === estat.obert) {
+      if (estat.obert) plegaMenuPelXat();
+      return;
+    }
     menuXatObert = estat.obert;
     deixaObservarMenu();
     if (estat.obert) {
       menuPlegatPelXat = false;
-      if (!esAcoblat() || window.innerWidth >= 1440) return;
+      menuManual = false;
+      if (!esAcoblat()) return;
       // Només mentre esperem el muntatge inicial; mai replegar un menú manual.
       if (typeof MutationObserver !== 'undefined') {
         observaMenu = new MutationObserver(plegaMenuPelXat);
@@ -492,6 +535,10 @@
     window.dispatchEvent(new Event('resize'));
   }
 
+  function mostraFinal() {
+    if (estat.obert) el.final.scrollIntoView({ block: 'end' });
+  }
+
   function sincronitzaPlafó() {
     sincronitzaMenu();
     const acoblat = estat.obert && esAcoblat();
@@ -504,7 +551,7 @@
       avisaAmplada();
       // Respatller per a transicions interrompudes i moviment reduït (sense
       // transitionend). No es programa en cada tros de resposta ni pantalla.
-      resizePendent = window.setTimeout(avisaAmplada, 260);
+      resizePendent = window.setTimeout(() => { avisaAmplada(); mostraFinal(); }, 260);
     }
   }
 
@@ -513,6 +560,7 @@
         (e.target.matches?.('.stApp') && e.propertyName === 'width')) {
       window.clearTimeout(resizePendent);
       avisaAmplada();
+      mostraFinal();
     }
   }
 
@@ -606,6 +654,7 @@
       visualViewport.addEventListener('scroll', teclat);
     }
     window.matchMedia('(max-width: 699px)').addEventListener('change', pinta);
+    window.addEventListener('resize', sincronitzaMenu);
   }
 
   function creixCaixa() {
@@ -634,10 +683,11 @@
   function pintaConversa() {
     let html = estat.missatges.map(htmlMissatge).join('');
     if (estat.feina) {
-      html += estat.parcial
-        ? `<div class="xatia-missatge xatia-missatge--ia xatia-escrivint">${markdown(estat.parcial)}</div>`
-        : '<div class="xatia-missatge xatia-missatge--ia xatia-pensant">Pensant…</div>';
+      if (estat.parcial) html += `<div class="xatia-missatge xatia-missatge--ia xatia-escrivint">${markdown(estat.parcial)}</div>`;
+      if (estat.eina || !estat.parcial) html += `<div class="xatia-missatge xatia-missatge--ia xatia-pensant">${estat.eina ? 'Consultant l’horari…' : 'Pensant…'}</div>`;
     }
+    // Anunciem la resposta completa, sense llegir cada fragment del flux.
+    el.conversa.setAttribute('aria-busy', String(estat.feina));
     el.conversa.innerHTML = html;
     el.final.scrollIntoView({ block: 'end' });
   }
@@ -656,6 +706,7 @@
     el.arrel.classList.toggle('xatia--gran', gran && !esMobil());
     el.arrel.classList.toggle('xatia--amb-conversa', estat.missatges.length > 0);
     el.boto.hidden = obert;
+    el.boto.setAttribute('aria-expanded', String(obert));
     sincronitzaPlafó();
     el.plafo.setAttribute('aria-hidden', String(!obert));
     el.plafo.inert = !obert;
@@ -674,7 +725,7 @@
     /* Què veu de la pantalla, perquè se sàpiga que se li pot dir «i això?». */
     const veu = estat.pantalla && estat.pantalla.resum;
     el.veu.hidden = !veu;
-    el.veu.textContent = veu ? `Veu: ${veu}` : '';
+    el.veu.textContent = veu ? `Context: ${veu}` : '';
     el.veu.title = veu || '';
 
     el.preguntes.innerHTML = preguntesAra()
