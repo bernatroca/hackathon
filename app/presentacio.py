@@ -151,7 +151,7 @@ def context(t, altres=None):
             totes_mides = totes_mides[totes_mides.variant == 'oficial']
         c['falla'] = c['falla'] or ('falla' in totes_mides and bool(totes_mides.falla.any()))
         c['resposta'] = 'Falten aules d’algunes mides' if c['falla'] else 'Hi ha marge d’hores'
-        c['torns'] = f"Matí {c['ocupacio']} %. Que l’horari encaixi de debò ho valida la part 2."
+        c['torns'] = f"Matí {c['ocupacio']} %. Cal comprovar que les classes encaixen a l’horari proposat."
         torns = taula_extra(extra.get('torns', []))
         if {'torn', 'ocupacio_pct'}.issubset(torns.columns):
             noms = torns.torn.astype(str).str.lower().str.replace('í', 'i', regex=False)
@@ -159,7 +159,7 @@ def context(t, altres=None):
             parts = [f"{nom} {numero(round(float(valors[torn])))} %" for torn, nom, acord in
                      [('mati', 'Matí', 'ocupat'), ('tarda', 'Tarda', 'ocupada')] if torn in valors]
             if parts:
-                c['torns'] = ' · '.join(parts) + '. Que l’horari encaixi de debò ho valida la part 2.'
+                c['torns'] = ' · '.join(parts) + '. Cal comprovar que les classes encaixen a l’horari proposat.'
         c['coll_ampolla'] = coll_ampolla(extra)
     elif t.id in ('fora-torn', 'hores-aula'):
         cobertura = t if t.id == 'hores-aula' else altres.get('hores-aula')
@@ -244,7 +244,7 @@ def text(t, altres=None, *, setmana_triada=None):
         elif v.get('resposta') in (2, 4):
             resultat.update(etiqueta='Cal actuar', estat='vermell', frase=(
                 'No hi cap sense tocar l’horari proposat.' if v['resposta'] == 2 else 'Hem demostrat que no hi cap.')
-                + ' Ho ha comprovat la part 2 amb el verificador oficial.')
+                + ' Ho hem comprovat amb el verificador oficial.')
         else:
             resultat.update(etiqueta='Pendent de comprovar', estat='ambre')
     if t.id in ('hores-mortes', 'canvis-aula', 'dobles-mati') and 'setmanes_lectives' in t.extra:

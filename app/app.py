@@ -48,6 +48,7 @@ pagina = st.navigation({
         st.Page('pagines/imprevistos.py',title='Imprevistos',url_path='imprevistos',icon=':material/event_busy:'),
     ],
 })
+st.session_state['_pagina_horari'] = st.Page(part2.mostra, title='Horari proposat', url_path='part2')
 with st.sidebar:
     st.markdown('<div class="marca-escola">Espais de l’Escola</div>', unsafe_allow_html=True)
 st.title(pagina.title)
