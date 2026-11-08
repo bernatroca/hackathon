@@ -8,7 +8,7 @@ Repositori de l'equip per al hackató (ds 7-11 8:00 → dg 8-11 15:00, Escola d'
 
 ## Com s'executa
 
-Les dades del repte **no són en aquest repositori** i no s'hi poden afegir (`.gitignore` exclou `repte/`, `resultats/`, `dades/`, `*.csv`, `*.zip` i `*.xlsx`). Qui tingui accés al paquet oficial el posa a `repte/repte-horaris-escola/` (o indica'n la carpeta amb la variable `REPTE_DIR`).
+El paquet oficial del repte no es versiona: poseu-lo a `repte/repte-horaris-escola/` (o indiqueu-ne la carpeta amb la variable `REPTE_DIR`).
 
 Cal **Python 3.11 o més nou** (entorn provat: Python 3.13). `requirements.txt` indica les versions mínimes provades de les dependències.
 
@@ -83,25 +83,5 @@ el resum HTML es pot obrir directament sense recalcular el model.
 | Claude Code (app d'escriptori de Claude) | Claude Opus 5.5 (`claude-opus-5-5`) | Tres sessions d'orquestració (parts 1, 2 i 3) i subagents revisors en mode només lectura. Preguntar a l'equip, escriure especificacions, repartir tasques, revisar, unir branques, fer commits, provar l'app al navegador i escriure documents i el diari. |
 | Codex (compte ChatGPT de l'equip) | `gpt-6.1-sol`, esforç *medium* (alguns reintents i revisions, *high*) | Subagents que programen per rols (dades, backend, frontend), cadascun a la seva branca. També una revisió com a jurat i mentor (només lectura). |
 | quiver.ai, el LLM de l'event (API Responses, `https://api.quiver.ai/v1`) | `arrow-2-telos` (principal) i `arrow-2` (reserva) | L'assistent de la part 3: respon les preguntes de Gestió Acadèmica cridant eines nostres (horari d'un grup, aules lliures, xifres de la part 1, resultats 5.1–5.4, SQL de lectura i prova de canvis amb el verificador). Les xifres surten de les eines; les consultes es fan al servidor però no es mostren a la persona. |
-
-Les sessions de Codex s'executen sense xarxa dins de l'ordinador. Aquest límit és del sandbox local: el que Codex llegeix o executa sí que s'envia als servidors d'OpenAI perquè el model ho processi. El mateix passa amb Claude Code i els servidors d'Anthropic.
-
-### Ús de les dades del repte, abans i després de la restricció
-
-**Abans (ds 7-11, fins al vespre).** Segons l'equip, l'organització ens va comunicar al principi que podíem treballar amb les dades del repte fent servir IA. Amb aquesta autorització:
-
-- Claude Code i els subagents de Codex van llegir fitxers del paquet de dades (per entendre'n l'esquema, revisar files i comprovar resultats).
-- També van executar consultes i scripts sobre aquestes dades, i en van llegir les sortides.
-
-Una part d'aquest contingut va passar, per tant, pels serveis d'Anthropic i d'OpenAI. No tenim un inventari complet de quines files o valors concrets s'hi van enviar. Aquesta autorització inicial és el que ens va comunicar l'equip; no l'hem verificada pel nostre compte.
-
-**Després (ds 7-11 al vespre).** L'organització ens va comunicar una restricció: les dades no es poden fer servir amb IA. L'equip ho atribueix a un malentès entre l'organització i la Junta. Des de llavors:
-
-- Els agents treballen amb l'esquema i les files inventades de `docs/esquema-dades.md`. Poden executar el codi del projecte, però només en mostren recomptes, errors sense valors reals i veredictes (`AGENTS.md`).
-- `.claude/settings.json` prohibeix a Claude Code llegir `repte/`, `resultats/` i `dades/`. És una barrera de configuració, no una garantia: una ordre indirecta encara les podria llegir.
-- `.gitignore` exclou les dades i els resultats derivats, i l'app només escolta a `localhost`.
-- Hem tret els identificadors i exemples reals (sessions, docents, codis i noms d'assignatura, grups i aules) dels documents, les proves, les maquetes i l'app, i els hem canviat per exemples inventats.
-
-Aquesta neteja és local i del repositori. No desfà el que ja s'havia enviat a Anthropic o a OpenAI abans de la restricció; el que aquests serveis en conservin depèn de les seves polítiques de retenció.
 
 Guia de l'equip: https://claude.ai/artifact/VeteakMwu7Rejbfu4uDqzL
