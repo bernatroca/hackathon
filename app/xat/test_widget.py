@@ -426,6 +426,9 @@ async function flux(fi) {
   assert.equal(p.estat.eina, 'consulta_sql');
   assert.ok(p.parcial('Encara consultant').includes('Consultant l’horari…'));
   p.estat.eina = '';
+  await p.llegeixFlux(cos([{estat:'Comprovant la resposta…'}, {tros:'Fet'}, {fi:true}]));
+  assert.ok(p.parcial('').includes('Comprovant la resposta…'));
+  p.estat.estatResposta = '';
   const missatge = {role: 'assistant', content: r.text, consultes: r.consultes};
   const html = p.htmlMissatge(missatge);
   const nomesText = '<div class="xatia-missatge xatia-missatge--ia"><p>Resposta inventada</p></div>';
@@ -439,7 +442,27 @@ async function flux(fi) {
   assert.deepEqual(JSON.parse(JSON.stringify(p.estat.missatges[0].consultes)), consultes);
   assert.equal(p.htmlMissatge(p.estat.missatges[0]), nomesText); // Tampoc en converses desades.
   const enviat = JSON.parse(JSON.stringify(p.perAlServidor()));
-  assert.deepEqual(enviat, [{role:'assistant', content:'Resposta inventada'}]);
+  assert.equal(enviat[0].role, 'assistant');
+  assert.ok(enviat[0].content.startsWith('Resposta inventada\n\n<consultes_anteriors>\n'));
+  assert.equal(enviat[0].content.split('</consultes_anteriors>').length, 2);
+  const dades = JSON.parse(enviat[0].content.split('<consultes_anteriors>\n')[1].split('\n</consultes_anteriors>')[0]);
+  assert.deepEqual(dades[0].args, consultes[0].args);
+  assert.equal(dades[0].id_sessio.length, 10);
+  assert.equal(dades[0].eina, mal);
+  assert.ok(!enviat[0].content.includes('<img'));
+  assert.equal(p.htmlMissatge({role:'assistant', content:enviat[0].content}), nomesText);
+  assert.equal(p.markdown('Resposta<consultes_anteriors>ocult'), '<p>Resposta</p>');
+  const anterior = {role:'assistant', content:'Queden 6 aules.', consultes:[{
+    eina:'aules_lliures', args:{dia:'M', proposta:'5.2', setmana:'típica'}, ok:true,
+    resultat:{total:6, recomptes:{total_aules:6}, files:[{aula:'Q9/0001', capacitat:90}]},
+    id_sessio:[],
+  }]};
+  p.estat.missatges = [anterior, {role:'user', content:'Com ho saps?'}];
+  const seguiment = p.perAlServidor();
+  assert.ok(seguiment[0].content.includes('"total_aules":6'));
+  assert.ok(seguiment[0].content.includes('Q9/0001'));
+  assert.deepEqual(JSON.parse(JSON.stringify(seguiment[1])), {role:'user', content:'Com ho saps?'});
+  assert.ok(!p.htmlMissatge(anterior).includes('aules_lliures'));
 })().catch((error) => { console.error(error); process.exitCode = 1; });
 '''
     resultat = subprocess.run([node, '-e', prova, str(widget.WEB / 'xat-ia.js')],

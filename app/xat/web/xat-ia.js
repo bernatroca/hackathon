@@ -62,6 +62,7 @@
     feina: false,
     parcial: '',
     eina: '',
+    estatResposta: '',
     error: '',
     obert: false,
     gran: false,
@@ -104,6 +105,16 @@
 
   function textPerALaIA(m, i) {
     let t = m.content;
+    if (m.role === 'assistant' && Array.isArray(m.consultes) && m.consultes.length) {
+      const consultes = m.consultes.map((c) => ({
+        eina: c.eina, args: c.args, ok: c.ok, resultat: c.resultat,
+        id_sessio: Array.isArray(c.id_sessio) ? c.id_sessio.slice(0, 10) : [],
+      }));
+      // El JSON no pot tancar el delimitador ni afegir altres blocs de context.
+      const dades = JSON.stringify(consultes).replace(/[<>&]/g, (c) =>
+        ({'<': '\\u003c', '>': '\\u003e', '&': '\\u0026'})[c]);
+      t += `\n\n<consultes_anteriors>\n${dades}\n</consultes_anteriors>`;
+    }
     if (m.pantalla) t = `<pantalla>\n${m.pantalla}\n</pantalla>\n\n${t}`;
     if (i === 0 && estat.contextInicial) t = `<context>\n${estat.contextInicial}\n</context>\n\n${t}`;
     return t;
@@ -151,6 +162,7 @@
     estat.feina = true;
     estat.parcial = '';
     estat.eina = '';
+    estat.estatResposta = '';
     desa();
     pinta();
 
@@ -170,6 +182,7 @@
       estat.feina = false;
       estat.parcial = '';
       estat.eina = '';
+      estat.estatResposta = '';
       desa();
       pinta();
       creixCaixa();
@@ -235,8 +248,13 @@
         }
         if (e.error) return interromput(missatgeError(e.error));
         if (Array.isArray(e.consultes)) consultes = e.consultes;
+        if (e.estat === 'Comprovant la resposta…') {
+          estat.estatResposta = e.estat;
+          pintaConversa();
+        }
         if (e.eina) {
           estat.eina = String(e.eina);
+          estat.estatResposta = '';
           estat.parcial = text;
           pintaConversa();
         }
@@ -316,6 +334,7 @@
     // escapar abans de generar HTML, també durant la resposta en directe.
     const entitats = { '&lt;': '<', '&gt;': '>', '&amp;': '&', '&quot;': '"', '&#39;': "'", '&#x27;': "'" };
     text = text.replace(/&(?:lt|gt|amp|quot|#39|#x27);/g, (entitat) => entitats[entitat]);
+    text = text.replace(/<consultes_anteriors>[\s\S]*?(?:<\/consultes_anteriors>|$)/g, '');
     const linies = text.replace(/\r/g, '').split('\n');
     let html = '';
     let llista = null; // 'ul' | 'ol'
@@ -688,7 +707,7 @@
     let html = estat.missatges.map(htmlMissatge).join('');
     if (estat.feina) {
       if (estat.parcial) html += `<div class="xatia-missatge xatia-missatge--ia xatia-escrivint">${markdown(estat.parcial)}</div>`;
-      if (estat.eina || !estat.parcial) html += `<div class="xatia-missatge xatia-missatge--ia xatia-pensant">${estat.eina ? 'Consultant l’horari…' : 'Pensant…'}</div>`;
+      if (estat.estatResposta || estat.eina || !estat.parcial) html += `<div class="xatia-missatge xatia-missatge--ia xatia-pensant">${estat.estatResposta || (estat.eina ? 'Consultant l’horari…' : 'Pensant…')}</div>`;
     }
     // Anunciem la resposta completa, sense llegir cada fragment del flux.
     el.conversa.setAttribute('aria-busy', String(estat.feina));

@@ -8,7 +8,8 @@ Copiat de com ho fa Armari (server/api/pregunta.php + ia.php), passat a Python:
 - Cada missatge es reconstrueix camp a camp: no hi passa res més del que toca.
 - Les captures només poden ser data URI d'imatge (les que fa el xat), poques i petites.
 - La resposta surt en directe com a esdeveniments (SSE):
-      data: {"tros": "..."}                      mentre escriu
+      data: {"estat": "Comprovant la resposta…"}  mentre acumula i comprova
+      data: {"tros": "..."}                      text final comprovat
       data: {"fi": true, "tallada": false, "model": "..."}   al final
       data: {"error": "..."}                     si es talla a mig camí
   Si falla ABANS de començar, és un error normal en JSON amb el seu codi (l'adaptador ho fa).
@@ -30,6 +31,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import os
 import re
 import time
+from decimal import Decimal
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -397,7 +399,7 @@ def _executa(crida):
 
 
 def _resum_consulta(nom, args, resultat):
-    """Traça per al navegador, separada dels missatges que rep la IA."""
+    """Traça compacta, guardada pel client per poder explicar la resposta anterior."""
     ids, vistos = [], set()
 
     def afegeix(valor):
@@ -425,9 +427,97 @@ def _resum_consulta(nom, args, resultat):
     resum = {"eina": nom, "args": args, "ok": resultat.get("ok") is True,
              "consulta": resultat.get("consulta", ""), "id_sessio": ids[:10],
              "total_id": len(ids)}
+    if resum["ok"]:
+        resum["resultat"] = _resum_resultat(resultat.get("resultat"))
     if not resum["ok"]:
         resum["error"] = _sense_claus(str(resultat.get("error", "")))[:200]
     return _neteja_secrets(resum)
+
+
+def _resum_resultat(valor, profunditat=0):
+    """Conserva recomptes i context; les mostres de files tenen un límit explícit."""
+    if profunditat > 6:
+        return None
+    if isinstance(valor, dict):
+        return {k: _resum_resultat(v, profunditat + 1) for k, v in valor.items()
+                if k != "id_sessio"}
+    if isinstance(valor, list):
+        return [_resum_resultat(v, profunditat + 1) for v in valor[:10]]
+    if isinstance(valor, str):
+        return valor[:300]
+    return valor
+
+
+_BLOC_CONSULTES = re.compile(r"<consultes_anteriors>.*?(?:</consultes_anteriors>|$)", re.S)
+_CODIS = re.compile(r"\b(?:[A-Z]\d+/\d{4}|[SN]\d+)\b", re.I)
+_NUMERO = re.compile(r"(?<![\w/])[-+]?\d+(?:[.,]\d+)*(?![\w/])")
+_TEMPORAL = re.compile(
+    r"\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}[/.-]\d{1,2}[/.-]\d{4}\b|"
+    r"\b\d{4}-W\d{2}\b|\b\d{1,2}:\d{2}(?::\d{2})?\b|"
+    r"\b(?:[01]?\d|2[0-3])[.][0-5]\d\b(?!\s*%)|"
+    r"(?<=a les )\d{1,2}(?:[.]\d{2})?\b|(?<=a las )\d{1,2}(?:[.]\d{2})?\b|"
+    r"\b\d{1,2}(?:[.]\d{2})?\s*(?:h\b|am\b|pm\b)|"
+    r"\b\d{1,2}(?=\s+(?:de |d['’])(?:gener|febrer|març|abril|maig|juny|juliol|agost|setembre|octubre|novembre|desembre)\b)",
+    re.I,
+)
+
+
+def _normalitza_numero(text):
+    # Punt amb grups de tres = milers; coma = decimal, tal com mostra l'app.
+    if re.fullmatch(r"[-+]?\d{1,3}(?:\.\d{3})+(?:,\d+)?", text):
+        text = text.replace(".", "")
+    return str(Decimal(text.replace(",", ".")).normalize())
+
+
+def _afirmacions(text):
+    """Tokens atòmics: els dígits d'una aula, data o sessió no avalen recomptes."""
+    text = html.unescape(text)
+    tokens = [(m.group().upper(), m.group()) for m in _CODIS.finditer(text)]
+    text = _CODIS.sub(" ", text)
+    text = _TEMPORAL.sub(" ", text)
+    for m in _NUMERO.finditer(text):
+        try:
+            tokens.append((_normalitza_numero(m.group()), m.group()))
+        except ArithmeticError:
+            continue
+    return tokens
+
+
+def _evidencia(valor):
+    """Llegeix valors, mai noms de columna ni números d'una consulta SQL."""
+    if isinstance(valor, dict):
+        return set().union(*(_evidencia(v) for k, v in valor.items()
+                             if k not in ("consulta", "error")))
+    if isinstance(valor, list):
+        return set().union(*(_evidencia(v) for v in valor))
+    if type(valor) in (int, float):
+        return {str(Decimal(str(valor)).normalize())}
+    if isinstance(valor, str):
+        return {token for token, _ in _afirmacions(valor)}
+    return set()
+
+
+def _evidencia_conversa(missatges):
+    fonts = set()
+    for m in missatges:
+        contingut = m.get("content", "")
+        text = contingut if isinstance(contingut, str) else "\n".join(
+            p.get("text", "") for p in (contingut or []) if p.get("type") == "text")
+        if m["role"] == "user":
+            fonts.update(_evidencia(text))
+        elif m["role"] == "assistant":
+            for bloc in _BLOC_CONSULTES.findall(text):
+                cru = bloc.removeprefix("<consultes_anteriors>").removesuffix("</consultes_anteriors>").strip()
+                try:
+                    valor = json.loads(cru)
+                except ValueError:
+                    valor = cru
+                fonts.update(_evidencia(valor))
+    return fonts
+
+
+def _no_comprovades(text, fonts):
+    return list(dict.fromkeys(original for token, original in _afirmacions(text) if token not in fonts))
 
 
 def _llengua(missatges):
@@ -467,40 +557,59 @@ def _trossos(p: dict, missatges: list[dict]):
         return
     llengua = _llengua(missatges)
     conversa = [*missatges, {"role": "system", "content": _IDIOMES[llengua]}]
-    for i in range(6):
-        crides, contingut = [], []
-        final = {"tallada": False, "model": p["model"]}
-        for tipus, valor in _trossos_api({**p, 'sense_eines': True} if i == 5 else p, conversa):
-            if tipus == "tools":
-                crides.extend(valor)
-            elif tipus == "tros":
-                contingut.append(valor)
-                yield tipus, valor
-            elif tipus == "fi":
-                final = valor
-        if i == 5:
-            if not contingut:
-                yield 'tros', _LIMIT_VOLTES[llengua]
-            yield 'fi', final
-            return
-        if not crides:
+    fonts = _evidencia_conversa(missatges)
+    for correccio in range(2):
+        for i in range(6):
+            crides, contingut = [], []
+            final = {"tallada": False, "model": p["model"]}
+            avisat = False
+            for tipus, valor in _trossos_api({**p, 'sense_eines': True} if i == 5 else p, conversa):
+                if tipus == "tools":
+                    crides.extend(valor)
+                elif tipus == "tros":
+                    contingut.append(valor)
+                    if not avisat:
+                        yield "estat", "Comprovant la resposta…"
+                        avisat = True
+                elif tipus == "fi":
+                    final = valor
+            if crides and i < 5:
+                conversa.append({"role": "assistant", "content": "".join(contingut) or None,
+                                 "tool_calls": crides})
+                for crida in crides:
+                    yield "eina", crida["function"]["name"]
+                    resultat = _executa(crida)
+                    if resultat.get("ok") is True:
+                        fonts.update(_evidencia(resultat))
+                    try:
+                        args = _arguments_crida(crida)
+                    except (ValueError, TypeError):
+                        args = {}
+                    yield "consulta", _resum_consulta(crida["function"]["name"], args, resultat)
+                    conversa.append({"role": "tool", "tool_call_id": crida["id"],
+                                     "content": "<dades>\n" + json.dumps(resultat, ensure_ascii=False)
+                                     + "\n</dades>"})
+                continue
+            # Cap fragment de text de la IA arriba al client abans de comprovar-lo.
+            text = _BLOC_CONSULTES.sub("", "".join(contingut)).strip()
+            if not text and i == 5:
+                text = _LIMIT_VOLTES[llengua]
+            pendents = _no_comprovades(text, fonts)
+            if pendents and correccio == 0:
+                conversa.append({"role": "assistant", "content": text})
+                conversa.append({"role": "system", "content":
+                    "Aquestes dades de la teva resposta no surten de cap resultat d'eina: "
+                    + json.dumps(pendents, ensure_ascii=False)
+                    + ". Torna a cridar l'eina adequada si cal i corregeix la resposta; no inventis."})
+                break
+            if pendents:
+                prefix = {'ca': 'No he pogut comprovar', 'es': 'No he podido comprobar',
+                          'en': 'I could not verify'}[llengua]
+                text += "\n(" + prefix + ": " + ", ".join(pendents) + ")"
+            if text:
+                yield "tros", text
             yield "fi", final
             return
-        conversa.append({"role": "assistant", "content": "".join(contingut) or None,
-                         "tool_calls": crides})
-        for crida in crides:
-            yield "eina", crida["function"]["name"]
-            resultat = _executa(crida)
-            try:
-                args = _arguments_crida(crida)
-            except (ValueError, TypeError):
-                args = {}
-            yield "consulta", _resum_consulta(crida["function"]["name"], args, resultat)
-            conversa.append({"role": "tool", "tool_call_id": crida["id"],
-                             "content": "<dades>\n" + json.dumps(resultat, ensure_ascii=False)
-                             + "\n</dades>"})
-    yield "tros", _LIMIT_VOLTES[llengua]
-    yield "fi", {"tallada": False, "model": p["model"]}
 
 
 def _sense_claus(text):
@@ -582,6 +691,8 @@ def _segueix(primer, trossos) -> Iterator[str]:
             if tipus == "tros":
                 escrit = True
                 yield _sse({"tros": valor})
+            elif tipus == "estat":
+                yield _sse({"estat": valor})
             elif tipus == "eina":
                 yield _sse({"eina": valor})
             elif tipus == "consulta":
