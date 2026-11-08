@@ -50,7 +50,7 @@ def dades_inventades():
     despres.files['recuperacio-inventada'].dia = 'V'
     despres.files['suport-inventada'].aula = 'Q9/0002'
     relaxacions = [{'restriccio': 'R1-FIXADA', 'sessions': 'reserva-inventada',
-                   'justificacio': 'L’aula està tancada; canviem l’aula d’una classe fixada i conservem el dia i l’hora.'}]
+                   'justificacio': 'L’aula de la sessió fixada està tancada per una contingència; és imprescindible canviar només l’aula, conservant el dia, l’hora i el torn.'}]
     noms = {s.codi: f'Assignatura Inventada {i + 1}' for i, s in enumerate(sessions)}
     return calcula(base, contingencies, abans, despres, relaxacions,
                    resum={'temps_s': 1.24}, informe={'veredicte': 'VALIDA AMB RELAXACIONS DECLARADES'}, noms=noms)

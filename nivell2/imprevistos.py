@@ -9,6 +9,8 @@ from collections import defaultdict
 from datetime import date, timedelta
 import re
 
+from nivell2.junta import MOTIU_S04526
+
 DIES = 'LMXJV'
 NOMS_DIES = ('Dilluns', 'Dimarts', 'Dimecres', 'Dijous', 'Divendres', 'Dissabte', 'Diumenge')
 TIPUS = {'TE': 'teoria', 'PAUL': 'problemes', 'SEM': 'seminari', 'PLAB': 'laboratori'}
@@ -26,15 +28,33 @@ def nom_grup(grup, tipus):
     return f'{"Grup" if tipus == "TE" else "Subgrup"} {grup.rsplit("/", 1)[-1]} · {nom}'
 
 
-def motiu_planer(text):
-    """Tradueix les abreviatures que poden venir de les justificacions."""
-    regles = {'R1': 'torn i classes fixades', 'R2': 'finestra horària',
-              'R3': 'aules i capacitat', 'R4': 'solapaments d’aula, professorat o alumnat',
-              'R5': 'recuperació de classes', 'R6': 'aula habitual',
-              'R7': 'aules de laboratori', 'R8': 'aules de reserva'}
-    text = re.sub(r'\bR[1-8](?:-[A-Z0-9_]+)?\b',
-                  lambda m: regles[m.group()[:2]], text)
-    return re.sub(r'\b(?:TE|PAUL|SEM|PLAB)\b', lambda m: TIPUS[m.group()], text)
+MOTIU_DESCONEGUT = '1 d’aquestes classes necessita una excepció a les condicions habituals; en pots consultar el motiu al detall tècnic.'
+MOTIU_FIXADA = '1 d’aquestes classes estava fixada; com que la seva aula està tancada, només li canviem l’aula: es fa el mateix dia, a la mateixa hora.'
+MOTIUS_PLANERS = {
+    'L’aula de la sessió fixada està tancada per una contingència; és imprescindible canviar només l’aula, conservant el dia, l’hora i el torn.':
+        MOTIU_FIXADA,
+    'La regla 1 diu que les classes de 1r i 2n d’aquests graus no es toquen; ja es fan a la tarda.':
+        'Aquestes classes ja es fan a la tarda i mantenen l’horari perquè estaven fixades.',
+    'El doble va a la classe d’un altre grup, que no es mou.':
+        'L’alumnat de la doble titulació comparteix classe amb un altre grup i en manté l’horari.',
+    'Setmana d’avaluació: impossibilitat demostrada amb R1 dura; vegeu diagnostic.md.':
+        MOTIU_S04526,
+}
+
+
+def motiu_planer(text, n=1):
+    """Només publiquem traduccions conegudes; un motiu nou no exposa text tècnic."""
+    normalitzat = text.replace("'", '’')
+    normalitzat = re.sub(r'(?:\.\./5\.2/)?diagnostic\.md', 'diagnostic.md', normalitzat)
+    planer = MOTIUS_PLANERS.get(normalitzat, MOTIU_DESCONEGUT)
+    if n != 1:
+        if planer == MOTIU_FIXADA:
+            return (f'{n} d’aquestes classes estaven fixades; com que la seva aula està tancada, '
+                    'només els canviem l’aula: es fan el mateix dia, a la mateixa hora.')
+        if planer == MOTIU_DESCONEGUT:
+            return (f'{n} d’aquestes classes necessiten una excepció a les condicions habituals; '
+                    'en pots consultar el motiu al detall tècnic.')
+    return planer
 
 
 def _moment(sessio, assignacio):
@@ -147,7 +167,16 @@ def calcula(base_52, contingencies, proposta_52, proposta_53, relaxacions, *,
     targetes = []
     for clau, titol in IMPREVISTOS:
         sessions = afectades[clau]
-        motius = sorted({motiu_planer(motiu) for _, sid, motiu in noves if sid in sessions})
+        # Comptem classes úniques per explicació, encara que tinguin més d’una regla.
+        per_explicacio = defaultdict(set)
+        originals = {}
+        for _, sid, motiu in noves:
+            if sid in sessions:
+                explicacio = motiu_planer(motiu)
+                per_explicacio[explicacio].add(sid)
+                originals[explicacio] = motiu
+        motius = sorted(motiu_planer(originals[m], len(ids))
+                        for m, ids in per_explicacio.items())
         targetes.append({'clau': clau, 'titol': titol, 'descripcio': descripcio(clau),
                         'sessions_afectades': len(sessions),
                         'canvis_aula': len(sessions & canvis_aula),
@@ -165,7 +194,7 @@ def calcula(base_52, contingencies, proposta_52, proposta_53, relaxacions, *,
                       'imprevistos': [clau for clau, _ in IMPREVISTOS if sid in afectades[clau]]})
     per_motiu = defaultdict(set)
     for _, sid, motiu in totes_relax:
-        per_motiu[motiu_planer(motiu)].add(sid)
+        per_motiu[motiu].add(sid)
     directes = set().union(*afectades.values())
     return {
         'resum': {
