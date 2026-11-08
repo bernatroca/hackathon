@@ -27,15 +27,22 @@ def dades_inventades(escenari='Validat'):
         resultat('hores-aula', '35 %', {'dia':list('LMXJV'), 'demanda':[6, 8, 7, 5, 4],
             'sessions_totals':[120]*5}, dict(sessions_sense_aula=42,
             desglos={'per_assignar':30, 'laboratoris':8, 'dobles':4}, setmana='2027-W07')),
-        resultat('marge-grau-nou', '26 h', [{'llindar':0, 'seminaris':False,
-            'nou_hores':26., 'marge_hores':181.}], dict(setmana='2027-W07',
-            marge_semestre_h=4679., demanda_h_setmana=26., lliures_h_setmana=181.,
+        resultat('marge-grau-nou', '27 h', [{'llindar':0, 'seminaris':False,
+            'nou_hores':27., 'marge_hores':173.}], dict(setmana='2027-W06', criteri_setmana='demanda_mati',
+            demanda_h_setmana=27., lliures_h_setmana=173.,
             cap_per_mida=True, validat_part2={'valida':True, 'resposta':1,
                 'sessions_grau_nou_collocades':72, 'sessions_52_mogudes':0})),
         resultat('problemes-millores', '24', {'problema':['Sessions sense aula'],
             'xifra':[24], 'proposta':['Revisar les assignacions inventades.']}),
     ]
     mapa = {t.id:t for t in resultats}
+    for id_, total in (('hores-aula', 30), ('fora-torn', 84)):
+        mapa[id_].extra['classes_detall'] = pd.DataFrame([
+            dict(id_sessio=f'S{90000 + i}', assignatura=f'Assignatura Inventada {i % 3 + 1}',
+                 grup='TE/81', data='2027-02-15', dia='L', h_ini='08:30', h_fi='10:30',
+                 titulacions_curs='GXX:1r' if i % 2 else 'GYY:2n',
+                 **(dict(torn_actual='mati', torn_requerit='tarda') if id_ == 'fora-torn' else {}))
+            for i in range(total)])
     if escenari == 'Pendent de validar':
         for id_ in ('hi-cap-mati', 'marge-grau-nou'):
             mapa[id_].extra['validat_part2'] = None

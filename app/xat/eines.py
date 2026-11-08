@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import csv
 import dataclasses
 import datetime as dt
 import json
@@ -86,10 +87,10 @@ def _dia(dia):
     return noms[nom]
 
 
-def _hora(h):
+def _hora(h, parametre='hora_ini'):
     match = re.fullmatch(r'([01]?\d|2[0-3])(?:(?:[:.])([0-5]\d)|h)?', str(h).strip().lower())
     if not match:
-        raise EntradaError(f'hora_ini {h!r} no vàlida: indica una hora de 00:00 a 23:59, com 16, 16:00, 16.00 o 16h.')
+        raise EntradaError(f'{parametre} {h!r} no vàlida: indica una hora de 00:00 a 23:59, com 16, 16:00, 16.00 o 16h.')
     return int(match[1])*60 + int(match[2] or 0)
 
 
@@ -138,6 +139,7 @@ def _files(b, p):
         yield {'id_sessio': sid, 'activitat_id': s.activitat, 'data': date, 'setmana': date.strftime('%G-W%V'),
                'dia': DIES[date.weekday()], 'h_ini': a.h_ini, 'h_fi': nb.fmt(ini+s.durada),
                'ini_min': ini, 'fi_min': ini+s.durada, 'aula': a.aula,
+               'torn_actual': 'mati' if ini < 870 else 'tarda',
                'assignatura': s.codi, 'tipus': s.tipus, 'grup': s.grup}
 
 
@@ -190,7 +192,9 @@ def horari_grup(grup, titulacio=None, curs=None, dia=None, setmana=None, propost
     rows = []
     for tit, c, linia in sorted(seleccions):
         cs = graella.celles(b, p, w, cohort=f'{tit}:{c}', linia=linia)
-        rows.extend(dict(_json(cella), titulacio=tit, curs=c) for cella in cs if d is None or cella.dia == d)
+        rows.extend(dict(_json(cella), titulacio=tit, curs=c,
+                         activitat_id=b.sessions[cella.id_sessio].activitat)
+                    for cella in cs if d is None or cella.dia == d)
     horaris = {}
     for r in rows[:LIMIT]:
         key = (r['titulacio'], r['curs'])
@@ -208,6 +212,10 @@ def ocupacio_aula(aula, dia=None, setmana=None, proposta='avui'):
     rows = [r for r in _files(b, p) if r['aula'] == aula and w <= r['data'] < w+dt.timedelta(days=7) and (d is None or r['dia'] == d)]
     out = _retorn(sorted(rows, key=lambda r: (r['data'], r['ini_min'], r['id_sessio'])), f'ocupacio_aula(aula={aula}, dia={dia}, setmana={w}, proposta={proposta})')
     out['resultat']['recomptes'] = _recomptes(rows, b)
+    out['resultat']['tancada'] = sorted({(w+dt.timedelta(days=i)).isoformat()
+        for i in range(7) for t in b.tancaments
+        if t.aula == aula and t.data_ini <= w+dt.timedelta(days=i) <= t.data_fi
+        and (d is None or i == DIES.index(d))})
     return out
 
 
@@ -220,21 +228,142 @@ def aules_lliures(hora_ini, durada_min, places_min, dia=None, data=None, tipus=N
     if type(places_min) is not int or places_min < 0:
         raise EntradaError(f'places_min {places_min!r} no vàlid: fes servir un enter igual o superior a 0.')
     b, p = _carrega(proposta)
-    if tipus is not None and (not isinstance(tipus, str) or tipus not in {a.tipus for a in b.aules.values()}):
-        raise EntradaError(f'tipus {tipus!r} no vàlid: fes servir el tipus exacte de l’inventari o omet el paràmetre per cercar aules ordinàries.')
+    if tipus is not None:
+        normal = _normalitza_text(tipus) if isinstance(tipus, str) else ''
+        aliases = {'seminari': 'Seminaris', 'seminaris': 'Seminaris',
+                   'laboratori': 'Laboratoris docents', 'laboratoris': 'Laboratoris docents',
+                   'informatica': 'Aules informàtiques', 'aula informatica': 'Aules informàtiques',
+                   'aula': 'Aules docents', 'aules': 'Aules docents'}
+        valids = sorted({a.tipus for a in b.aules.values()})
+        tipus = aliases.get(normal, next((v for v in valids if _normalitza_text(v) == normal), tipus))
+        if not isinstance(tipus, str) or tipus not in valids:
+            raise EntradaError(f'tipus {tipus!r} no vàlid: tipus de l’inventari disponibles: {", ".join(valids)}; omet-lo per cercar aules ordinàries.')
     w = _setmana(b, setmana)
     date = _data(data) if data is not None else w+dt.timedelta(days=DIES.index(_dia(dia)))
-    ocupades = {r['aula'] for r in _files(b, p) if r['data'] == date and r['ini_min'] < ini+durada_min and r['fi_min'] > ini}
+    dates = [s.data for s in b.sessions.values()]
+    if data is not None and (not dates or not min(dates) <= date <= max(dates)):
+        rang = f' ({min(dates):%d/%m/%Y}–{max(dates):%d/%m/%Y})' if dates else ''
+        raise EntradaError(f'Les dades són del 2n semestre{rang}; tria una data dins d’aquest període.')
+    franja = [r for r in _files(b, p) if r['data'] == date and r['ini_min'] < ini+durada_min and r['fi_min'] > ini]
+    ocupades = {r['aula'] for r in franja}
+    ocupades.update(t.aula for t in b.tancaments if t.data_ini <= date <= t.data_fi
+                    and t.ini < ini+durada_min and t.fi > ini)
     # Les aules addicionals de partida també ocupen espai.
     if proposta == 'avui':
-        for r in dades.connexio().cursor().execute('SELECT data, ini_min, fi_min, aules_addicionals_partida FROM sessions').fetchall():
-            if r[0] == date and r[1] < ini+durada_min and r[2] > ini:
-                ocupades.update((r[3] or '').split('|'))
+        cur = dades.connexio().cursor()
+        try:
+            for r in cur.execute('SELECT data, ini_min, fi_min, aules_addicionals_partida FROM sessions').fetchall():
+                if r[0] == date and r[1] < ini+durada_min and r[2] > ini:
+                    ocupades.update((r[3] or '').split('|'))
+        finally:
+            cur.close()
     rows = [{'aula': a.aula, 'capacitat': a.capacitat, 'tipus': a.tipus, 'data': date, 'h_ini': nb.fmt(ini), 'h_fi': nb.fmt(ini+durada_min)}
             for a in b.aules.values() if a.aula not in ocupades and a.capacitat >= places_min and (a.tipus == tipus if tipus else a.ordinaria)]
     out = _retorn(sorted(rows, key=lambda r: (r['capacitat'], r['aula'])), f'aules_lliures(data={date}, hora_ini={hora_ini}, durada_min={durada_min}, places_min={places_min}, tipus={tipus}, proposta={proposta}); solapament: inici < fi AND final > inici')
-    out['resultat']['recomptes'] = {'total_aules': len(rows)}
+    out['resultat']['files'] = out['resultat']['files'][:5]
+    ordinaries = sum(a.ordinaria and a.aula not in ocupades for a in b.aules.values())
+    out['resultat']['recomptes'] = {'total_aules': len(rows), 'ordinaries_lliures': ordinaries,
+        'respecta_reserva': ordinaries - 1 >= 2}
+    # Ocupar un seminari no consumeix cap aula ordinària de la reserva R8.
+    for r in out['resultat']['files']:
+        r['respecta_reserva'] = ordinaries - int(b.aules[r['aula']].ordinaria) >= 2
+    if proposta == 'avui':
+        out['resultat']['recomptes']['sessions_sense_aula_a_la_franja'] = sum(
+            not r['aula'] and not b.sessions[r['id_sessio']].sense_espai
+            and b.sessions[r['id_sessio']].tipus in ('TE', 'PAUL', 'SEM') for r in franja)
     return out
+
+
+def _noms_assignatures():
+    cur = dades.connexio().cursor()
+    try:
+        return dict(cur.execute('SELECT DISTINCT codi, assignatura FROM sessions').fetchall())
+    finally:
+        cur.close()
+
+
+def _normalitza_text(text):
+    return ''.join(c for c in unicodedata.normalize('NFD', text.strip().lower())
+                   if not unicodedata.combining(c))
+
+
+def _detall_canvi(s, abans, despres, noms):
+    from nivell2.imprevistos import _moment, _lloc, nom_grup
+    def moment(a):
+        data, inici = _moment(s, a)
+        return {**_json(a), 'data': data.isoformat(), 'h_fi': nb.fmt(inici+s.durada),
+                'lloc': _lloc(s, a)}
+    return {'id_sessio': s.id, 'assignatura': noms.get(s.codi, getattr(s, 'assignatura', s.codi)),
+            'grup': nom_grup(s.grup, s.tipus), 'tipus': s.tipus,
+            'abans': moment(abans), 'despres': moment(despres)}
+
+
+def imprevistos_53():
+    """Context de contingències i sessions afectades sobre la referència 5.2."""
+    from nivell2.imprevistos import _moment, IMPREVISTOS
+    abans, p52 = _carrega('5.2')
+    b, p53 = _carrega('5.3')
+    noms = _noms_assignatures()
+    def sessions(ids):
+        files = [_detall_canvi(b.sessions[sid], p52.files[sid], p53.files[sid], noms)
+                 for sid in sorted(ids)]
+        return {'total': len(files), 'sessions': files}
+    titols = dict(IMPREVISTOS)
+    causes = {}
+    tancaments = []
+    for t in b.tancaments:
+        ids = []
+        for sid, s in abans.sessions.items():
+            data, ini = _moment(s, p52.files[sid])
+            if (not s.sense_espai and p52.files[sid].aula == t.aula
+                    and t.data_ini <= data <= t.data_fi and ini < t.fi and ini+s.durada > t.ini):
+                ids.append(sid)
+        clau = 'aula_reservada' if t.data_ini != t.data_fi else 'aula_avariada'
+        for sid in ids:
+            causes.setdefault(sid, []).append(titols[clau])
+        tancaments.append({**_json(t), 'tipus': 'reserva per a un acte' if clau == 'aula_reservada' else 'avaria',
+                           'descripcio': titols[clau], **sessions(ids)})
+    grups = {}
+    for sid, s in b.sessions.items():
+        if s.alumnes > abans.sessions[sid].alumnes:
+            grups.setdefault((s.codi, s.grup), []).append(sid)
+            causes.setdefault(sid, []).append(titols['grup_creix'])
+    alumnes = [{'codi': codi, 'grup': grup, 'alumnes_abans': abans.sessions[ids[0]].alumnes,
+                'alumnes': b.sessions[ids[0]].alumnes, **sessions(ids)}
+               for (codi, grup), ids in sorted(grups.items())]
+    cancellades = [{'id_sessio': sid, 'recuperar_fins': limit, **sessions([sid])}
+                  for sid, limit in sorted(b.cancellades.items())]
+    for sid in b.cancellades:
+        causes.setdefault(sid, []).append(titols['recuperacio'])
+    mogudes = {sid for sid in b.sessions if p52.files[sid] != p53.files[sid]}
+    suport = sessions(mogudes - causes.keys())
+    # Segueix qui ocupa l'espai alliberat, també si hi ha una cadena de moviments.
+    def destinataries(sid, vistos):
+        if sid in vistos:
+            return set()
+        vistos = vistos | {sid}
+        s = b.sessions[sid]
+        aula = p52.files[sid].aula
+        data, ini = _moment(s, p52.files[sid])
+        ids = set()
+        for altre in sorted(mogudes - vistos):
+            t = b.sessions[altre]
+            data_nova, ini_nou = _moment(t, p53.files[altre])
+            if (aula and p53.files[altre].aula == aula and data_nova == data
+                    and ini_nou < ini+s.durada and ini_nou+t.durada > ini):
+                ids.update({altre} if altre in causes else destinataries(altre, vistos))
+        return ids
+    for fila in suport['sessions']:
+        ids = destinataries(fila['id_sessio'], set())
+        fila['per_fer_lloc_a'] = [{**_detall_canvi(b.sessions[sid], p52.files[sid], p53.files[sid], noms),
+                                  'imprevistos': causes[sid]} for sid in sorted(ids)]
+        fila['motiu'] = 'Per fer lloc' + (' a ' + '; '.join(
+            f"{f['assignatura']} · {f['grup']} ({', '.join(f['imprevistos'])})"
+            for f in fila['per_fer_lloc_a']) if ids else '; no s’ha identificat el destinatari directe')
+    return _retorn({'descripcio': 'Imprevistos 5.3 sobre la proposta 5.2, amb les dates pròpies de cada incidència.',
+        'aules_tancades': tancaments, 'alumnes': alumnes, 'cancellades': cancellades,
+        'classes_de_suport': suport,
+        'data_avis': dt.date.today()}, 'contingències del model oficial; comparació 5.2 → 5.3')
 
 
 def xifra(id):
@@ -244,7 +373,8 @@ def xifra(id):
         raise EntradaError(f'id {id!r} no vàlid. IDs disponibles: '+', '.join(ids))
     t = troballes.una(id, 2, None)
     rows = _json(t.taula)
-    return _retorn({'id': t.id, 'xifra': t.xifra, 'frase': t.frase, 'metode': t.metode, 'total': len(rows), 'files': rows[:LIMIT]}, t.sql,
+    return _retorn({'id': t.id, 'abast': 'horari d’avui (dades originals), no és cap proposta',
+                   'xifra': t.xifra, 'frase': t.frase, 'metode': t.metode, 'total': len(rows), 'files': rows[:LIMIT]}, t.sql,
                    [r['id_sessio'] for r in rows[:LIMIT] if r.get('id_sessio')])
 
 
@@ -261,6 +391,22 @@ def resultat_proposta(apartat):
     if resum_path.is_file():
         resultat['resum'] = json.loads(resum_path.read_text(encoding='utf-8'))
         consulta += f'; nivell2/{apartat}/resum.json'
+    xifres_path = carpeta / 'xifres.csv'
+    if xifres_path.is_file():
+        def valor(text):
+            try:
+                return json.loads(text)
+            except ValueError:
+                return text
+        with xifres_path.open(encoding='utf-8-sig', newline='') as fitxer:
+            resultat['xifres'] = [{'xifra': fila['xifra'], 'abans': valor(fila['abans']),
+                                   'despres': valor(fila['despres'])} for fila in csv.DictReader(fitxer)]
+        consulta += f'; nivell2/{apartat}/xifres.csv'
+    if apartat == '5.4':
+        from nivell2.readmes import NOTA_GRAU_NOU
+        resultat['motius'] = {'sessions_grau_nou_fora_franja': NOTA_GRAU_NOU}
+    if apartat == '5.3':
+        resultat['imprevistos'] = imprevistos_53()['resultat']
     return _retorn(resultat, consulta)
 
 
@@ -282,7 +428,9 @@ def _normalitza_dies_sql(sql):
         if len(valor) <= 1 or valor != valor.strip():
             continue
         normal = ''.join(c for c in unicodedata.normalize('NFD', valor.lower()) if not unicodedata.combining(c))
-        if normal in ('tipica', 'typical', 'setmana tipica'):
+        if normal in ('mati', 'morning', 'tarda', 'afternoon'):
+            codi = 'mati' if normal in ('mati', 'morning') else 'tarda'
+        elif normal in ('tipica', 'typical', 'setmana tipica'):
             if setmana_tipica is None:
                 setmana_tipica = _setmana(nb.carrega_oficial(), None).strftime('%G-W%V')
             codi = setmana_tipica
@@ -297,7 +445,7 @@ def _normalitza_dies_sql(sql):
     return original.decode('utf-8')
 
 
-def _abast_sql(sql):
+def _abast_sql(sql, taules=None):
     import duckdb
     # Tokenització exclou comentaris i evita confondre literals amb columnes.
     raw = sql.encode('utf-8')
@@ -317,9 +465,17 @@ def _abast_sql(sql):
     week = re.search(r"\bsetmana\b\s*=\s*'(\d{4}-W\d{2})'", text, re.I)
     if week:
         return f'setmana {week[1]}'
-    semester = re.search(r"\b(?:sem|semestre)\b\s*=\s*'?((?:C/)?[12])'?", text, re.I)
+    semester = re.search(r"\bsem\b\s*=\s*'?([12])'?", text, re.I)
     if semester:
         return '1r semestre' if semester[1].endswith('1') else '2n semestre'
+    etiqueta = re.search(r"\bsemestre\b\s*=\s*'C/([12])'", text, re.I)
+    if etiqueta:
+        return f'assignatures C/{etiqueta[1]}, sense les anuals'
+    if taules is None:
+        with duckdb.connect(config={'enable_external_access': False, 'threads': 1}) as con:
+            taules = con.get_table_names(sql)
+    if taules and all(n.startswith('proposta_') for n in taules):
+        return '2n semestre'
     return 'tot el curs (els dos semestres)'
 
 
@@ -330,6 +486,13 @@ def consulta_sql(sql):
     con = duckdb.connect(config={'enable_external_access': False, 'threads': 1})
     timer = None
     try:
+        tokens = duckdb.tokenize(sql)
+        raw = sql.encode('utf-8')
+        codi = ' '.join(raw[start:(tokens[i+1][0] if i+1 < len(tokens) else len(raw))].decode().strip()
+                        for i, (start, kind) in enumerate(tokens)
+                        if kind.name not in ('string_const', 'comment'))
+        if re.search(r'\b(?:current_date|current_timestamp)\b|\b(?:now|today)\s*\(', codi, re.I):
+            raise EntradaError('avui = horari de partida; no filtris per la data del sistema')
         sql = _normalitza_dies_sql(sql)
         statements = con.extract_statements(sql)
         if len(statements) != 1 or statements[0].type != duckdb.StatementType.SELECT or not re.match(r'^\s*(SELECT|WITH)\b', sql, re.I):
@@ -367,7 +530,7 @@ def consulta_sql(sql):
         out = _retorn(rows, sql)
         out['resultat']['total'] = total
         out['resultat']['truncat'] = total > LIMIT
-        out['resultat']['abast'] = _abast_sql(sql)
+        out['resultat']['abast'] = _abast_sql(sql, names)
         return out
     except duckdb.Error as exc:
         # Els errors de vinculació/sintaxi descriuen la consulta, no les files.
@@ -389,6 +552,16 @@ def _violacions(informe):
     return [v for v in informe.violacions if v.compta]
 
 
+def _motiu_aforament(b, alumnes):
+    gran = max(b.aules.values(), key=lambda a: a.capacitat)
+    return f'Cap aula compatible té {alumnes} places; la més gran, {gran.aula}, en té {gran.capacitat}.'
+
+
+def _sense_proposta(context, estat, motiu):
+    return _retorn({**context, 'estat': estat, 'veredicte': 'SENSE PROPOSTA', 'motiu': motiu,
+                    'canvis': [], 'total': 0}, 'repara + avalua_rapid: sense solució al veïnat provat')
+
+
 def prova_canvi(apartat, canvi):
     _apartat(apartat)
     if not isinstance(canvi, dict):
@@ -407,12 +580,14 @@ def prova_canvi(apartat, canvi):
     b, p = _carrega(apartat)
     oficial = json.loads((nb.RESULTATS_PRINCIPAL / apartat / 'informe.json').read_text(encoding='utf-8'))['veredicte']
     context = {'aplicat': False, 'desat': False, 'veredicte_oficial': oficial,
+               'data_avis': dt.date.today().isoformat(),
                'nota_validacio': 'Comprovació ràpida sense les relaxacions declarades. '
                    f'Veredicte oficial de {apartat}: {oficial}. '
                    'Els incompliments nous es comparen amb la mateixa comprovació ràpida sense el canvi.'}
     before = nb.avalua_rapid(b, p, nomes_aules=apartat == '5.1')
     nova = copy.deepcopy(p)
     estat = 'MOVIMENT_EXPLICIT'
+    relaxacions = []
     if canvi.get('tipus') == 'moure':
         if bool(canvi.get('id_sessio')) == bool(canvi.get('activitat_id')):
             raise EntradaError('Indica id_sessio o activitat_id, exactament un.')
@@ -446,11 +621,25 @@ def prova_canvi(apartat, canvi):
             d1, d2 = _data(t['data_ini'], 'data_ini'), _data(t['data_fi'], 'data_fi')
             if d2 < d1:
                 raise EntradaError('data_fi no vàlida: ha de ser igual o posterior a data_ini.')
-            after.tancaments.append(Tancament(t['aula'], d1, d2))
+            ini = _hora(t['hora_ini']) if 'hora_ini' in t else 0
+            fi = _hora(t['hora_fi'], 'hora_fi') if 'hora_fi' in t else 1440
+            if fi <= ini:
+                raise EntradaError('hora_fi no vàlida: ha de ser posterior a hora_ini.')
+            after.tancaments.append(Tancament(t['aula'], d1, d2, ini, fi))
         for g in canvi.get('grups_creixen', []):
-            rows = [s for s in after.sessions.values() if s.codi == g['codi'] and s.grup == g['grup']]
+            codi = str(g['codi']).strip()
+            noms = _noms_assignatures()
+            if not codi.isdigit():
+                codis = {c for c, nom in noms.items() if _normalitza_text(nom) == _normalitza_text(codi)}
+                if len(codis) == 1:
+                    codi = codis.pop()
+            rows = [s for s in after.sessions.values() if s.codi == codi and s.grup == g['grup']]
             if not rows:
-                raise EntradaError('codi/grup no vàlids: indica un codi d’assignatura i un grup existents (p. ex. TE/81).')
+                codis_grup = sorted({s.codi for s in b.sessions.values() if s.grup == g['grup']})
+                if codis_grup:
+                    opcions = ', '.join(f'{c} ({noms.get(c, c)})' for c in codis_grup)
+                    raise EntradaError(f'codi {g["codi"]!r} no vàlid per a aquest grup: el grup {g["grup"]} existeix a les assignatures {opcions}. Fes servir el codi numèric exacte.')
+                raise EntradaError(f'grup {g["grup"]!r} no vàlid: indica un grup existent (p. ex. TE/81) i el codi numèric de l’assignatura.')
             if type(g['alumnes']) is not int or any(g['alumnes'] < s.alumnes for s in rows):
                 raise EntradaError('alumnes no vàlid: fes servir un enter igual o superior a l’alumnat actual del grup.')
             for s in rows:
@@ -462,11 +651,30 @@ def prova_canvi(apartat, canvi):
             if limit <= b.sessions[c['id_sessio']].data:
                 raise EntradaError('recuperar_fins no vàlid: ha de ser una data AAAA-MM-DD posterior a la sessió.')
             after.cancellades[c['id_sessio']] = limit
-        res = repara(p, Canvi(after, b, temps_s=10))
+        for g in canvi.get('grups_creixen', []):
+            if after.aules and g['alumnes'] > max(a.capacitat for a in after.aules.values()):
+                return _sense_proposta(context, 'INFEASIBLE', _motiu_aforament(after, g['alumnes']))
+        res = repara(p, Canvi(after, b, temps_s=30 if canvi.get('sessions_cancel_lades') else 10))
         estat = res.estat
+        relaxacions = res.relaxacions
         b = after
         if res.proposta is None:
-            return _retorn({**context, 'estat': estat, 'veredicte': 'SENSE PROPOSTA', 'canvis': [], 'total': 0}, 'repara + avalua_rapid: sense solució al veïnat provat')
+            intents = res.estadistiques.get('intents', [])
+            diagnostics = [i['diagnostic'] for i in intents if i.get('diagnostic')]
+            diagnostic = next((d for d in diagnostics if d.get('aules_amb_aforament') == 0),
+                              diagnostics[-1] if diagnostics else {})
+            n = diagnostic.get('alumnes')
+            if n and not diagnostic.get('aules_amb_aforament', 1) and b.aules:
+                motiu = _motiu_aforament(b, n)
+            elif diagnostic.get('opcions_bloquejades_tancament'):
+                motiu = 'Les aules tancades impedeixen trobar un lloc compatible en les franges provades.'
+            elif diagnostic.get('franges_bloquejades_persones'):
+                motiu = 'Les franges provades coincideixen amb altres classes del grup o del professorat.'
+            elif estat == 'INFEASIBLE':
+                motiu = 'No s’ha trobat cap combinació d’aula i horari compatible dins del veïnat provat.'
+            else:
+                motiu = 'S’ha esgotat el temps de cerca sense trobar una proposta; no demostra que sigui impossible.'
+            return _sense_proposta(context, estat, motiu)
         nova = res.proposta
     else:
         raise EntradaError('tipus ha de ser imprevist o moure.')
@@ -482,18 +690,36 @@ def prova_canvi(apartat, canvi):
             antics[k] -= 1
         else:
             nous.append(_json(v))
-    diffs = [{'id_sessio': sid, 'abans': _json(p.files[sid]), 'despres': _json(a)} for sid, a in nova.files.items() if a != p.files[sid]]
+    from nivell2.imprevistos import _relaxacions, MOTIU_FIXADA
+    declarades = {(regla, sid) for regla, sid, _ in _relaxacions(relaxacions)}
+    excepcions, nous_reals = [], []
+    for v in nous:
+        sessions = v.get('sessions', [])
+        sessions = sessions.split('|') if isinstance(sessions, str) else sessions
+        if (v['regla'] in ('R1-FIXADA', 'R7-PLAB') and sessions
+                and all((v['regla'], sid) in declarades for sid in sessions)):
+            excepcions.append({**v, 'declarada': True, 'motiu': MOTIU_FIXADA})
+        else:
+            nous_reals.append(v)
+    nous = nous_reals
+    noms = _noms_assignatures()
+    diffs = [_detall_canvi(b.sessions[sid], p.files[sid], a, noms)
+             for sid, a in nova.files.items() if a != p.files[sid]]
+    veredicte = inf.veredicte
+    if excepcions and not nous:
+        veredicte = 'VALIDA AMB EXCEPCIONS INEVITABLES'
     ids_conflictes = set(re.findall(r'[\w/.-]+', json.dumps(nous))) & b.sessions.keys()
-    return _retorn({**context, 'veredicte': inf.veredicte, 'veredicte_abans': before.veredicte,
+    return _retorn({**context, 'veredicte': veredicte, 'veredicte_abans': before.veredicte,
                     'verificacio': 'Ràpida, sense relaxacions declarades; compara incompliments amb la proposta original.',
                     'estat': estat, 'total': len(diffs), 'canvis': diffs[:LIMIT],
                     'total_incompliments_nous': len(nous), 'incompliments_nous': nous[:LIMIT],
+                    'excepcions_inevitables': excepcions, 'total_excepcions_inevitables': len(excepcions),
                     'nous_per_regla': dict(Counter(v['regla'] for v in nous))},
                    f'prova_canvi({apartat}, {json.dumps(canvi, ensure_ascii=False)}); avalua_rapid abans/després',
                    [r['id_sessio'] for r in diffs] + sorted(ids_conflictes))
 
 
-_HANDLERS = {f.__name__: f for f in (horari_grup, aules_lliures, ocupacio_aula, xifra, resultat_proposta, consulta_sql, prova_canvi)}
+_HANDLERS = {f.__name__: f for f in (horari_grup, aules_lliures, ocupacio_aula, xifra, resultat_proposta, imprevistos_53, consulta_sql, prova_canvi)}
 
 
 def _normalitza_parametres(args):
@@ -557,10 +783,10 @@ _PROPOSTA = {'type': 'string', 'enum': ['avui', *APARTATS], 'default': 'avui'}
 _APARTAT = {'type': 'string', 'enum': list(APARTATS)}
 _COMMON = {'dia': _str('L, M, X, J o V (també el nom del dia)'), 'setmana': {'type': ['string', 'integer', 'null'], 'description': "buit o 'típica' = setmana típica; o 2027-W07; o una data"}, 'proposta': _PROPOSTA}
 _CANVI = {'oneOf': [
-    _obj({'tipus': {'const': 'moure', 'type': 'string'}, 'id_sessio': _str('Una sola sessió'), 'activitat_id': _str('Totes les sessions de l’activitat; tria això o id_sessio'), 'dia': _COMMON['dia'], 'hora_ini': _str('Hora: 16, 16:00, 16.00 o 16h'), 'aula': _str('Codi exacte d’aula')}, ['tipus']),
+    _obj({'tipus': {'const': 'moure', 'type': 'string'}, 'id_sessio': _str('Una sola sessió'), 'activitat_id': _str('Totes les sessions de l’activitat; surt d’horari_grup; tria això o id_sessio'), 'dia': _COMMON['dia'], 'hora_ini': _str('Hora: 16, 16:00, 16.00 o 16h'), 'aula': _str('Codi exacte d’aula')}, ['tipus']),
     _obj({'tipus': {'const': 'imprevist', 'type': 'string'},
-          'aules_tancades': {'type': 'array', 'items': _obj({k: _str(v) for k, v in [('aula', 'Codi aula'), ('data_ini', 'AAAA-MM-DD inclosa'), ('data_fi', 'AAAA-MM-DD inclosa')]}, ['aula', 'data_ini', 'data_fi'])},
-          'grups_creixen': {'type': 'array', 'items': _obj({'codi': _str('Codi assignatura'), 'grup': _str('Grup exacte, p. ex. TE/81'), 'alumnes': {'type': 'integer', 'minimum': 0}}, ['codi', 'grup', 'alumnes'])},
+          'aules_tancades': {'type': 'array', 'items': _obj({k: _str(v) for k, v in [('aula', 'Codi aula'), ('data_ini', 'AAAA-MM-DD inclosa'), ('data_fi', 'AAAA-MM-DD inclosa'), ('hora_ini', 'Hora inicial opcional; sense hores, tot el dia'), ('hora_fi', 'Hora final opcional, posterior a hora_ini')]}, ['aula', 'data_ini', 'data_fi'])},
+          'grups_creixen': {'type': 'array', 'items': _obj({'codi': _str('Codi numèric d’assignatura, p. ex. 106047; també admet el nom complet inequívoc'), 'grup': _str('Grup exacte, p. ex. TE/81'), 'alumnes': {'type': 'integer', 'minimum': 0}}, ['codi', 'grup', 'alumnes'])},
           'sessions_cancel_lades': {'type': 'array', 'items': _obj({'id_sessio': _str('Sessió cancel·lada'), 'recuperar_fins': _str('Data límit AAAA-MM-DD')}, ['id_sessio', 'recuperar_fins'])}}, ['tipus'])]}
 
 
@@ -570,18 +796,18 @@ def _metadades_xifres():
     moduls = troballes.moduls()
     preguntes = {
         'ocupacio': 'ocupació física de les aules de l’horari actual',
-        'hores-aula': 'demanda d’hores-aula i cobertura de les aules de partida',
+        'hores-aula': 'sessions sense aula: quantes n’hi ha i quantes cal assignar',
         'fora-torn': 'quantes sessions són al torn equivocat avui amb el model nou',
         'hi-cap-mati': 'hi cap el matí? Condicions necessàries als dos torns',
         'aforament': 'sessions que superen l’aforament segons R3',
         'marge-grau-nou': 'marge d’hores-aula per al grau nou',
         'dobles-mati': 'dobles titulacions de cursos superiors al matí',
-        'docents-cavall': 'docents de cursos inicials i superiors el mateix dia',
+        'docents-cavall': 'docents amb matí i tarda el mateix dia segons el torn requerit',
         'canvis-aula': 'dispersió i canvis d’aula de l’alumnat',
         'hores-mortes': 'hores mortes de l’alumnat dins del mateix torn',
         'problemes-millores': 'problemes observats i propostes de millora',
     }
-    descripcio = "Primer opció per a xifres generals de l'horari d'avui (part 1)."
+    descripcio = "Només l'horari d'avui (part 1), mai d'una proposta. Per a propostes, fes servir resultat_proposta."
     for m in moduls:
         titol = preguntes.get(m.ID) or getattr(m, 'TITOL', None) or getattr(m, 'PREGUNTA', None) or (m.__doc__ or m.ID).strip().splitlines()[0]
         descripcio += f'\n{m.ID}: {titol}'
@@ -595,23 +821,29 @@ _COLUMNES_SQL = {
     'sessions': 'id_sessio, activitat_id, id_compartida, codi, assignatura, tipus, grup, semestre, data, setmana, dia, h_ini, h_fi, durada_min, alumnes, capacitat_grup, aula_partida, aules_addicionals_partida, plans, titulacions_curs, dc, torn_requerit, fixada, docents, alumnes_origen, sense_espai, sem, ini_min, fi_min, torn_actual, unitat, demanda_aulari',
     'aules': 'aula, edifici, tipus, descripcio, capacitat, ordinaria',
     'activitats': 'activitat_id, codi, grup, semestre, dia, h_ini, h_fi, assignatura, tipus, n_sessions, setmana_primera, setmana_ultima, alumnes, aules_partida, sessions_sense_aula, titulacions_curs, torn_requerit, fixada, docents, sense_espai',
-    'proposta_5_1, proposta_5_2, proposta_5_3, proposta_5_4': 'id_sessio, activitat_id, data, setmana, dia, h_ini, h_fi, ini_min, fi_min, aula, assignatura, tipus, grup',
+    'proposta_5_1, proposta_5_2, proposta_5_3, proposta_5_4': 'id_sessio, activitat_id, data, setmana, dia, h_ini, h_fi, ini_min, fi_min, torn_actual, aula, assignatura, tipus, grup',
 }
-_DESCRIPCIO_SQL = ('Una SELECT o WITH…SELECT, màxim 50 files i 5 s. Fes servir xifra primer per a xifres generals. '
+_DESCRIPCIO_SQL = ('Una SELECT o WITH…SELECT, màxim 50 files i 5 s. Per a xifres de propostes fes servir resultat_proposta; xifra només per a avui. '
                    'Sense fitxers ni xarxa. Columnes de les vistes:\n'
                    + '\n'.join(f'{nom}: {cols}' for nom, cols in _COLUMNES_SQL.items())
                    + "\ndia: L, M, X, J o V (X = dimecres); h_ini 'HH:MM'; ini_min = minuts des de mitjanit"
                    + "\nper a la setmana típica, filtra setmana = 'típica' (es tradueix sol). Sense filtre de setmana ni semestre es compta tot el curs (els dos semestres); a sessions filtra sem = 2 per al segon semestre. Fes servir abast per indicar el període."
                    + "\nel torn d'una sessió es dedueix de h_ini (abans de 14.30 matí); torn_requerit és el que li toca")
+_DESCRIPCIO_SQL += ("\ntorn_actual: 'mati' o 'tarda' (sense accent); aula_partida NULL = sessió sense aula; "
+    "sense_espai = grup de doble titulació que no necessita aula (no vol dir sense aula); "
+    "les vistes proposta_* només tenen el 2n semestre; per al 2n semestre fes servir sem = 2, no semestre. "
+    "Les sessions del grau nou tenen id_sessio que comença per N; filtra id_sessio LIKE 'N%' i torn_actual per comptar-les per torn. "
+    "avui = horari de partida; mai CURRENT_DATE, now(), today() ni current_timestamp.")
 
 _DEFS = [
     ('horari_grup', 'Horari del grup i els seus subgrups en una setmana. Només cal grup: no preguntis titulació ni curs; si falten, retorna totes les coincidències agrupades per titulació i curs (màxim 50 files en total).', _obj({**_COMMON, 'titulacio': _str('Codi titulació'), 'curs': _str('1r, 2n, 3r, 4t…'), 'grup': _str('Grup: 81, TE/81, 811…; inclou la línia associada de teoria i subgrups')}, ['grup'])),
-    ('aules_lliures', 'Aules lliures durant tota la franja en la proposta triada; ordinàries per defecte. Indica dia o data.', _obj({**_COMMON, 'data': _str('AAAA-MM-DD; exclou dia'), 'hora_ini': _str('Hora: 16, 16:00, 16.00 o 16h'), 'durada_min': {'type': 'integer', 'minimum': 1}, 'places_min': {'type': 'integer', 'minimum': 0}, 'tipus': _str('Tipus exacte de l’inventari; substitueix el filtre ordinària')}, ['hora_ini', 'durada_min', 'places_min'])),
+    ('aules_lliures', 'Aules lliures durant tota la franja en la proposta triada; ordinàries per defecte. Indica dia o data.', _obj({**_COMMON, 'data': _str('AAAA-MM-DD; exclou dia'), 'hora_ini': _str('Hora: 16, 16:00, 16.00 o 16h'), 'durada_min': {'type': 'integer', 'minimum': 1}, 'places_min': {'type': 'integer', 'minimum': 0}, 'tipus': {**_str('Tipus d’inventari; també admet singulars i minúscules'), 'enum': ['Aules docents', 'Aules informàtiques', 'Laboratoris docents', 'Seminaris']}}, ['hora_ini', 'durada_min', 'places_min'])),
     ('ocupacio_aula', 'Sessions que ocupen una aula durant una setmana de la proposta triada.', _obj({**_COMMON, 'aula': _str('Codi exacte d’aula')}, ['aula'])),
     ('xifra', _DESCRIPCIO_XIFRA, _obj({'id': {**_str('ID de la troballa'), 'enum': _IDS_XIFRES}}, ['id'])),
-    ('resultat_proposta', 'Veredicte oficial i recomptes per regla d’una proposta 5.1–5.4.', _obj({'apartat': _APARTAT}, ['apartat'])),
+    ('resultat_proposta', 'Xifres d’una proposta 5.1–5.4: veredicte, canvis de torn, de franja i d’aula, abans→després; xifres.csv i motius del grau nou.', _obj({'apartat': _APARTAT}, ['apartat'])),
+    ('imprevistos_53', 'Imprevistos oficials 5.3: reserves i avaries amb dates, grups que creixen, cancel·lacions i classes_de_suport mogudes per fer lloc; assignatura, grup, motiu i lloc abans/després. Per als avisos, no facis servir la setmana típica.', _obj({})),
     ('consulta_sql', _DESCRIPCIO_SQL, _obj({'sql': _str('Consulta SQL de lectura')}, ['sql'])),
-    ('prova_canvi', 'Simula sense desar. moure: id_sessio o activitat_id i almenys dia/hora_ini/aula; valida i compara conflictes nous sense reparar. imprevist: llistes de tancaments, creixements o cancel·lacions; repara (10 s) i valida.', _obj({'apartat': _APARTAT, 'canvi': _CANVI}, ['apartat', 'canvi'])),
+    ('prova_canvi', 'Simula sense desar. moure: id_sessio o activitat_id d’horari_grup i almenys dia/hora_ini/aula; valida i compara conflictes nous sense reparar. imprevist: llistes de tancaments (hores opcionals), creixements o cancel·lacions; repara (10 s, 30 s per a recuperacions) i valida.', _obj({'apartat': _APARTAT, 'canvi': _CANVI}, ['apartat', 'canvi'])),
 ]
 EINES: list[dict] = [{'type': 'function', 'function': {'name': n, 'description': d + (' Fes servir `recomptes` per a qualsevol número.' if n in ('horari_grup', 'ocupacio_aula', 'aules_lliures') else ''), 'parameters': p}} for n, d, p in _DEFS]
 
@@ -635,7 +867,7 @@ def main():
             print(f'{name}: ERROR {r["error"]}')
         else:
             result = r['resultat']
-            print(f'{name}: files={result.get("total", 1)} id_sessio={r["id_sessio"][:3]}')
+            print(f'{name}: files={result.get("total", 1)}')
 
 
 if __name__ == '__main__':

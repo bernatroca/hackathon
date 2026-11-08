@@ -1,17 +1,38 @@
 """Widget persistent al document principal de Streamlit 1.67."""
+from __future__ import annotations
+
 import json
 from pathlib import Path
+import sys
 from uuid import uuid4
+
+if sys.version_info < (3, 10):
+    raise RuntimeError('L’assistent necessita Python 3.10 o més nou. Executa l’app amb l’entorn virtual del projecte.')
 
 import streamlit as st
 
 WEB = Path(__file__).with_name('web')
 PREGUNTES = {
-    'Com estem avui': ['Quantes sessions són al torn equivocat?', 'Quina aula va més plena?', 'Hi cap el matí?'],
-    'Horari proposat': ['On té classe aquest grup dimarts?', 'Què ha canviat respecte d’avui?', 'Per què aquesta classe s’ha mogut?'],
-    'Imprevistos': ['Quines sessions afecta l’aula avariada?', 'Redacta l’avís per al grup afectat'],
+    'Com estem avui': ['Quantes sessions són al torn equivocat?', 'Quina aula va més plena?', 'Si 1r i 2n fan classe al matí, hi cabem?'],
+    'Horari proposat': ['On té classe aquest grup dimarts?', 'Què ha canviat respecte d’avui?', 'Quines classes d’aquest grup canvien de dia o hora i per què?'],
+    'Imprevistos': ['Quines classes afecta l’avaria de la Q1/1003 el 10/03?', 'Redacta l’avís per al grup 21 de Transmissió de Calor', 'Què passa si l’aula Q2/1009 s’avaria dijous 11/03?'],
+    'Resum per a la Junta': ['Resumeix aquesta proposta en tres frases per a la Junta', 'Quin risc té aquesta proposta?'],
+    'Totes les respostes': ['Quantes classes no tenen aula assignada?', 'Quantes classes tenen més alumnes que places?'],
 }
-PER_DEFECTE = ['Quina aula de 60 places està lliure dijous a les 10?', 'On té classe el grup 81 dimarts?']
+PREGUNTA_DEMO = 'Quantes aules queden lliures dimarts a les 10?'
+PER_DEFECTE = [PREGUNTA_DEMO, 'Quantes classes no tenen aula assignada?', 'Quines propostes d’horari hi ha?']
+
+
+def _imprevistos():
+    # El mateix carregador i la mateixa memòria cau que la pàgina del 5.3.
+    from pagines.imprevistos import carrega
+    dades = carrega()
+    return [t['descripcio'] for t in dades['imprevistos']] if dades else []
+
+
+def _nom_proposta(proposta):
+    from pagines.part2 import NOMS_PROPOSTES
+    return NOMS_PROPOSTES.get(proposta, str(proposta))
 
 
 def _api():
@@ -23,34 +44,72 @@ def _api():
 
 
 def pantalla_actual(titol, estat):
-    """Només selectors de la pàgina oberta; mai resultats ni files de dades."""
+    """Context visible de la pàgina, sense consultes ni files de sessions."""
     parts = [titol]
     semestre = estat.get('semestre', 2)
     setmana = estat.get('setmana')
     linies = [f'Està mirant «{titol}».']
+    preguntes = PREGUNTES.get(titol, PER_DEFECTE)
     if titol == 'Horari proposat':
         semestre = 2  # La graella és sempre del segon semestre.
         setmana = estat.get('p2-setmana')
         proposta = estat.get('p2-proposta', 'Avui') if estat.get('p2-vista') == 'Proposta i avui' else 'Avui'
-        parts.append(str(proposta))
-        linies.append(f'Compara la proposta {proposta} amb avui.' if proposta != 'Avui' else 'Mostra només l’horari d’avui.')
-        grup = ' '.join(str(estat[k]) for k in ('p2-titulacio', 'p2-curs', 'p2-grup') if estat.get(k) is not None)
+        parts.append(_nom_proposta(proposta))
+        referencia = 'Torns nous (5.2)' if proposta in ('5.3', '5.4') else 'avui'
+        linies.append(f'Compara la proposta {_nom_proposta(proposta)} amb {referencia}.' if proposta != 'Avui' else 'Mostra només l’horari d’avui.')
+        if proposta in ('5.3', '5.4'):
+            preguntes = [p.replace('Què ha canviat respecte d’avui?', 'Què canvia respecte de Torns nous (5.2)?') for p in preguntes]
+        from nivell2.junta import NOMS
+        titulacio = estat.get('p2-titulacio')
+        curs = estat.get('p2-curs')
+        numero = estat.get('p2-grup')
+        grup = ' '.join(str(v) for v in (NOMS.get(titulacio, titulacio),
+                        'Màster' if curs == 'M' else curs,
+                        f'Grup {numero}' if numero is not None else None) if v is not None)
         if grup:
             parts.append(grup)
             linies.append(f'Estudis, curs i grup seleccionats: {grup}.')
         if estat.get('p2-aula'):
             linies.append(f'Aula seleccionada a la vista per aula: {estat["p2-aula"]}.')
+        if proposta == 'Avui':
+            preguntes = ['On té classe aquest grup dimarts?', 'Quines aules fa servir aquest grup?']
     elif titol == 'Resum per a la Junta':
         semestre = 2
         proposta = estat.get('junta-proposta', 'Avui')
-        parts.append(str(proposta))
-        linies.append(f'Proposta seleccionada: {proposta}.')
+        parts.append(_nom_proposta(proposta))
+        linies.append(f'Proposta seleccionada: {_nom_proposta(proposta)}.')
     elif titol == 'Imprevistos':
         semestre = 2
         linies.append('Mostra els imprevistos de la proposta 5.3.')
-    linies.append(f'Semestre {semestre}. Setmana: {setmana if setmana is not None else "típica"}.')
+    if titol in ('Imprevistos', 'Resum per a la Junta'):
+        linies.append(f'Semestre {semestre}.')
+        if titol == 'Resum per a la Junta':
+            linies.append('Escenari d’imprevistos de la proposta 5.3 (només s’aplica al 5.3):')
+        try:
+            imprevistos = _imprevistos()
+        except Exception:
+            imprevistos = []
+        linies.extend(imprevistos or ['El detall dels imprevistos del 5.3 no està disponible ara mateix.'])
+    else:
+        linies.append(f'Semestre {semestre}. Setmana: {setmana if setmana is not None else "típica"}.')
+    if titol in ('Com estem avui', 'Totes les respostes'):
+        if titol == 'Com estem avui':
+            resultats = estat.get('resultats', {})
+            portada = resultats.get('hi-cap-mati')
+            if portada is not None:
+                from presentacio import text, text_portada
+                info = text_portada(portada, text(portada, resultats, setmana_triada=setmana))
+                linies.append(f'La pàgina diu: {info["etiqueta"]}. {info["c"]["resposta"]}. {info["frase"]}')
+        detall_id = estat.get('detall_id')
+        if detall_id:
+            from textos import TEXTOS
+            detall = estat.get('resultats', {}).get(detall_id)
+            nom = getattr(detall, 'titol', None) or TEXTOS.get(detall_id, {}).get('titol', detall_id)
+            parts.append(nom)
+            linies.append(f'Resposta oberta: «{nom}» (identificador: {detall_id}).')
+            preguntes = ['Explica’m aquesta resposta en paraules senzilles', 'Què es pot millorar en aquest cas?']
     return dict(resum=' · '.join(parts), text='\n'.join(linies),
-                preguntes=PREGUNTES.get(titol, PER_DEFECTE))
+                preguntes=[PREGUNTA_DEMO, *[p for p in preguntes if p != PREGUNTA_DEMO]][:3])
 
 
 def _json(valor):
@@ -65,7 +124,7 @@ def posa_widget(pantalla: dict | None = None):
         # El GET de salut del widget desactiva l'enviament sense cap port.
         api = 'data:application/json,' + '%7B%22teClau%22%3Afalse%7D'
     opcions = dict(api=api, titol='Assistent',
-                   salutacio='Pregunta’m sobre l’horari, les aules o les propostes de l’Escola.',
+                   salutacio='Pregunta’m per aules, grups o l’horari proposat. Respondré amb les dades.',
                    preguntes=PER_DEFECTE)
     css = (WEB / 'xat-ia.css').read_text()
     js = (WEB / 'xat-ia.js').read_text()

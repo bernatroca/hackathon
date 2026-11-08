@@ -7,23 +7,24 @@ from components.graella import LINIES_JS
 
 
 PASSOS = (
-    ('.st-key-p2-seleccio-proposta', 'Què vols veure?',
+    ('.st-key-p2-controls', 'Què vols veure?',
      '«Proposta i avui» mostra la proposta i marca els canvis respecte dels fitxers originals. '
-     '«Només avui» mostra l’horari original. Tria també la proposta i la setmana.'),
+     'Amb els imprevistos i el grau nou, es compara amb Torns nous (5.2). El grau nou no té horari anterior. '
+     '«Només avui» mostra l’horari original. Tria la proposta; a «Més opcions» pots canviar la setmana.'),
     ('.st-key-p2-seleccio-alumnat', 'De quin grup?',
      'Tria estudis, curs i grup. Incloem la teoria i els seus subgrups de problemes i seminaris. '
      'Dos subgrups simultanis no impliquen que cada estudiant assisteixi a tots dos.'),
     ('.st-key-p2-context-dades', 'Què canvia?',
-     'El resum compta canvis de dia o hora, canvis d’una aula que ja hi era i aules diferents. '
+     'El resum compta canvis de dia o hora, canvis d’una aula que ja hi era, classes que reben aula i aules diferents. '
      'Si faltava l’aula original, assignar-ne una es marca en verd. No és un veredicte de validació.'),
     ('.st-key-p2-clau-colors', 'Filtra per color',
-     'Blau: sense canvis. Verd: aula assignada. Taronja: canvia. Vermell: cas especial. '
-     'Tria una pastilla per apagar la resta de classes; «Totes» les torna a mostrar.'),
+     'Blau: sense canvis. Verd: aula assignada. Taronja: canvia. Ambre: fora del patró. Vermell: excepció demostrada. '
+     'A «Més opcions», tria un color per apagar la resta de classes; «Totes» les torna a mostrar.'),
     ('.st-key-p2-graelles .p2-horari', 'Llegeix la setmana',
      'Cada bloc és una classe. Les compartides apareixen juntes. Passa-hi el ratolí o obre el bloc '
-     'amb clic o teclat per llegir què hi havia abans. Si no hi cap, la setmana es reparteix en blocs un sota l’altre.'),
+     'amb clic o teclat per llegir què hi havia abans. Al mòbil, llisca la graella cap al costat per veure la resta de dies.'),
     ('.st-key-p2-vista-aula', 'Consulta i comparteix una aula',
-     'Mostra totes les classes de l’aula, amb la mateixa setmana i proposta. '
+     'A «Més opcions», mostra totes les classes de l’aula, amb la mateixa setmana i proposta. '
      'Descarrega l’HTML per compartir-lo o imprimir-lo sense connexió.'),
 )
 

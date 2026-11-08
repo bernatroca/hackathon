@@ -6,6 +6,11 @@ ID = 'fora-torn'
 ORDRE = 3
 
 
+def classes(semestre=2):
+    """Classes que compten al resum semestral, sense duplicar compartides."""
+    return consulta('fora_torn_classes', semestre=semestre)[0]
+
+
 def _nombre(valor):
     return f'{int(valor):,}'.replace(',', '.')
 
@@ -20,7 +25,7 @@ def calcula(semestre=2, setmana=None):
         xifra=f'{int(total.sessions):,}'.replace(',', '.'),
         frase=f"{_nombre(total.sessions)} sessions del semestre computen a R1-TORN; {_nombre(total.heretades)} més són fora de torn però fixades heretades.",
         metode="Es compara el torn requerit amb l’hora d’inici (tall a les 14.30): el total del semestre inclou PLAB i dobles, però R1-TORN exclou les fixades sense moure, heretades segons el verificador. "
-               "El gràfic és de la setmana triada per cohort (una sessió pot aparèixer en diverses); les hores-aula exclouen PLAB i dobles i compten les compartides un sol cop.",
+               "El gràfic cobreix el semestre per titulació i curs (una classe compartida pot aparèixer en diversos); les hores-aula exclouen PLAB i dobles i compten les compartides un sol cop.",
         sql=sql, taula=taula, exemples=list(total.exemples[:5]), grafic='barres',
         extra={'setmana': setmana, 'resum': dades[dades.cohort == 'TOTAL'].copy(),
                'per_cohort': dades[dades.cohort != 'TOTAL'].copy()})

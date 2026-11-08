@@ -45,7 +45,8 @@ def test_pagina_resum_quatre_targetes_i_taula_llegible():
     html = contingut(app)
     assert [t.value for t in app.title] == ['Imprevistos']
     assert 'Comprovat amb el verificador oficial' in html
-    assert 'en 1,24 segons' in html
+    assert 'Temps de càlcul: 1,24 segons' in html
+    assert 'segons' not in imprevistos.resum_html(dades_inventades()['resum'])
     assert html.count('<article class="imp-targeta">') == 4
     assert html.count('Resolt amb excepció') == 1
     assert html.count('class="estat verd"') == 4  # Veredicte i tres targetes.
@@ -53,11 +54,10 @@ def test_pagina_resum_quatre_targetes_i_taula_llegible():
     assert all(t['titol'] in html for t in dades_inventades()['imprevistos'])
     assert not re.search(r'\b(R[1-8](?:-[A-Z]+)?|TE|PAUL|SEM|PLAB)\b', html)
     taula = app.dataframe[0].value
-    assert list(taula.columns) == ['Assignatura', 'Grup', 'Abans', 'Després']
+    assert list(taula.columns) == ['Assignatura', 'Grup', 'Data', 'Hora', 'Aula', 'Dia/hora nous', 'Motiu']
     assert len(taula) == 6
     assert any('Subgrup' in g for g in taula['Grup'])
-    assert app.expander[0].label == 'Detall tècnic'
-    assert not app.expander[0].proto.expanded
+    assert not next(e for e in app.expander if e.label == 'Detall tècnic').proto.expanded
     assert app.code[0].value == 'python -m nivell2.s53 --temps 120 --llavor 0'
 
 
@@ -71,8 +71,8 @@ def test_filtres_natius_per_imprevist_i_classes_de_suport():
         assert len(app.dataframe[0].value) == n
     app.button(key='imp-boto-recuperacio').click().run(timeout=30)
     fila = app.dataframe[0].value.iloc[0]
-    assert '18/02/2027' in fila['Abans']
-    assert '19/02/2027' in fila['Després']
+    assert fila['Data'] == '18/02/2027 (cancel·lada)'
+    assert '19/02/2027' in fila['Dia/hora nous']
 
 
 def test_sense_canvis_i_filtre_sense_files():
@@ -183,8 +183,9 @@ def test_concordanca_targetes_resum_i_suport():
         assert canvi + ' d’aula' in text
         assert canvi + ' de dia o hora' in text
         assert imprevistos.accio(n, 0) in text
-        if n:
-            assert any(suport + ' per fer lloc' in c.value for c in app.caption)
+        assert suport + ' per fer lloc' in text
+        assert sum('Per provar un imprevist nou' in c.value for c in app.caption) == 1
+        assert not any('per fer lloc' in c.value for c in app.caption)
         assert '0 canvien' not in text and '0 classes' not in text
     assert imprevistos.accio(1, 0) == 'Què hem fet: 1 canvia d’aula i cap de dia o hora.'
     assert imprevistos.accio(2, 1) == 'Què hem fet: 2 canvien d’aula i 1 de dia o hora.'
@@ -194,15 +195,16 @@ def test_filtres_sense_canvis_diuen_cap():
     dades = dades_inventades()
     dades['files'] = []
     app = obre(dades)
-    assert all(b.label.endswith('(cap)') for b in app.button)
+    assert all(b.label.endswith('(cap)') for b in app.button if b.key.startswith('imp-boto-'))
 
 
 def test_temps_un_segon_en_singular():
     dades = dades_inventades()
     dades['resum']['temps_s'] = 1
-    html = contingut(obre(dades))
-    assert 'en 1,00 segon<' in html
-    assert 'en 1,00 segons' not in html
+    app = obre(dades)
+    detall = next(e for e in app.expander if e.label == 'Detall tècnic')
+    assert any(m.value == 'Temps de càlcul: 1,00 segon' for m in detall.markdown)
+    assert 'segon' not in imprevistos.resum_html(dades['resum'])
 
 
 def test_informe_ha_de_correspondre_al_csv(tmp_path):
@@ -248,7 +250,7 @@ def test_motius_tecnics_nomes_dins_del_detall():
         assert original not in exterior
         assert not re.search(r"\b(?:R\d+|CSV|TE|PAUL|SEM|PLAB)\b|diagnostic\.md", exterior)
         assert "'" not in re.sub(r'<[^>]+>', '', exterior)
-        assert app.expander[0].dataframe[0].value.iloc[0]['Motiu'] == original
+        assert next(e for e in app.expander if e.label == 'Detall tècnic').dataframe[0].value.iloc[0]['Motiu'] == motiu_planer(original)
 
 
 def test_nota_recompte_concorda_i_es_dinamica():
@@ -286,3 +288,228 @@ def test_targeta_mostra_recompte_del_motiu_i_text_avaluacio_compartit():
             assert MOTIU_S04526 in html
             assert original not in html
             assert avaluacio not in html
+
+
+def test_taula_destaca_aula_motiu_i_no_repeteix_la_franja_sense_canvi():
+    app = obre()
+    assert app.button(key='imp-boto-totes').label == 'Totes les classes (6)'
+    taula = app.dataframe[0].value
+    assert 'Q9/0001 → Q9/1003' in set(taula['Aula'])
+    assert set(taula['Motiu']) == {r['motiu'] for r in dades_inventades()['files']}
+    app.button(key='imp-boto-grup_creix').click().run(timeout=30)
+    assert not app.error
+    assert 'Dia/hora nous' not in app.dataframe[0].value
+    assert set(app.dataframe[0].value['Aula']) == {'Q9/0002 → Q9/1003'}
+
+
+def test_dades_absents_mostren_instruccions_abans_dimportar_pagines(tmp_path):
+    import os
+    with patch.dict(os.environ, {'REPTE_DIR': str(tmp_path)}), \
+            patch('streamlit.navigation', side_effect=AssertionError('No ha d’importar les pàgines.')):
+        app = AppTest.from_file(str(ARREL / 'app.py')).run(timeout=30)
+    assert not app.exception
+    assert len(app.error) == 1
+    assert 'repte/repte-horaris-escola/' in app.error[0].value
+    assert 'REPTE_DIR' in app.error[0].value
+    assert app.button(key='reintenta-paquet').label == 'Torna-ho a provar'
+
+
+def test_error_unic_per_renderitzat_i_reintent_buida_totes_les_caches():
+    import servei
+    app = AppTest.from_string("""
+import streamlit as st
+from errors import mostra_error
+st.session_state['_error_mostrat'] = False
+for _ in range(10):
+    mostra_error()
+""")
+    with patch.object(servei.connexio, 'cache_clear') as duckdb_clear, \
+            patch.object(servei.st.cache_data, 'clear') as streamlit_clear:
+        app.run(timeout=30)
+        assert not app.exception
+        assert len(app.error) == 1
+        assert len(app.button) == 1
+        app.button(key='reintenta-dades').click().run(timeout=30)
+        assert not app.exception
+        assert len(app.error) == 1
+        duckdb_clear.assert_called_once()
+        streamlit_clear.assert_called_once()
+
+
+def test_setmanes_filtren_residuals_i_tipica_no_en_te_en_compte():
+    from datetime import date
+    import duckdb
+    import servei
+    from nivell1 import dades
+    con = duckdb.connect()
+    con.execute('CREATE TABLE sessions (setmana VARCHAR, data DATE, sem INTEGER)')
+    for setmana, dia, n in [('2027-W07', '2027-02-15', 200),
+                             ('2027-W08', '2027-02-22', 210),
+                             ('2027-W09', '2027-03-01', 220),
+                             ('2027-W10', '2027-03-08', 1),
+                             ('2027-W11', '2027-03-15', 2)]:
+        con.execute('INSERT INTO sessions SELECT ?, CAST(? AS DATE), 2 FROM range(?)', [setmana, dia, n])
+    servei.setmanes.clear()
+    try:
+        with patch.object(servei, 'connexio', return_value=con), patch.object(dades, 'connexio', return_value=con):
+            assert servei.setmanes(2) == [('2027-W07', date(2027, 2, 15), 200),
+                                         ('2027-W08', date(2027, 2, 22), 210),
+                                         ('2027-W09', date(2027, 3, 1), 220)]
+            assert dades.setmana_tipica(2) == '2027-W08'
+            assert servei.setmanes(1) == []
+            con.execute('DELETE FROM sessions WHERE setmana NOT IN (?, ?)', ['2027-W10', '2027-W11'])
+            assert dades.setmana_tipica(2) == '2027-W10'
+    finally:
+        servei.setmanes.clear()
+        con.close()
+
+
+def test_opcions_nomes_a_pagines_davui_i_dates_llegibles(tmp_path):
+    from datetime import date
+    import os
+    from types import SimpleNamespace as NS
+    import servei
+    (tmp_path / 'paquet').mkdir()
+    (tmp_path / 'paquet' / 'sessions.csv').touch()
+    (tmp_path / 'horaris').mkdir()
+    for ruta, error in [('avui', False), ('respostes', False), ('part2', False),
+                        ('junta', False), ('imprevistos', False), ('avui', True)]:
+        pagina = NS(url_path=ruta, title='Pàgina inventada', run=lambda: None)
+        with patch.dict(os.environ, {'REPTE_DIR': str(tmp_path)}), \
+                patch('streamlit.navigation', return_value=pagina), \
+                patch.object(servei, 'versio_registre', return_value=()), \
+                patch.object(servei, 'setmanes', return_value=[('2027-W07', date(2027, 2, 15), 250)],
+                             side_effect=RuntimeError('Error inventat') if error else None), \
+                patch('components.vistes.franja_context', return_value='Context inventat'), \
+                patch('xat.widget.posa_widget'), patch('xat.widget.pantalla_actual', return_value={}):
+            app = AppTest.from_file(str(ARREL / 'app.py')).run(timeout=30)
+        assert not app.exception
+        if error:
+            assert len(app.error) == 1
+            assert not app.sidebar.error
+            assert app.button(key='reintenta-dades').label == 'Torna-ho a provar'
+            assert not app.sidebar.expander[0].button
+            continue
+        assert not app.error
+        assert any(b.label == 'Actualitza les dades' for b in app.sidebar.button)
+        if ruta in ('avui', 'respostes'):
+            assert [e.label for e in app.sidebar.expander] == ['Opcions']
+            assert app.sidebar.selectbox[1].options == ['Típica', 'Setmana del 15 de febrer · 250 classes']
+        else:
+            assert not app.sidebar.selectbox
+            assert not app.sidebar.expander
+            assert any(c.value == 'La proposta és del 2n semestre' for c in app.sidebar.caption)
+
+
+def test_exemple_aula_prioritza_mateix_dia_i_hora():
+    app = obre()
+    assert not next(e for e in app.expander if e.label == 'Més opcions').proto.expanded
+    app.button(key='imp-exemple').click().run(timeout=30)
+    assert not app.exception and not app.error
+    assert app.session_state['imp-filtre'] == 'aula_reservada'
+    assert len(app.dataframe[0].value) == 1
+    assert 'Dia/hora nous' not in app.dataframe[0].value
+    assert app.get('page_link')[0].proto.label == 'Pas següent: el resum per a la Junta →'
+
+
+def test_exemple_sense_aula_tancada_no_inventa_cap_cas():
+    d = dades_inventades()
+    for t in d['imprevistos']:
+        if t['clau'] in ('aula_reservada', 'aula_avariada'):
+            t['sessions_afectades'] = 0
+    assert imprevistos.exemple_aula(d) is None
+    assert not any(b.key == 'imp-exemple' for b in obre(d).button)
+
+
+def test_pas_seguent_utilitza_la_pagina_registrada():
+    with patch.object(imprevistos, 'carrega', return_value=dades_inventades()):
+        app = AppTest.from_string('''
+import streamlit as st
+from pagines import imprevistos, junta
+p = st.navigation([
+    st.Page(imprevistos.mostra, title='Imprevistos', default=True),
+    st.Page(junta.mostra, title='Resum per a la Junta', url_path='junta'),
+])
+p.run()
+''').run(timeout=30)
+    assert not app.exception and not app.error
+    assert app.get('page_link')[0].proto.label == 'Pas següent: el resum per a la Junta →'
+
+
+
+def test_motius_identifiquen_imprevist_i_classe_que_rep_aula():
+    from nivell2.test_imprevistos import escenari
+    from nivell2.imprevistos import calcula
+    b, c, p, q, noms = escenari()
+    # Solapament parcial: no cal que les hores d’inici siguin idèntiques.
+    c.sessions['suport-inventada'].ini = 525
+    p.files['suport-inventada'].h_ini = '08:45'
+    q.files['suport-inventada'].h_ini = '08:45'
+    p.files['suport-inventada'].aula = 'Q9/0002'
+    q.files['suport-inventada'].aula = 'Q9/0004'
+    originals = calcula(b, c, p, q, [], noms=noms)
+    resum = deepcopy(originals['resum'])
+    dades = imprevistos.afegeix_motius(originals, b, c, p, q, noms)
+    assert dades['resum'] == resum
+    suport = next(r for r in dades['files'] if not r['imprevistos'])
+    assert 'Per fer lloc a ' + noms[c.sessions['creix-inventada'].codi] in suport['motiu']
+    assert '20 a 70 alumnes durant tot el semestre' in suport['motiu']
+    targeta = next(t for t in dades['imprevistos'] if t['clau'] == 'grup_creix')
+    assert targeta['suport_text'] == '1 classe més es mou per deixar l’aula a les afectades.'
+    app = obre(dades)
+    taula = app.dataframe[0].value
+    assert any('Per fer lloc a ' in motiu for motiu in taula['Motiu'])
+    assert any('avariada el 17/02/2027' in motiu for motiu in taula['Motiu'])
+    assert '1 classe més es mou per deixar l’aula' in contingut(app)
+    app.button(key='imp-boto-suport').click().run(timeout=30)
+    assert not app.error
+    assert len(app.dataframe[0].value) == 1
+    assert 'Per fer lloc a ' in app.dataframe[0].value.iloc[0]['Motiu']
+
+
+def test_tria_semestre_i_setmana_sobreviu_pagines_de_la_proposta(tmp_path):
+    from datetime import date
+    import os
+    from types import SimpleNamespace as NS
+    import servei
+    (tmp_path / 'paquet').mkdir()
+    (tmp_path / 'paquet' / 'sessions.csv').touch()
+    (tmp_path / 'horaris').mkdir()
+    pagina = NS(url_path='avui', title='Pàgina inventada', run=lambda: None)
+    app = AppTest.from_file(str(ARREL / 'app.py'))
+    with patch.dict(os.environ, {'REPTE_DIR': str(tmp_path)}), \
+            patch('streamlit.navigation', return_value=pagina), \
+            patch.object(servei, 'versio_registre', return_value=()), \
+            patch.object(servei, 'setmanes', return_value=[('2027-W07', date(2027, 2, 15), 250)]), \
+            patch('xat.widget.posa_widget'), patch('xat.widget.pantalla_actual', return_value={}):
+        app.run(timeout=30)
+        app.selectbox[0].select(1).run(timeout=30)
+        app.selectbox[1].select('2027-W07').run(timeout=30)
+        for ruta in ('part2', 'junta', 'imprevistos'):
+            pagina.url_path = ruta
+            app.run(timeout=30)
+            assert not app.exception and not app.error
+            assert not app.selectbox
+            assert app.session_state['semestre_triat'] == 1
+            assert app.session_state['setmana_triada'] == '2027-W07'
+        pagina.url_path = 'avui'
+        app.run(timeout=30)
+        assert not app.exception and not app.error
+        assert app.selectbox[0].value == 1
+        assert app.selectbox[1].value == '2027-W07'
+        assert app.session_state['semestre'] == 1
+        assert app.session_state['setmana'] == '2027-W07'
+
+
+def test_temps_nomes_al_detall_tecnic_tancat():
+    for temps, text in ((28.53, '28,53 segons'), (1, '1,00 segon'), (None, 'Temps no disponible')):
+        dades = dades_inventades()
+        dades['resum']['temps_s'] = temps
+        app = obre(dades)
+        detall = next(e for e in app.expander if e.label == 'Detall tècnic')
+        assert not detall.proto.expanded
+        assert any(m.value == 'Temps de càlcul: ' + text for m in detall.markdown)
+        nodes_detall = {id(node) for node in detall}
+        assert all('Temps de càlcul' not in m.value and text not in m.value
+                   for m in app.markdown if id(m) not in nodes_detall)
+        assert 'temps de càlcul' not in imprevistos.resum_html(dades['resum'])

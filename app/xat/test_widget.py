@@ -59,26 +59,79 @@ def test_context_grup_i_aula_sense_arrossegar_altres_pagines():
              'p2-vista': 'Proposta i avui', 'p2-titulacio': 'GXX', 'p2-curs': '1r',
              'p2-grup': '81', 'p2-aula': 'Q9/0001', 'p2-setmana': None}
     p = widget.pantalla_actual('Horari proposat', estat)
-    assert p['resum'] == 'Horari proposat · 5.2 · GXX 1r 81'
+    assert p['resum'] == 'Horari proposat · Torns nous (5.2) · GXX 1r Grup 81'
     assert 'Q9/0001' in p['text']
     assert 'Semestre 2. Setmana: típica.' in p['text']
     p = widget.pantalla_actual('Com estem avui', estat)
     assert 'GXX' not in p['text']
-    assert '5.2' not in p['text']
-    assert p['preguntes'][0] == 'Quantes sessions són al torn equivocat?'
+    assert 'La pàgina diu:' not in p['text']
+    for context in ({'semestre': 1}, {'semestre': 2, 'setmana': 'inventada'}):
+        assert 'La pàgina diu:' not in widget.pantalla_actual('Com estem avui', context)['text']
+    assert 'La pàgina diu:' not in widget.pantalla_actual('Com estem avui', {'semestre': 2})['text']
+    assert p['preguntes'] == [widget.PREGUNTA_DEMO, *widget.PREGUNTES['Com estem avui'][:2]]
     estat['p2-vista'] = 'Només avui'
     assert '5.2' not in widget.pantalla_actual('Horari proposat', estat)['text']
 
 
 def test_preguntes_i_junta():
-    assert len(widget.pantalla_actual('Imprevistos', {})['preguntes']) == 2
-    assert widget.pantalla_actual('Totes les respostes', {})['preguntes'] == widget.PER_DEFECTE
-    assert '5.4' in widget.pantalla_actual('Resum per a la Junta', {'junta-proposta': '5.4'})['text']
+    from types import SimpleNamespace
+    inventades = ['Aula Q9/0001 reservada el 15/02/2027.',
+                  'Assignatura inventada · TE/81 passa de 10 a 20 alumnes.']
+    with patch.dict(sys.modules, {'pagines.imprevistos': SimpleNamespace(
+            carrega=lambda: {'imprevistos': [{'descripcio': t} for t in inventades]})}):
+        for pagina in ('Imprevistos', 'Resum per a la Junta'):
+            p = widget.pantalla_actual(pagina, {'setmana': 'inventada', 'junta-proposta': '5.4'})
+            assert 'Setmana:' not in p['text']
+            assert 'Semestre 2.' in p['text']
+            assert all(t in p['text'] for t in inventades)
+        assert len(widget.pantalla_actual('Imprevistos', {})['preguntes']) == 3
+        assert '5.4' in p['text']
+        assert p['resum'].endswith('Incorporar el grau nou (5.4)')
+    assert widget.pantalla_actual('Totes les respostes', {})['preguntes'] == [widget.PREGUNTA_DEMO, *widget.PREGUNTES['Totes les respostes']]
+    assert widget.PREGUNTES['Resum per a la Junta'] != widget.PER_DEFECTE
+    assert widget.PREGUNTES['Com estem avui'][-1] == 'Si 1r i 2n fan classe al matí, hi cabem?'
+    assert widget.PREGUNTES['Horari proposat'][-1] == 'Quines classes d’aquest grup canvien de dia o hora i per què?'
 
 
-def test_sense_estils_consultes_i_correccio_footer():
+def test_detall_obert_nomes_a_la_pagina_corresponent():
+    from types import SimpleNamespace
+    estat = {'detall_id': 'inventada', 'resultats': {
+        'inventada': SimpleNamespace(titol='Una resposta inventada')}}
+    for pagina in ('Com estem avui', 'Totes les respostes'):
+        p = widget.pantalla_actual(pagina, estat)
+        assert 'Resposta oberta: «Una resposta inventada» (identificador: inventada).' in p['text']
+        assert 'Una resposta inventada' in p['resum']
+        assert p['preguntes'][0] == widget.PREGUNTA_DEMO
+        assert p['preguntes'][1] == 'Explica’m aquesta resposta en paraules senzilles'
+    assert 'inventada' not in widget.pantalla_actual('Horari proposat', estat)['text']
+    p = widget.pantalla_actual('Totes les respostes', {'detall_id': 'aforament'})
+    assert 'Més alumnes que places' in p['text']
+
+
+def test_imprevistos_no_disponibles_no_inventa_context():
+    with patch.object(widget, '_imprevistos', side_effect=OSError('inventat')):
+        p = widget.pantalla_actual('Imprevistos', {'setmana': 'inventada'})
+    assert 'no està disponible' in p['text']
+    assert 'Setmana:' not in p['text']
+    assert 'Q1/1003' not in p['text']
+
+
+def test_python_310_i_missatge_per_versions_anteriors():
+    import ast
+
+    codi = Path(widget.__file__).read_text()
+    ast.parse(codi, feature_version=(3, 10))
+    # El guardià s'executa abans de carregar Streamlit o el backend.
+    with patch.object(sys, 'version_info', (3, 9, 6)), pytest.raises(RuntimeError, match='Python 3.10'):
+        exec(compile(codi, str(widget.__file__), 'exec'), {})
+
+
+def test_estils_consultes_i_correccio_footer():
     css = (widget.WEB / 'xat-ia.css').read_text()
-    assert '.xatia-consult' not in css
+    assert '.xatia-consultes summary' in css
+    assert '.xatia-consulta pre' in css
+    assert 'overflow-wrap: anywhere' in css
+    assert 'focus-visible' in css
     assert 'white-space: pre-wrap' in css
     assert '.xatia footer.xatia-peu { display: block !important; }' in css
 
@@ -105,17 +158,28 @@ const sandbox = {
   },
 };
 const source = fs.readFileSync(process.argv[1], 'utf8').replace('  window.XatIA = {', `
-  window.prova = { markdown, htmlMissatge, llegeixFlux, perAlServidor, desa, llegeixMemoria, estat,
-    sincronitzaPlafó, acabaTransicio, teclaPlafó, clicFons,
+  window.prova = { htmlConsultes, copiaIds, descriuArgument, preguntesAra, markdown, htmlMissatge, llegeixFlux, pregunta_, missatgeError, perAlServidor, desa, llegeixMemoria, estat,
+    sincronitzaPlafó, sincronitzaMenu, clicManualMenu, acabaTransicio, teclaPlafó, clicFons,
+    pintaConversa,
+    preparaLectura() {
+      let html = "";
+      el = {cos: {scrollHeight:1000, scrollTop:100, clientHeight:300},
+        conversa: {setAttribute() {}, get innerHTML() { return html; },
+          set innerHTML(v) { html = v; el.escriptures++; }},
+        veu: {}, preguntes: {}, escriptures:0, desplacaments:0,
+        final: {scrollIntoView() { el.desplacaments++; }}};
+      return el;
+    },
     preparaInteraccio() {
       el = {fons: {}, lupa: {hidden:true},
-        plafo: {contains: (node) => node === 'dins'}, boto: {focus() {}}};
+        final: {scrollIntoView() { el.desplacaments = (el.desplacaments || 0) + 1; }},
+        plafo: {contains: (node) => node === 'dins', getBoundingClientRect: () => ({width:420})}, boto: {focus() {}}};
       return el;
     },
     adreca() { return op.api; },
-    prepara() { op = { clauMemoria: 'prova' }; },
+    prepara() { op = { clauMemoria: 'prova', preguntes: ['Pregunta per defecte'] }; },
     parcial(text) {
-      el = {conversa: {innerHTML: ''}, final: {scrollIntoView() {}}};
+      el = {conversa: {innerHTML: '', setAttribute() {}}, final: {scrollIntoView() {}}};
       estat.feina = true; estat.parcial = text;
       pintaConversa();
       estat.feina = false; estat.parcial = '';
@@ -125,6 +189,34 @@ const source = fs.readFileSync(process.argv[1], 'utf8').replace('  window.XatIA 
 vm.runInNewContext(source, sandbox);
 const p = sandbox.window.prova;
 p.prepara();
+assert.equal(p.preguntesAra()[0], 'Pregunta per defecte');
+p.estat.pantalla = {preguntes: ['Pregunta de pàgina']};
+assert.equal(p.preguntesAra()[0], 'Pregunta de pàgina');
+p.estat.missatges = [{role:'user', content:'Pregunta inventada'}];
+assert.equal(p.preguntesAra()[0], 'Pregunta de pàgina');
+p.estat.missatges.push({role:'assistant', content:'Resposta inventada'});
+assert.equal(JSON.stringify(p.preguntesAra()), JSON.stringify(['Com ho saps?']));
+p.estat.pantalla = {preguntes: ['Una altra pàgina']};
+assert.equal(p.preguntesAra()[0], 'Com ho saps?');
+p.estat.missatges = [];
+assert.equal(p.preguntesAra()[0], 'Una altra pàgina');
+p.estat.pantalla = null;
+const lectura = p.preparaLectura();
+p.estat.missatges = [{role:'assistant', content:'Inventat'}];
+p.pintaConversa();
+assert.equal(lectura.desplacaments, 0);
+assert.equal(lectura.cos.scrollTop, 100);
+assert.equal(lectura.escriptures, 1);
+p.pintaConversa();
+assert.equal(lectura.escriptures, 1);
+sandbox.window.XatIA.pantalla({resum:'Context nou', preguntes:[]});
+assert.equal(lectura.escriptures, 1);
+assert.equal(lectura.desplacaments, 0);
+lectura.cos.scrollTop = 690;
+p.estat.missatges.push({role:'user', content:'Una altra'});
+p.pintaConversa();
+assert.equal(lectura.desplacaments, 1);
+p.estat.missatges = [];
 let mobil = false;
 const classes = new Set();
 const resizes = [];
@@ -158,6 +250,7 @@ assert.equal(resizes.length, 1);
 p.acabaTransicio({target: elements.plafo, propertyName: 'transform'});
 assert.equal(resizes.length, 2);
 assert.equal(timers.size, 0);
+assert.ok(elements.desplacaments > 0); // Després de la transició també segueix l'última resposta.
 p.clicFons();
 assert.equal(p.estat.obert, true);
 p.teclaPlafó({key:'Escape'});
@@ -201,6 +294,55 @@ for (const [id, callback] of timers) { timers.delete(id); callback(); }
 assert.equal(resizes.length, abansFinal + 1); // També sense transitionend.
 p.sincronitzaPlafó();
 assert.equal(resizes.length, abansFinal + 1);
+// Espai real per a menú + plafó: inclou 1440 px exactes i els canvis de mida.
+let menuDesplegat = true;
+let plegats = 0;
+let desplegats = 0;
+sandbox.window.innerWidth = 1440;
+sandbox.window.innerHeight = 900;
+sandbox.window.getComputedStyle = () => ({display:'block', visibility:'visible'});
+const menu = {getBoundingClientRect: () => ({width:300, height:900, left:menuDesplegat ? 0 : -300,
+  right:menuDesplegat ? 300 : 0, top:0, bottom:900})};
+sandbox.document.querySelector = () => menu;
+sandbox.document.querySelectorAll = (selector) => [{click() {
+  if (selector.includes('stSidebarCollapseButton')) { menuDesplegat = false; plegats++; }
+  else { menuDesplegat = true; desplegats++; }
+}}];
+p.estat.obert = false;
+p.sincronitzaMenu();
+p.estat.obert = true;
+p.sincronitzaMenu();
+assert.equal(plegats, 1);
+assert.equal(menuDesplegat, false);
+p.sincronitzaMenu();
+assert.equal(plegats, 1);
+p.estat.obert = false;
+p.sincronitzaMenu();
+assert.equal(desplegats, 1);
+assert.equal(menuDesplegat, true);
+sandbox.window.innerWidth = 1800;
+p.estat.obert = true;
+p.sincronitzaMenu();
+assert.equal(menuDesplegat, true);
+sandbox.window.innerWidth = 1440;
+p.sincronitzaMenu();
+assert.equal(menuDesplegat, false);
+p.estat.obert = false;
+p.sincronitzaMenu();
+p.estat.obert = true;
+p.sincronitzaMenu();
+p.clicManualMenu({target:{closest: () => true}});
+menuDesplegat = true;
+p.sincronitzaMenu();
+assert.equal(menuDesplegat, true); // Respecta l'acció manual mentre és obert.
+p.estat.obert = false;
+p.sincronitzaMenu();
+menuDesplegat = false;
+p.estat.obert = true;
+p.sincronitzaMenu();
+p.estat.obert = false;
+p.sincronitzaMenu();
+assert.equal(menuDesplegat, false); // No desplega un menú que ja estava plegat.
 const entitats = 'inici &gt; 15.00 &lt; 20.00 &amp; &quot;hora&quot; &#39;dia&#39; &#x27;aula&#x27;';
 const esperat = '<p>inici &gt; 15.00 &lt; 20.00 &amp; &quot;hora&quot; &#39;dia&#39; &#39;aula&#39;</p>';
 assert.equal(p.markdown(entitats), esperat);
@@ -249,22 +391,156 @@ async function flux(fi) {
   assert.equal(r.consultes[0].total_id, 23);
   assert.equal(r.tallada, false);
   const truncada = await flux(false);
-  assert.equal(truncada.tallada, true);
+  assert.equal(truncada.tallada, false);
+  assert.match(truncada.error, /connexió s’ha tallat/);
   assert.equal(truncada.consultes.length, 1);
+  assert.equal(truncada.text, 'Resposta inventada');
+  const cos = (events, falla = false) => {
+    let llegit = false;
+    return {getReader: () => ({read: async () => {
+      if (llegit) { if (falla) throw new TypeError('network'); return {done:true}; }
+      llegit = true;
+      return {value:new TextEncoder().encode(events.map(e => 'data: ' + JSON.stringify(e) + '\n\n').join('')), done:false};
+    }})};
+  };
+  const tall = await p.llegeixFlux(cos([{tros:'Resposta parcial'}], true));
+  assert.equal(tall.text, 'Resposta parcial');
+  assert.match(tall.error, /connexió s’ha tallat/);
+  await assert.rejects(() => p.llegeixFlux(cos([], true)), /connexió s’ha tallat/);
+  await assert.rejects(() => p.llegeixFlux(cos([])), /connexió s’ha tallat/);
+  await assert.rejects(() => p.llegeixFlux(cos([{fi:true, tallada:true}])), /pregunta més concreta/);
+  await assert.rejects(() => p.llegeixFlux(cos([{error:'La IA ha respost HTTP 429.'}])), /IA està saturada/);
+  const errorParcial = await p.llegeixFlux(cos([{tros:'Parcial'}, {error:'La IA ha respost HTTP 429.'}]));
+  assert.equal(errorParcial.text, 'Parcial');
+  assert.match(errorParcial.error, /IA està saturada/);
+  sandbox.fetch = async () => ({ok:false, status:429, headers:{get: () => 'application/json'}, json:async () => ({error:'HTTP 429'})});
+  await assert.rejects(() => p.pregunta_([]), /IA està saturada/);
+  sandbox.fetch = async () => { throw new TypeError('network'); };
+  await assert.rejects(() => p.pregunta_([]), /connexió amb el servidor/);
+  assert.match(p.missatgeError('HTTP 502'), /no està disponible/);
+  for (const codi of [401, 403, 404]) {
+    assert.match(p.missatgeError('La IA ha respost HTTP ' + codi, 502), /no està ben configurat/);
+    assert.match(p.missatgeError('', codi), /no està ben configurat/);
+  }
+  assert.match(p.missatgeError('L’assistent no està ben configurat (clau o model).', 502), /no està ben configurat/);
+  p.estat.feina = true;
+  const ambEina = await p.llegeixFlux(cos([{eina:'consulta_sql'}, {tros:'Fet'}, {fi:true}]));
+  assert.equal(ambEina.text, 'Fet');
+  assert.equal(p.estat.eina, 'consulta_sql');
+  assert.ok(p.parcial('Encara consultant').includes('Consultant l’horari…'));
+  p.estat.eina = '';
+  await p.llegeixFlux(cos([{estat:'Comprovant la resposta…'}, {tros:'Fet'}, {fi:true}]));
+  assert.ok(p.parcial('').includes('Comprovant la resposta…'));
+  p.estat.estatResposta = '';
   const missatge = {role: 'assistant', content: r.text, consultes: r.consultes};
   const html = p.htmlMissatge(missatge);
   const nomesText = '<div class="xatia-missatge xatia-missatge--ia"><p>Resposta inventada</p></div>';
-  assert.equal(html, nomesText); // Sense bloc, SQL, arguments, sessions ni errors de consultes.
+  assert.equal(html, nomesText); // Les consultes fallides no es mostren.
   assert.equal(p.htmlMissatge({role:'assistant', content:r.text}), nomesText);
-  p.estat.missatges = [missatge];
+  const bones = [{eina:'aules_lliures', ok:true,
+    args:{dia:'J', hora_ini:'10:00', durada_min:60, places_min:60, proposta:'avui'},
+    id_sessio:Array.from({length:12}, (_, i) => 'S900' + i), total_id:23,
+    consulta:'SELECT * FROM inventat WHERE x < 4; ' + mal},
+    {eina:'ocupacio_aula', ok:true, args:{aula:'Q9/0001'}, id_sessio:[], consulta:'cap resultat'},
+    ...consultes];
+  const ambConsultes = {...missatge, consultes:bones};
+  const comprovacio = p.htmlMissatge(ambConsultes);
+  assert.ok(comprovacio.includes('<details class="xatia-consultes"><summary>Comprova-ho</summary>'));
+  assert.ok(!comprovacio.includes('<details open'));
+  assert.equal((comprovacio.match(/class="xatia-consulta"/g) || []).length, 2);
+  for (const text of ['Aules lliures', 'dia: dijous', 'hora: 10:00', 'durada: 60 min',
+    '60 places o més', 'horari d’avui', '+13 més', 'Copia', 'cap resultat',
+    'Ocupació de l’aula', 'Q9/0001', 'x &lt; 4', '&lt;img']) assert.ok(comprovacio.includes(text), text);
+  assert.ok(!comprovacio.includes('<img'));
+  assert.ok(!comprovacio.includes('S90010'));
+  assert.ok(!comprovacio.includes('S90011'));
+  assert.ok(!p.htmlMissatge({role:'user', content:'Hola', consultes:bones}).includes('Comprova-ho'));
+  assert.equal(p.htmlConsultes([]), '');
+  assert.equal(p.htmlConsultes(null), '');
+  assert.equal(p.htmlConsultes([{ok:false}]), '');
+  for (const eina of ['horari_grup','xifra','resultat_proposta','consulta_sql','prova_canvi']) {
+    const h = p.htmlConsultes([{ok:true,eina,args:{apartat:'5.2',canvi:{tipus:'moure',id_sessio:'S90001'}}}]);
+    assert.ok(h.includes('horari proposat: 5.2'));
+    assert.ok(h.includes('canvi: tipus: moure una classe · sessió: S90001'));
+    assert.ok(!h.includes(eina));
+  }
+  assert.equal(p.descriuArgument('proposta', '5.2'), 'horari proposat: 5.2');
+  const status = {textContent:''};
+  const codeIds = {};
+  const boto = {dataset:{ids:'S90001,S90002'}, parentElement:{querySelector:(selector) => selector === 'code' ? codeIds : status}};
+  let copiat;
+  sandbox.navigator = {clipboard:{writeText:async (text) => {copiat = text;}}};
+  await p.copiaIds(boto);
+  assert.equal(copiat, 'S90001,S90002');
+  assert.equal(status.textContent, 'Copiat');
+  let temporal, eliminats = 0, seleccionats = 0, focusRestaurat = 0;
+  sandbox.document.activeElement = {focus:() => {focusRestaurat++;}};
+  sandbox.document.createElement = (tag) => {
+    assert.equal(tag, 'textarea');
+    temporal = {style:{}, setAttribute:(k,v) => {assert.equal(k,'readonly');},
+      select:() => {seleccionats++;}, remove:() => {eliminats++;}};
+    return temporal;
+  };
+  sandbox.document.body = {appendChild:(element) => {assert.equal(element,temporal);}};
+  sandbox.document.execCommand = (command) => {
+    assert.equal(command, 'copy');
+    assert.equal(temporal.value, 'S90001,S90002');
+    return true;
+  };
+  sandbox.navigator.clipboard.writeText = async () => {throw new Error('denegat');};
+  await p.copiaIds(boto);
+  assert.equal(status.textContent, 'Copiat');
+  delete sandbox.navigator.clipboard;
+  await p.copiaIds(boto);
+  assert.equal(status.textContent, 'Copiat');
+  assert.equal(eliminats, 2);
+  assert.equal(seleccionats, 2);
+  assert.equal(focusRestaurat, 2);
+  let contingut, rangAfegit, netejat = false;
+  const rang = {selectNodeContents:(node) => {contingut = node;}};
+  sandbox.document.createRange = () => rang;
+  sandbox.window.getSelection = () => ({removeAllRanges:() => {netejat = true;},
+    addRange:(r) => {rangAfegit = r;}});
+  for (const falla of [() => false, () => {throw new Error('bloquejat');}]) {
+    sandbox.document.execCommand = falla;
+    await p.copiaIds(boto);
+    assert.equal(status.textContent, 'Seleccionat: prem Cmd+C o Ctrl+C per copiar-ho');
+    assert.equal(contingut, codeIds);
+    assert.equal(rangAfegit, rang);
+    assert.ok(netejat);
+  }
+  assert.equal(eliminats, 4);
+  p.estat.missatges = [ambConsultes];
   p.desa();
   p.estat.missatges = [];
   p.llegeixMemoria();
   assert.equal(p.estat.missatges[0].consultes[0].total_id, 23);
-  assert.deepEqual(JSON.parse(JSON.stringify(p.estat.missatges[0].consultes)), consultes);
-  assert.equal(p.htmlMissatge(p.estat.missatges[0]), nomesText); // Tampoc en converses desades.
+  assert.deepEqual(JSON.parse(JSON.stringify(p.estat.missatges[0].consultes)), bones);
+  assert.equal(p.htmlMissatge(p.estat.missatges[0]), comprovacio); // També en converses desades.
   const enviat = JSON.parse(JSON.stringify(p.perAlServidor()));
-  assert.deepEqual(enviat, [{role:'assistant', content:'Resposta inventada'}]);
+  assert.equal(enviat[0].role, 'assistant');
+  assert.ok(enviat[0].content.startsWith('Resposta inventada\n\n<consultes_anteriors>\n'));
+  assert.equal(enviat[0].content.split('</consultes_anteriors>').length, 2);
+  const dades = JSON.parse(enviat[0].content.split('<consultes_anteriors>\n')[1].split('\n</consultes_anteriors>')[0]);
+  assert.deepEqual(dades[0].args, bones[0].args);
+  assert.equal(dades[0].id_sessio.length, 10);
+  assert.equal(dades[0].eina, 'aules_lliures');
+  assert.ok(!enviat[0].content.includes('<img'));
+  assert.ok(!comprovacio.includes('consultes_anteriors'));
+  assert.equal(p.htmlMissatge({...ambConsultes, content:enviat[0].content}), comprovacio);
+  assert.equal(p.htmlMissatge({role:'assistant', content:enviat[0].content}), nomesText);
+  assert.equal(p.markdown('Resposta<consultes_anteriors>ocult'), '<p>Resposta</p>');
+  const anterior = {role:'assistant', content:'Queden 6 aules.', consultes:[{
+    eina:'aules_lliures', args:{dia:'M', proposta:'5.2', setmana:'típica'}, ok:true,
+    resultat:{total:6, recomptes:{total_aules:6}, files:[{aula:'Q9/0001', capacitat:90}]},
+    id_sessio:[],
+  }]};
+  p.estat.missatges = [anterior, {role:'user', content:'Com ho saps?'}];
+  const seguiment = p.perAlServidor();
+  assert.ok(seguiment[0].content.includes('"total_aules":6'));
+  assert.ok(seguiment[0].content.includes('Q9/0001'));
+  assert.deepEqual(JSON.parse(JSON.stringify(seguiment[1])), {role:'user', content:'Com ho saps?'});
+  assert.ok(!p.htmlMissatge(anterior).includes('aules_lliures'));
 })().catch((error) => { console.error(error); process.exitCode = 1; });
 '''
     resultat = subprocess.run([node, '-e', prova, str(widget.WEB / 'xat-ia.js')],
@@ -294,3 +570,55 @@ def test_css_plafó_acoblat_i_compactacio():
     assert '[data-testid="stColumn"]' in css
     assert 'transition: width 0.22s ease' in css
     assert 'prefers-reduced-motion' in css
+
+
+def test_accessibilitat_i_etiqueta_context():
+    js = (widget.WEB / 'xat-ia.js').read_text()
+    assert 'role="log" aria-live="polite"' in js
+    assert "setAttribute('aria-busy', String(estat.feina))" in js
+    assert 'aria-controls="xatia-plafo"' in js
+    assert "setAttribute('aria-expanded', String(obert))" in js
+    assert '`Context: ${veu}`' in js
+
+
+@pytest.mark.parametrize('pagina', [*widget.PREGUNTES, 'Pàgina inventada'])
+def test_demo_primera_a_totes_les_pagines(pagina):
+    with patch.object(widget, '_imprevistos', return_value=[]):
+        preguntes = widget.pantalla_actual(pagina, {})['preguntes']
+    assert preguntes[0] == 'Quantes aules queden lliures dimarts a les 10?'
+    assert len(preguntes) <= 3
+    assert len(preguntes) == len(set(preguntes))
+    assert widget.PER_DEFECTE[0] == preguntes[0]
+
+
+def test_benvinguda_planera():
+    with patch.object(widget, '_api', return_value='/api/xat'), patch.object(widget.st, 'html') as html:
+        widget.posa_widget(None)
+    assert 'Pregunta’m per aules, grups o l’horari proposat. Respondré amb les dades.' in html.call_args.args[0]
+
+
+@pytest.mark.parametrize('proposta', ['5.3', '5.4'])
+def test_context_compara_amb_torns_nous(proposta):
+    p = widget.pantalla_actual('Horari proposat', {
+        'p2-vista': 'Proposta i avui', 'p2-proposta': proposta,
+        'p2-titulacio': 'GEET', 'p2-curs': '1r', 'p2-grup': '31'})
+    assert 'amb Torns nous (5.2).' in p['text']
+    assert 'amb avui' not in p['text']
+    assert p['preguntes'][2] == 'Què canvia respecte de Torns nous (5.2)?'
+    assert 'Enginyeria Electrònica de Telecomunicació 1r Grup 31' in p['resum']
+    assert widget._nom_proposta(proposta) in p['text']
+
+
+def test_portada_reutilitza_presentacio_del_resultat_visible():
+    resultat = object()
+    resultats = {'hi-cap-mati': resultat}
+    info = {'etiqueta': 'Cal actuar', 'c': {'resposta': 'No hi cap'},
+            'frase': 'Falta espai inventat.'}
+    with patch('presentacio.text', return_value={'inventat': True}) as text, \
+            patch('presentacio.text_portada', return_value=info) as portada:
+        p = widget.pantalla_actual('Com estem avui', {
+            'semestre': 1, 'setmana': 'inventada', 'resultats': resultats})
+    text.assert_called_once_with(resultat, resultats, setmana_triada='inventada')
+    portada.assert_called_once_with(resultat, {'inventat': True})
+    assert 'La pàgina diu: Cal actuar. No hi cap. Falta espai inventat.' in p['text']
+    assert 'Sí, hi cap' not in p['text']

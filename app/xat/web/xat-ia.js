@@ -61,6 +61,8 @@
     contextInicial: undefined,
     feina: false,
     parcial: '',
+    eina: '',
+    estatResposta: '',
     error: '',
     obert: false,
     gran: false,
@@ -103,6 +105,16 @@
 
   function textPerALaIA(m, i) {
     let t = m.content;
+    if (m.role === 'assistant' && Array.isArray(m.consultes) && m.consultes.length) {
+      const consultes = m.consultes.map((c) => ({
+        eina: c.eina, args: c.args, ok: c.ok, resultat: c.resultat,
+        id_sessio: Array.isArray(c.id_sessio) ? c.id_sessio.slice(0, 10) : [],
+      }));
+      // El JSON no pot tancar el delimitador ni afegir altres blocs de context.
+      const dades = JSON.stringify(consultes).replace(/[<>&]/g, (c) =>
+        ({'<': '\\u003c', '>': '\\u003e', '&': '\\u0026'})[c]);
+      t += `\n\n<consultes_anteriors>\n${dades}\n</consultes_anteriors>`;
+    }
     if (m.pantalla) t = `<pantalla>\n${m.pantalla}\n</pantalla>\n\n${t}`;
     if (i === 0 && estat.contextInicial) t = `<context>\n${estat.contextInicial}\n</context>\n\n${t}`;
     return t;
@@ -149,13 +161,16 @@
     estat.error = '';
     estat.feina = true;
     estat.parcial = '';
+    estat.eina = '';
+    estat.estatResposta = '';
     desa();
     pinta();
 
     try {
       const r = await pregunta_(perAlServidor());
       estat.missatges = [...estat.missatges, { role: 'assistant', content: r.text, consultes: r.consultes }];
-      if (r.tallada) estat.error = 'La resposta s’ha tallat per llarga.';
+      if (r.error) estat.error = r.error;
+      else if (r.tallada) estat.error = 'La resposta s’ha tallat per llarga. Prova una pregunta més concreta.';
     } catch (e) {
       /* La pregunta que ha fallat no es queda: el text i les captures tornen a la caixa. */
       estat.missatges = abans;
@@ -166,6 +181,8 @@
     } finally {
       estat.feina = false;
       estat.parcial = '';
+      estat.eina = '';
+      estat.estatResposta = '';
       desa();
       pinta();
       creixCaixa();
@@ -187,7 +204,15 @@
     const tipus = resposta.headers.get('content-type') || '';
     if (resposta.ok && resposta.body && tipus.includes('event-stream')) return llegeixFlux(resposta.body);
     const dades = await resposta.json().catch(() => null);
-    throw new Error((dades && dades.error) || `El servidor ha respost ${resposta.status}.`);
+    throw new Error(missatgeError(dades && dades.error, resposta.status));
+  }
+
+  function missatgeError(missatge, codi) {
+    const text = typeof missatge === 'string' ? missatge : '';
+    if (codi === 429 || /\b429\b/.test(text)) return 'La IA està saturada. Torna-ho a provar d’aquí a uns segons.';
+    if ([401, 403, 404, 424].includes(codi) || /\bHTTP\s+(401|403|404)\b/i.test(text) || /no està ben configurat/i.test(text)) return 'L’assistent no està ben configurat (clau o model del fitxer .env). Avisa qui manté l’app.';
+    if (codi >= 500 || /\bHTTP\s+5\d\d\b/i.test(text)) return 'El servei de l’assistent no està disponible ara mateix. Torna-ho a provar d’aquí a uns segons.';
+    return text || 'No s’ha pogut completar la consulta. Torna-ho a provar.';
   }
 
   async function llegeixFlux(cos) {
@@ -197,8 +222,18 @@
     let consultes = [];
     let pendent = '';
     let darrer = 0;
+    const interromput = (error = 'La connexió s’ha tallat a mig resposta. Torna-ho a provar.') => {
+      if (text) return { text, consultes, tallada: false, error };
+      throw new Error(error);
+    };
     for (;;) {
-      const { value, done } = await lector.read();
+      let lectura;
+      try {
+        lectura = await lector.read();
+      } catch (e) {
+        return interromput();
+      }
+      const { value, done } = lectura;
       if (value) pendent += descodifica.decode(value, { stream: true });
       const blocs = pendent.split('\n\n');
       pendent = done ? '' : blocs.pop() || '';
@@ -211,8 +246,18 @@
         } catch (err) {
           continue;
         }
-        if (e.error) throw new Error(e.error);
+        if (e.error) return interromput(missatgeError(e.error));
         if (Array.isArray(e.consultes)) consultes = e.consultes;
+        if (e.estat === 'Comprovant la resposta…') {
+          estat.estatResposta = e.estat;
+          pintaConversa();
+        }
+        if (e.eina) {
+          estat.eina = String(e.eina);
+          estat.estatResposta = '';
+          estat.parcial = text;
+          pintaConversa();
+        }
         if (typeof e.tros === 'string') {
           text += e.tros;
           /* Com a molt vint cops per segon: pintar-ho a cada tros no cal. */
@@ -223,12 +268,16 @@
             pintaConversa();
           }
         }
-        if (e.fi) return { text, consultes, tallada: !!e.tallada, model: e.model };
+        if (e.fi) {
+          if (!text) throw new Error(e.tallada
+            ? 'La resposta s’ha tallat abans d’escriure res. Prova una pregunta més concreta.'
+            : 'No s’ha pogut obtenir una resposta. Torna-ho a provar.');
+          return { text, consultes, tallada: !!e.tallada, model: e.model };
+        }
       }
       if (done) break;
     }
-    if (text) return { text, consultes, tallada: true };
-    throw new Error('La resposta s’ha tallat abans de començar.');
+    return interromput('La connexió s’ha tallat abans de completar la resposta. Torna-ho a provar.');
   }
 
   /* ---------- captures ---------- */
@@ -285,6 +334,7 @@
     // escapar abans de generar HTML, també durant la resposta en directe.
     const entitats = { '&lt;': '<', '&gt;': '>', '&amp;': '&', '&quot;': '"', '&#39;': "'", '&#x27;': "'" };
     text = text.replace(/&(?:lt|gt|amp|quot|#39|#x27);/g, (entitat) => entitats[entitat]);
+    text = text.replace(/<consultes_anteriors>[\s\S]*?(?:<\/consultes_anteriors>|$)/g, '');
     const linies = text.replace(/\r/g, '').split('\n');
     let html = '';
     let llista = null; // 'ul' | 'ol'
@@ -333,12 +383,12 @@
     const arrel = document.createElement('div');
     arrel.className = 'xatia';
     arrel.innerHTML = `
-      <button type="button" class="xatia-boto" aria-label="Obre ${escapa(op.titol)}">
+      <button type="button" class="xatia-boto" aria-label="Obre ${escapa(op.titol)}" aria-expanded="false" aria-controls="xatia-plafo">
         ${icona('sparkles', 20)}<span>${escapa(op.titol)}</span>
       </button>
       <div class="xatia-fons" hidden></div>
-      <aside class="xatia-plafo" aria-label="${escapa(op.titol)}" aria-hidden="true" inert>
-        <header class="xatia-cap">
+      <aside id="xatia-plafo" class="xatia-plafo" aria-label="${escapa(op.titol)}" aria-hidden="true" inert>
+        <header tabindex="-1" class="xatia-cap">
           <span class="xatia-titol">${icona('sparkles', 18)} ${escapa(op.titol)}</span>
           <button type="button" class="xatia-icona" data-fa="nova" aria-label="Conversa nova" title="Conversa nova">${icona('nova', 16)}</button>
           <button type="button" class="xatia-icona xatia-nomes-ordinador" data-fa="gran" aria-label="Fes-ho gran" title="Fes-ho gran">${icona('gran', 16)}</button>
@@ -347,7 +397,7 @@
         <div class="xatia-cos">
           <div class="xatia-columna">
             <div class="xatia-missatge xatia-missatge--ia xatia-salutacio"></div>
-            <div class="xatia-conversa"></div>
+            <div class="xatia-conversa" role="log" aria-live="polite" aria-relevant="additions text" aria-busy="false"></div>
             <div class="xatia-final"></div>
           </div>
         </div>
@@ -405,6 +455,7 @@
   let menuXatObert = false;
   let menuPlegatPelXat = false;
   let clicMenuDelXat = false;
+  let menuManual = false;
   let observaMenu;
 
   function menuVisible(node) {
@@ -435,7 +486,7 @@
   }
 
   function plegaMenuPelXat() {
-    if (!estat.obert || !esAcoblat()) {
+    if (!estat.obert || !esAcoblat() || menuManual || menuPlegatPelXat) {
       deixaObservarMenu();
       return;
     }
@@ -443,6 +494,13 @@
     if (!menu) return; // Pot muntar-se després del widget.
     if (!menuVisible(menu)) {
       deixaObservarMenu(); // Ja estava plegat: no ens correspon restaurar-lo.
+      return;
+    }
+    // També a 1440 px: reservem lloc al plafó i almenys 1000 px a la pàgina.
+    const ampladaMenu = menu.getBoundingClientRect().width;
+    const ampladaPlafo = el.plafo.getBoundingClientRect().width;
+    if (window.innerWidth - ampladaMenu - ampladaPlafo >= 1000) {
+      deixaObservarMenu();
       return;
     }
     const boto = botoMenu(selectorPlegaMenu);
@@ -456,18 +514,23 @@
     if (!menuXatObert || clicMenuDelXat) return;
     if (e.target.closest && e.target.closest(selectorPlegaMenu + ', ' + selectorDesplegaMenu)) {
       menuPlegatPelXat = false;
+      menuManual = true;
       deixaObservarMenu();
     }
   }
 
   function sincronitzaMenu() {
     if (typeof document.querySelector !== 'function') return;
-    if (menuXatObert === estat.obert) return;
+    if (menuXatObert === estat.obert) {
+      if (estat.obert) plegaMenuPelXat();
+      return;
+    }
     menuXatObert = estat.obert;
     deixaObservarMenu();
     if (estat.obert) {
       menuPlegatPelXat = false;
-      if (!esAcoblat() || window.innerWidth >= 1440) return;
+      menuManual = false;
+      if (!esAcoblat()) return;
       // Només mentre esperem el muntatge inicial; mai replegar un menú manual.
       if (typeof MutationObserver !== 'undefined') {
         observaMenu = new MutationObserver(plegaMenuPelXat);
@@ -492,6 +555,10 @@
     window.dispatchEvent(new Event('resize'));
   }
 
+  function mostraFinal() {
+    if (estat.obert) el.final.scrollIntoView({ block: 'end' });
+  }
+
   function sincronitzaPlafó() {
     sincronitzaMenu();
     const acoblat = estat.obert && esAcoblat();
@@ -504,7 +571,7 @@
       avisaAmplada();
       // Respatller per a transicions interrompudes i moviment reduït (sense
       // transitionend). No es programa en cada tros de resposta ni pantalla.
-      resizePendent = window.setTimeout(avisaAmplada, 260);
+      resizePendent = window.setTimeout(() => { avisaAmplada(); mostraFinal(); }, 260);
     }
   }
 
@@ -513,6 +580,7 @@
         (e.target.matches?.('.stApp') && e.propertyName === 'width')) {
       window.clearTimeout(resizePendent);
       avisaAmplada();
+      mostraFinal();
     }
   }
 
@@ -540,10 +608,14 @@
         else if (accio === 'nova') conversaNova();
         else if (accio === 'captura') el.fitxer.click();
         else if (accio === 'envia') envia(el.caixa.value, true);
+        else if (accio === 'copia-ids') copiaIds(fa);
         else if (accio === 'treu') {
           estat.preparades = estat.preparades.filter((_, i) => i !== Number(fa.dataset.i));
           pinta();
-        } else if (accio === 'pregunta') envia(fa.dataset.text, false);
+        } else if (accio === 'pregunta') {
+          envia(fa.dataset.text, false);
+          enfocaEntrada();
+        }
         return;
       }
       const img = e.target.closest('.xatia-captures img, .xatia-preparada img');
@@ -606,6 +678,7 @@
       visualViewport.addEventListener('scroll', teclat);
     }
     window.matchMedia('(max-width: 699px)').addEventListener('change', pinta);
+    window.addEventListener('resize', sincronitzaMenu);
   }
 
   function creixCaixa() {
@@ -621,6 +694,98 @@
 
   /* ---------- pintar ---------- */
 
+  const NOMS_EINES = {
+    horari_grup: 'Horari del grup', aules_lliures: 'Aules lliures',
+    ocupacio_aula: 'Ocupació de l’aula', xifra: 'Xifra de l’horari',
+    resultat_proposta: 'Resultat de la proposta', consulta_sql: 'Consulta de l’horari',
+    prova_canvi: 'Prova d’un canvi',
+  };
+  const ETIQUETES_ARGS = {
+    titulacio: 'titulació', curs: 'curs', grup: 'grup', dia: 'dia', data: 'data',
+    hora_ini: 'hora', h_ini: 'hora', h_fi: 'hora final', durada_min: 'durada',
+    places_min: 'places', tipus: 'tipus', setmana: 'setmana', aula: 'aula',
+    id: 'xifra', apartat: 'horari proposat', proposta: 'horari', sql: 'consulta',
+    canvi: 'canvi', id_sessio: 'sessió', activitat_id: 'activitat',
+    aules_tancades: 'aules tancades', grups_creixen: 'grups que creixen',
+    sessions_cancel_lades: 'sessions cancel·lades', data_ini: 'data inicial',
+    data_fi: 'data final', alumnes: 'alumnes', codi: 'codi d’assignatura',
+    recuperar_fins: 'recuperar fins al',
+  };
+
+  function descriuArgument(clau, valor) {
+    const etiqueta = ETIQUETES_ARGS[clau] || clau.replace(/_/g, ' ');
+    if (Array.isArray(valor)) return `${etiqueta}: ${valor.map(descriuValor).join('; ')}`;
+    if (valor && typeof valor === 'object') return `${etiqueta}: ${descriuValor(valor)}`;
+    if (clau === 'proposta') return ['avui', 'partida'].includes(valor)
+      ? 'horari d’avui' : `horari proposat: ${valor}`;
+    if (clau === 'dia') valor = ({L: 'dilluns', M: 'dimarts', X: 'dimecres', J: 'dijous', V: 'divendres'})[valor] || valor;
+    if (clau === 'durada_min') valor = `${valor} min`;
+    if (clau === 'places_min') valor = `${valor} places o més`;
+    if (clau === 'tipus') valor = ({moure: 'moure una classe', imprevist: 'imprevist'})[valor] || valor;
+    return `${etiqueta}: ${valor}`;
+  }
+
+  function descriuValor(valor) {
+    if (valor && typeof valor === 'object') return Object.entries(valor)
+      .filter(([, v]) => v !== null && v !== undefined)
+      .map(([k, v]) => descriuArgument(k, v)).join(' · ');
+    return String(valor);
+  }
+
+  function htmlConsultes(consultes) {
+    const correctes = Array.isArray(consultes)
+      ? consultes.filter((c) => c && c.ok === true && !c.error) : [];
+    if (!correctes.length) return '';
+    return '<details class="xatia-consultes"><summary>Comprova-ho</summary>' + correctes.map((c) => {
+      const args = c.args && typeof c.args === 'object' ? c.args : {};
+      const descripcio = [NOMS_EINES[c.eina] || String(c.eina || 'Consulta'),
+        ...Object.entries(args).filter(([, v]) => v !== null && v !== undefined)
+          .map(([k, v]) => descriuArgument(k, v))].join(' · ');
+      const ids = Array.isArray(c.id_sessio) ? c.id_sessio.filter((id) => typeof id === 'string' && id).slice(0, 10) : [];
+      const mes = Math.max(0, (Number(c.total_id) || 0) - ids.length);
+      const sessions = ids.length ? `<div class="xatia-consulta-ids"><span>id_sessio: <code>${escapa(ids.join(', '))}</code>${mes ? ` · +${mes} més` : ''}</span><button type="button" data-fa="copia-ids" data-ids="${escapa(ids.join(','))}" aria-label="Copia els identificadors de sessió">Copia</button><span role="status" class="xatia-consulta-estat"></span></div>` : '';
+      const consulta = c.consulta ? `<pre><code>${escapa(String(c.consulta))}</code></pre>` : '';
+      return `<section class="xatia-consulta"><p>${escapa(descripcio)}</p>${sessions}${consulta}</section>`;
+    }).join('') + '</details>';
+  }
+
+  async function copiaIds(boto) {
+    const estatCopia = boto.parentElement.querySelector('[role="status"]');
+    try {
+      await navigator.clipboard.writeText(boto.dataset.ids);
+      estatCopia.textContent = 'Copiat';
+      return;
+    } catch (e) {
+      /* Alguns navegadors bloquegen el porta-retalls modern. */
+    }
+    const focusAnterior = document.activeElement;
+    const temporal = document.createElement('textarea');
+    temporal.value = boto.dataset.ids;
+    temporal.setAttribute('readonly', '');
+    temporal.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;';
+    let copiat = false;
+    try {
+      document.body.appendChild(temporal);
+      temporal.select();
+      copiat = document.execCommand('copy');
+    } catch (e) {
+      /* Encara es pot copiar manualment la selecció visible. */
+    } finally {
+      temporal.remove();
+      if (focusAnterior && focusAnterior.focus) focusAnterior.focus();
+    }
+    if (copiat) {
+      estatCopia.textContent = 'Copiat';
+      return;
+    }
+    const rang = document.createRange();
+    rang.selectNodeContents(boto.parentElement.querySelector('code'));
+    const seleccio = window.getSelection();
+    seleccio.removeAllRanges();
+    seleccio.addRange(rang);
+    estatCopia.textContent = 'Seleccionat: prem Cmd+C o Ctrl+C per copiar-ho';
+  }
+
   function htmlMissatge(m) {
     if (m.role === 'user') {
       const captures = m.imatges && m.imatges.length
@@ -628,21 +793,28 @@
         : m.fotos ? `<span class="xatia-nota">${m.fotos === 1 ? 'amb una captura' : `amb ${m.fotos} captures`}</span>` : '';
       return `<div class="xatia-missatge xatia-missatge--jo">${captures}${escapa(m.content)}</div>`;
     }
-    return `<div class="xatia-missatge xatia-missatge--ia">${markdown(m.content)}</div>`;
+    return `<div class="xatia-missatge xatia-missatge--ia">${markdown(m.content)}${htmlConsultes(m.consultes)}</div>`;
   }
 
   function pintaConversa() {
     let html = estat.missatges.map(htmlMissatge).join('');
     if (estat.feina) {
-      html += estat.parcial
-        ? `<div class="xatia-missatge xatia-missatge--ia xatia-escrivint">${markdown(estat.parcial)}</div>`
-        : '<div class="xatia-missatge xatia-missatge--ia xatia-pensant">Pensant…</div>';
+      if (estat.parcial) html += `<div class="xatia-missatge xatia-missatge--ia xatia-escrivint">${markdown(estat.parcial)}</div>`;
+      if (estat.estatResposta || estat.eina || !estat.parcial) html += `<div class="xatia-missatge xatia-missatge--ia xatia-pensant">${estat.estatResposta || (estat.eina ? 'Consultant l’horari…' : 'Pensant…')}</div>`;
     }
+    // Anunciem la resposta completa, sense llegir cada fragment del flux.
+    el.conversa.setAttribute('aria-busy', String(estat.feina));
+    if (el.conversa.xatiaHtml === html) return;
+    const segueix = !el.cos || el.cos.scrollHeight - el.cos.scrollTop - el.cos.clientHeight < 80;
+    const posicio = el.cos && el.cos.scrollTop;
     el.conversa.innerHTML = html;
-    el.final.scrollIntoView({ block: 'end' });
+    el.conversa.xatiaHtml = html;
+    if (segueix) el.final.scrollIntoView({ block: 'end' });
+    else el.cos.scrollTop = posicio;
   }
 
   function preguntesAra() {
+    if (estat.missatges.some((m) => m.role === 'assistant')) return ['Com ho saps?'];
     const p = estat.pantalla;
     if (p && Array.isArray(p.preguntes)) return p.preguntes;
     return typeof op.preguntes === 'function' ? op.preguntes(p) || [] : op.preguntes || [];
@@ -656,6 +828,7 @@
     el.arrel.classList.toggle('xatia--gran', gran && !esMobil());
     el.arrel.classList.toggle('xatia--amb-conversa', estat.missatges.length > 0);
     el.boto.hidden = obert;
+    el.boto.setAttribute('aria-expanded', String(obert));
     sincronitzaPlafó();
     el.plafo.setAttribute('aria-hidden', String(!obert));
     el.plafo.inert = !obert;
@@ -671,15 +844,7 @@
 
     el.error.hidden = !estat.error;
     el.error.textContent = estat.error;
-    /* Què veu de la pantalla, perquè se sàpiga que se li pot dir «i això?». */
-    const veu = estat.pantalla && estat.pantalla.resum;
-    el.veu.hidden = !veu;
-    el.veu.textContent = veu ? `Veu: ${veu}` : '';
-    el.veu.title = veu || '';
-
-    el.preguntes.innerHTML = preguntesAra()
-      .map((t) => `<button type="button" class="xatia-fitxa" data-fa="pregunta" data-text="${escapa(t)}"${ocupat ? ' disabled' : ''}>${escapa(t)}</button>`)
-      .join('');
+    pintaPeu();
     el.preparades.innerHTML = estat.preparades
       .map((u, i) => `<span class="xatia-preparada"><img src="${u}" alt="Captura ${i + 1}"><button type="button" data-fa="treu" data-i="${i}" aria-label="Treu la captura">${icona('x', 12)}</button></span>`)
       .join('');
@@ -690,6 +855,24 @@
     el.captura.disabled = feina || estat.preparades.length >= op.maxCaptures;
     el.envia.disabled = ocupat || (!el.caixa.value.trim() && !estat.preparades.length);
     el.caixa.placeholder = estat.preparades.length ? 'Què en vols saber?' : esMobil() ? 'Pregunta…' : 'Pregunta el que vulguis, o passa’m una captura…';
+  }
+
+  function pintaPeu() {
+    if (!el.veu) return;
+    const ocupat = estat.feina || estat.preparant > 0;
+    /* Què veu de la pantalla, perquè se sàpiga que se li pot dir «i això?». */
+    const veu = estat.pantalla && estat.pantalla.resum;
+    el.veu.hidden = !veu;
+    el.veu.textContent = veu ? `Context: ${veu}` : '';
+    el.veu.title = veu || '';
+
+    el.preguntes.innerHTML = preguntesAra()
+      .map((t) => `<button type="button" class="xatia-fitxa" data-fa="pregunta" data-text="${escapa(t)}"${ocupat ? ' disabled' : ''}>${escapa(t)}</button>`)
+      .join('');
+  }
+
+  function enfocaEntrada() {
+    (esMobil() ? el.plafo.querySelector('header') : el.caixa).focus({ preventScroll: true });
   }
 
   /* ---------- accions ---------- */
@@ -725,6 +908,7 @@
     estat.error = '';
     desa();
     pinta();
+    enfocaEntrada();
   }
 
   let salutActual = 0;
@@ -762,7 +946,7 @@
     },
     pantalla(p) {
       estat.pantalla = p || null;
-      pinta();
+      pintaPeu();
     },
     obre,
     tanca,

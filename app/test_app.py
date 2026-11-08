@@ -21,16 +21,16 @@ from prova_portada import dades_inventades
 
 def grau_inventat():
     from nivell1.troballes import Troballa
-    return Troballa(id='marge-grau-nou', titol='Grau inventat', xifra='26 h',
+    return Troballa(id='marge-grau-nou', titol='Grau inventat', xifra='27 h',
         frase='Resum inventat', metode='Text tècnic inventat: la xifra gran és semestral.', sql='-- prova',
-        taula=pd.DataFrame([{'llindar':0,'seminaris':False,'nou_hores':26.,'marge_hores':181.}]),
-        extra={'setmana':'2027-W07','marge_semestre_h':4679.,'demanda_h_setmana':26.,'lliures_h_setmana':181.,
+        taula=pd.DataFrame([{'llindar':0,'seminaris':False,'nou_hores':27.,'marge_hores':173.}]),
+        extra={'setmana':'2027-W06','criteri_setmana':'demanda_mati','demanda_h_setmana':27.,'lliures_h_setmana':173.,
                'cap_per_mida':True,'estat_provisional':True}, exemples=['S90001'])
 
 
 def respostes_inventades():
     from nivell1.troballes import Troballa
-    colors = ['verd','ambre','vermell']
+    colors = ['gris','verd','ambre']
     return [Troballa(f'pregunta-{i+1}',f'Pregunta inventada {i+1}',str(i+1),
         'Una frase inventada per comprovar les targetes compactes.', 'Mètode inventat.', '-- prova',
         pd.DataFrame(), extra={'estat_inventat':colors[i%3]}) for i in range(11)]
@@ -38,7 +38,7 @@ def respostes_inventades():
 
 def info_inventada(t):
     color = t.extra['estat_inventat']
-    return dict(estat=color, etiqueta={'vermell':'Cal actuar','ambre':'Pendent de validar','verd':'Hi cap'}[color],
+    return dict(estat=color, etiqueta={'ambre':'Cal decidir','verd':'Resolt amb la proposta','gris':'Per saber-ho'}[color],
         titol=t.titol, frase=t.frase, c={'xifra':t.xifra})
 
 
@@ -67,7 +67,8 @@ class TestPortadaInventada(unittest.TestCase):
                 with self.subTest(escenari=escenari, id=id_):
                     detall = text(t, mapa)
                     resum = text_portada(t, detall)
-                    self.assertLessEqual(len(resum['frase'].split()),15 if id_ == 'hi-cap-mati' else 12)
+                    self.assertTrue(resum['titol'].endswith('?'))
+                    self.assertEqual(resum['frase'], detall['frase'])
                     self.assertEqual(resum['c'],detall['c'])
                     self.assertEqual(resum['estat'],detall['estat'])
                     self.assertEqual(resum['etiqueta'],detall['etiqueta'])
@@ -83,19 +84,19 @@ class TestPortadaInventada(unittest.TestCase):
                     app.selectbox[0].select(escenari).run(timeout=90)
                 self.assertEqual(list(app.exception),[])
                 self.assertEqual(list(app.error),[])
-                self.assertEqual(len([b for b in app.button if b.label == 'Com ho sabem →']),len(PORTADA))
+                self.assertEqual(len([b for b in app.button if (b.key or '').startswith('obre-')]),len(PORTADA))
                 for id_ in PORTADA[1:]:
                     caixa = next(b for b in app.get('flex_container') if b.proto.id.endswith('targeta-'+id_))
                     self.assertEqual(len(caixa.button),1)
-                    self.assertEqual(caixa.button[0].label,'Com ho sabem →')
+                    self.assertTrue(caixa.button[0].label.startswith('Mira '))
                     self.assertEqual(caixa.button[0].key,'obre-'+id_)
                 html = '\n'.join(m.value for m in app.markdown)
-                self.assertIn('Proposem</b>',html)
+                self.assertIn('Què vol dir</b>',html)
                 self.assertNotIn('class="metre"',html)
                 frases = re.findall(r'<p class="frase-(heroi|targeta)">(.*?)</p>',html)
                 self.assertEqual(len(frases),len(PORTADA))
                 for tipus, frase in frases:
-                    self.assertLessEqual(len(frase.split()),15 if tipus == 'heroi' else 35)
+                    self.assertIn('Què vol dir', frase)
 
     def test_css_text_sense_retalls_ni_alcada_fixa(self):
         css = (ARREL/'estil.css').read_text()
@@ -130,10 +131,10 @@ class TestApp(unittest.TestCase):
         self.assertEqual(len(app.title),1)
         self.assertTrue(any(t.value == 'Com estem avui' for t in app.title))
         # Amb el 5.2 vàlid de la part 2 la resposta passa a «Sí, hi cap».
-        self.assertTrue(any(t.value in ('Hi ha marge d’hores', 'Sí, hi cap') for t in app.subheader))
+        self.assertTrue(any(t.value in ('Per comprovar', 'Sí') for t in app.subheader))
         self.assertFalse(any('Sí, però just' in m.value for m in list(app.markdown)+list(app.subheader)))
         self.assertEqual(len([m for m in app.markdown if 'class="xifra-targeta"' in m.value]),len(PORTADA)-1)
-        self.assertEqual(len([b for b in app.button if b.label == 'Com ho sabem →']),len(PORTADA))
+        self.assertEqual(len([b for b in app.button if (b.key or '').startswith('obre-')]),len(PORTADA))
         self.assertEqual(len(app.get('plotly_chart')),0)
         self.assertFalse(any('MOSTRA' in m.value for m in app.markdown))
         self.assertEqual(app.selectbox[0].value,2)
@@ -162,7 +163,7 @@ preguntes.mostra()
         self.comprova(app)
         ids = list(app.session_state.resultats)
         self.assertEqual(len(ids),11)
-        self.assertEqual(len([b for b in app.button if b.label == 'Com ho sabem →']),len(ids))
+        self.assertEqual(len([b for b in app.button if (b.key or '').startswith('obre-')]),len(ids))
         for id_ in ids:
             app.button(key='obre-'+id_).click().run(timeout=90)
             self.comprova(app)
@@ -206,11 +207,11 @@ preguntes.mostra()
         html = '\n'.join(m.value for m in app.markdown)
         self.assertNotIn('per assignar de debò',html)
         self.assertNotIn('El més ajustat:',html)
-        self.assertIn('Matí 68 % · Tarda 81 %',text(mapa['hi-cap-mati'])['frase'])
+        self.assertIn('12 de les 19 aules',text(mapa['hi-cap-mati'])['frase'])
         marge = text(mapa['marge-grau-nou'])
-        self.assertEqual(marge['etiqueta'],'Pendent de comprovar')
+        self.assertEqual(marge['etiqueta'],'Cal decidir')
         self.assertEqual(marge['estat'],'ambre')
-        self.assertIn('Pendent de comprovar',html)
+        self.assertIn('Cal decidir',html)
         app.button(key='obre-hores-aula').click().run(timeout=90)
         self.comprova(app)
         detall = '\n'.join(m.value for m in app.markdown)
@@ -229,7 +230,7 @@ preguntes.mostra()
             self.assertIsNone(re.search(r'\b(cohort|PLAB|llindar|cota|heretades|bloc)\b',info['metode_planer'],re.I))
         marge = copy.deepcopy(una('marge-grau-nou'))
         marge.extra.pop('estat_provisional',None)
-        self.assertEqual(text(marge)['etiqueta'],'Pendent de comprovar')
+        self.assertEqual(text(marge)['etiqueta'],'Cal decidir')
 
     def test_figures_sense_manipulacio(self):
         from servei import totes, versio_registre
@@ -297,13 +298,13 @@ preguntes.mostra()
     def test_coll_ampolla_general_i_percentatges_enters(self):
         for mida in (0, None, '', float('nan')):
             frase = coll_ampolla({'coll_ampolla': {'llindar':mida,'torn':'mati','setmana':'2027-W06','ocupacio_pct':69.7}})
-            self.assertEqual(frase,'El més ajustat: el matí en conjunt, la setmana 2027-W06 (70 % ocupat).')
+            self.assertEqual(frase,'El més ajustat: el matí en conjunt, la setmana del 8/2 – 12/2 (70 % ocupat).')
             self.assertNotIn('places',frase)
         frase = coll_ampolla({'coll_ampolla': {'llindar':88,'torn':'mati','setmana':'2027-W06','ocupacio_pct':69.7}})
         self.assertIn('les aules de més de 88 places',frase)
         t = copy.deepcopy(una('hi-cap-mati'))
         t.extra['torns'] = pd.DataFrame({'torn':['mati','tarda'],'ocupacio_pct':[69.7,42.1]})
-        self.assertIn('Matí 70 % · Tarda 42 %',text(t)['frase'])
+        self.assertIn('de les 19 aules',text(t)['frase'])
 
     def test_regressions_portada_ronda6_inventades(self):
         mapa = dades_inventades('Validat')
@@ -316,13 +317,13 @@ preguntes.mostra()
             app = portada_inventada()
         self.comprova(app)
         hero = next(b for b in app.get('flex_container') if b.proto.id.endswith('-heroi'))
-        self.assertTrue(any('estat verd' in m.value and 'Hi cap' in m.value for m in hero.markdown))
+        self.assertTrue(any('estat verd' in m.value and 'Resolt amb la proposta' in m.value for m in hero.markdown))
         caixa = next(b for b in app.get('flex_container') if b.proto.id.endswith('targeta-marge-grau-nou'))
         html = '\n'.join(m.value for m in caixa.markdown)
-        self.assertIn('317 sessions: 29 sessions noves fora de la seva franja original', html)
-        self.assertIn('0 classes del 5.2 mogudes', html)
-        self.assertIn('Incorporar-lo a l’horari proposat: ja hi cap.', html)
-        self.assertNotIn('sense moure cap classe', html)
+        self.assertIn('317 classes del grau nou', html)
+        self.assertNotIn('5.2', html)
+        self.assertIn('Què vol dir', html)
+        self.assertIn('sense moure cap classe', html)
         from components.vistes import targeta_compacta
         app = AppTest.from_string("""
 from test_app import grau_inventat
@@ -332,10 +333,10 @@ targeta_compacta(grau_inventat())
 """).run(timeout=90)
         self.comprova(app)
         html = '\n'.join(m.value for m in app.markdown)
-        self.assertIn('26 h a la setmana', html)
-        self.assertIn('181 h lliures', html)
-        self.assertIn('4.679 h de marge en tot el semestre', html)
-        self.assertIn('white-space:normal;overflow:visible;text-overflow:clip', html)
+        self.assertIn('27 h a la setmana', html)
+        self.assertIn('173 h lliures', html)
+        self.assertNotIn('de marge en tot el semestre', html)
+        self.assertNotIn('-webkit-line-clamp:3', html)
 
     def test_grau_nou_segons_el_5_4(self):
         from presentacio import text
@@ -345,16 +346,16 @@ targeta_compacta(grau_inventat())
         t.extra['validat_part2'] = dict(valida=True, resposta=1, sessions_grau_nou_collocades=478,
                                       sessions_52_mogudes=0, sessions_grau_nou_fora_franja=235)
         info = text(t)
-        self.assertEqual((info['estat'],info['etiqueta']),('verd','Hi cap'))
-        self.assertIn('478 sessions',info['frase'])
-        self.assertIn('235 sessions noves fora de la seva franja original',info['frase'])
-        self.assertIn('0 classes del 5.2 mogudes',info['frase'])
-        self.assertNotIn('sense moure cap classe',info['frase'])
+        self.assertEqual((info['estat'],info['etiqueta']),('verd','Resolt amb la proposta'))
+        self.assertIn('478 classes',info['frase'])
+        self.assertIn('235 classes noves queden en una hora diferent de la que demanaven per reduir esperes',info['frase'])
+        self.assertIn('sense moure cap classe de la resta de l’horari',info['frase'])
+        self.assertIn('sense moure cap classe',info['frase'])
         t.extra['validat_part2'].update(sessions_grau_nou_fora_franja=0, sessions_52_mogudes=2)
-        self.assertIn('0 sessions noves fora de la seva franja original',text(t)['frase'])
-        self.assertIn('2 classes del 5.2 mogudes',text(t)['frase'])
+        self.assertIn('totes les classes noves conserven l’hora que demanaven',text(t)['frase'])
+        self.assertIn('movent 2 classes de la resta de l’horari',text(t)['frase'])
         t.extra['validat_part2'] = dict(valida=True, resposta=2)
-        self.assertEqual(text(t)['estat'],'vermell')
+        self.assertEqual(text(t)['estat'],'ambre')
         t.extra['validat_part2'] = dict(valida=False, resposta=1)
         self.assertEqual(text(t)['estat'],'ambre')
 
@@ -368,8 +369,8 @@ targeta_compacta(grau_inventat())
         self.assertEqual(text(t)['estat'],'ambre')
         t.extra['validat_part2'] = dict(veredicte='VALIDA AMB RELAXACIONS DECLARADES', incompliments=0, valida=True)
         info = text(t)
-        self.assertEqual((info['estat'],info['etiqueta'],info['c']['resposta']),('verd','Hi cap','Sí, hi cap'))
-        self.assertIn('verificador oficial',info['frase'])
+        self.assertEqual((info['estat'],info['etiqueta'],info['c']['resposta']),('verd','Resolt amb la proposta','Sí'))
+        self.assertNotIn('verificador oficial',info['frase'])
 
     def test_css_injectat_alinea_targetes(self):
         app = portada_inventada()
@@ -384,9 +385,9 @@ targeta_compacta(grau_inventat())
         self.assertEqual(len(peus),len(PORTADA)-1)
         for peu in peus:
             self.assertEqual(len(peu.button),1)
-            self.assertEqual(peu.button[0].label,'Com ho sabem →')
-            self.assertEqual(len(peu.markdown),1)
-            self.assertIn('Proposem',peu.markdown[0].value)
+            self.assertTrue(peu.button[0].label.startswith('Mira '))
+            propostes = [m for m in peu.markdown if 'class="proposem"' in m.value]
+            self.assertEqual(len(propostes),0)
 
     def test_bloc_gran_vermell_quan_falta_mida(self):
         mapa = dades_inventades()
@@ -397,10 +398,10 @@ targeta_compacta(grau_inventat())
         with patch('prova_portada.dades_inventades',return_value=mapa):
             app = portada_inventada()
         self.comprova(app)
-        self.assertTrue(any('Falten aules d’algunes mides' == h.value for h in app.subheader))
+        self.assertTrue(any('No' == h.value for h in app.subheader))
         html = '\n'.join(m.value for m in app.markdown)
-        self.assertIn('data-estat="vermell"',html)
-        self.assertIn('Cal actuar',html)
+        self.assertIn('data-estat="ambre"',html)
+        self.assertIn('Cal decidir',html)
         self.assertIn('Falta espai per a algunes mides d’aula',html)
         self.assertIn('aria-hidden="true"',html)
         app.button(key='obre-hi-cap-mati').click().run(timeout=90)
@@ -408,9 +409,9 @@ targeta_compacta(grau_inventat())
         detall = '\n'.join(m.value for m in app.markdown)
         self.assertIn('en falten 20 h',detall)
         self.assertIn('a la tarda',detall)
-        self.assertIn('2027-W06',detall)
+        self.assertIn('8/2 – 12/2',detall)
         t.extra['falla_per_mida'] = False
-        self.assertEqual(text(t)['estat'],'vermell')
+        self.assertEqual(text(t)['estat'],'ambre')
 
     def test_adreca_detall_franja_i_dades(self):
         app = AppTest.from_file(str(ARREL/'app.py'))
@@ -418,13 +419,13 @@ targeta_compacta(grau_inventat())
         app.run(timeout=90)
         self.comprova(app)
         self.assertEqual(len(app.title),1)
-        self.assertTrue(any(h.value == 'Classes al torn equivocat' for h in app.header))
-        self.assertTrue(any(e.label == 'Veure les dades' for e in app.expander))
+        self.assertTrue(any(h.value == 'Quantes classes són al torn equivocat?' for h in app.header))
+        self.assertTrue(any(e.label == 'Detall tècnic: veure les dades' for e in app.expander))
         self.assertGreater(len(app.dataframe),0)
         html = '\n'.join(m.value for m in app.markdown)
         self.assertIn('2n semestre',html)
         self.assertIn('setmana típica',html)
-        self.assertIn('2027-W',html)
+        self.assertRegex(html, r'\d{1,2}/\d{1,2} – \d{1,2}/\d{1,2}')
         self.assertIn(app.query_params['resposta'],('fora-torn',['fora-torn']))
         app.button(key='torna').click().run(timeout=90)
         self.comprova(app)
@@ -475,12 +476,12 @@ part2.mostra()
         self.assertEqual(list(app.error),[])
         self.assertTrue(any(h.value == 'La setmana del grup' for h in app.subheader))
 
-    def test_grau_nou_tres_magnituds_inventades(self):
+    def test_grau_nou_comparacio_setmanal_inventada(self):
         t = grau_inventat()
         info = text(t)
-        self.assertEqual(info['c']['hores_noves'],'26')
-        self.assertEqual(info['c']['hores_lliures'],'181')
-        self.assertEqual(info['c']['marge_semestre'],'4.679')
+        self.assertEqual(info['c']['hores_noves'],'27')
+        self.assertEqual(info['c']['hores_lliures'],'173')
+        self.assertEqual(info['c']['marge_semestre'],'—')
         self.assertIn('setmana seleccionada',text(t,setmana_triada='2027-W07')['frase'])
         app = AppTest.from_string("""
 import streamlit as st
@@ -494,12 +495,12 @@ detall(t)
 """).run(timeout=90)
         self.comprova(app)
         html = '\n'.join(m.value for m in app.markdown)
-        self.assertEqual(html.count('a la setmana que necessita'),2)  # només al detall
-        self.assertEqual(html.count('de marge en tot el semestre'),2)
-        self.assertIn('lliures a la setmana més plena',html)
-        self.assertIn('26 h',html)
-        self.assertIn('181 h',html)
-        self.assertIn('4.679 h',html)
+        self.assertIn('El grau necessita 27 h a la setmana',html)
+        self.assertNotIn('de marge en tot el semestre',html)
+        self.assertIn('lliures a la setmana amb més demanda de matí',html)
+        self.assertIn('27 h',html)
+        self.assertIn('173 h',html)
+        self.assertNotIn('4.679 h',html)
         self.assertFalse(any('S90001' in c.value for c in app.code))
         self.assertEqual(t.metode,'Text tècnic inventat: la xifra gran és semestral.')
 
@@ -542,7 +543,7 @@ detall(t)
         self.assertEqual([t.id for t in ordenades],
             ['pregunta-3','pregunta-6','pregunta-9','pregunta-2','pregunta-5',
              'pregunta-8','pregunta-11','pregunta-1','pregunta-4','pregunta-7','pregunta-10'])
-        self.assertEqual(grup_estat(infos['pregunta-2']),'Vigilar')
+        self.assertEqual(grup_estat(infos['pregunta-2']),'Resolt amb la proposta')
 
     def test_respostes_compactes_filtres_i_comptador(self):
         app = AppTest.from_string("""
@@ -560,6 +561,8 @@ with patch('pagines.preguntes.totes',return_value=respostes_inventades()), patch
         def targetes():
             return [m.value for m in app.markdown if '<article class="resposta-compacta"' in m.value]
         self.assertEqual(len(targetes()),11)
+        self.assertTrue(any('Prova: deixa només «Cal decidir»' in c.value for c in app.caption))
+        self.assertTrue(any('Pas següent: mira l’horari proposat →' in m.value for m in app.markdown))
         self.assertEqual([b.key for b in app.button],
             ['obre-pregunta-3','obre-pregunta-6','obre-pregunta-9','obre-pregunta-2',
              'obre-pregunta-5','obre-pregunta-8','obre-pregunta-11','obre-pregunta-1',
@@ -568,7 +571,7 @@ with patch('pagines.preguntes.totes',return_value=respostes_inventades()), patch
         self.assertFalse(any('class="proposem"' in m.value or 'class="metre"' in m.value for m in app.markdown))
         self.assertEqual(app.get('button_group')[0].proto.label,'Estat')
         self.assertEqual(app.multiselect[0].label,'Respostes')
-        app.get('button_group')[0].set_value(['Cal actuar']).run(timeout=90)
+        app.get('button_group')[0].set_value(['Cal decidir']).run(timeout=90)
         self.comprova(app)
         self.assertEqual(len(targetes()),3)
         self.assertTrue(any('Es mostren 3 de 11' in m.value for m in app.markdown))
@@ -578,21 +581,184 @@ with patch('pagines.preguntes.totes',return_value=respostes_inventades()), patch
         self.assertTrue(any('Es mostren 1 de 11' in m.value for m in app.markdown))
         app.multiselect[0].set_value([]).run(timeout=90)
         self.assertEqual(len(targetes()),3)
-        app.get('button_group')[0].set_value(['Vigilar']).run(timeout=90)
+        app.get('button_group')[0].set_value(['Resolt amb la proposta']).run(timeout=90)
         self.assertEqual(len(targetes()),4)
-        self.assertTrue(all('Pendent de validar' in h for h in targetes()))
+        self.assertTrue(all('Resolt amb la proposta' in h for h in targetes()))
         app.get('button_group')[0].set_value([]).run(timeout=90)
         self.comprova(app)
         self.assertEqual(len(targetes()),0)
+        self.assertTrue(any('Pas següent: mira l’horari proposat →' in m.value for m in app.markdown))
         self.assertTrue(any('Es mostren 0 de 11' in m.value for m in app.markdown))
 
     def test_canvi_semestre(self):
         app = self.carrega()
         app.selectbox[0].select(1).run(timeout=90)
         self.comprova(app)
-        self.assertEqual(len([b for b in app.button if b.label == 'Com ho sabem →']),len(PORTADA))
+        self.assertEqual(len([b for b in app.button if (b.key or '').startswith('obre-')]),len(PORTADA))
         app.selectbox[1].select_index(1).run(timeout=90)
         self.comprova(app)
+
+
+class TestAuditoriaInventada(unittest.TestCase):
+    def troballa(self, id_, taula=None, extra=None, xifra='1'):
+        from nivell1.troballes import Troballa
+        return Troballa(id_, 'Pregunta inventada', xifra, 'Frase inventada',
+                        'Mètode inventat', '-- prova',
+                        pd.DataFrame() if taula is None else taula, extra=extra or {})
+
+    def test_cobertura_llindar_i_avis(self):
+        for n, estat in ((2, 'ambre'), (5, 'ambre'), (74, 'ambre')):
+            with self.subTest(n=n):
+                cobertura = self.troballa('hores-aula', pd.DataFrame({'sessions_totals':[100]}),
+                                          {'sessions_sense_aula':n})
+                self.assertEqual(text(cobertura)['estat'], estat)
+                self.assertNotIn('aproximadament', text(cobertura)['frase'])
+                with patch('components.grafics.planol'), patch('components.grafics.st.info') as avis:
+                    grafics(self.troballa('ocupacio'), altres={'hores-aula':cobertura})
+                self.assertEqual(avis.call_count, int(n >= 5))
+                if n >= 5:
+                    self.assertIn('no tenen aula assignada', avis.call_args.args[0])
+
+    def test_dies_en_ordre_i_referencia(self):
+        t = self.troballa('hores-aula', pd.DataFrame({'dia':['V','M','L','J','X'],
+                            'demanda':[7,9,6,8,5]}))
+        with patch('components.grafics.st.plotly_chart') as mostra:
+            grafics(t)
+        fig = mostra.call_args.args[0]
+        self.assertEqual(list(fig.data[0].x), ['Dilluns','Dimarts','Dimecres','Dijous','Divendres'])
+        self.assertEqual(list(fig.data[0].y), [6,9,5,8,7])
+        self.assertEqual(fig.layout.shapes[0].y0, 19)
+
+    def test_tots_els_singulars(self):
+        from components.grafics import barres, SINGULAR
+        for plural, singular in SINGULAR.items():
+            with self.subTest(unitat=plural), patch('components.grafics.st.plotly_chart') as mostra:
+                barres(['Inventat'], [1], 'prova', plural)
+                self.assertEqual(list(mostra.call_args.args[0].data[0].text), ['1'+singular])
+
+    def test_docents_sense_dies_no_apareixen(self):
+        from components.taules import resum_docents
+        for dies in ([0,0], [0,1,2]):
+            df = pd.DataFrame({'dies_mati_tarda':dies})
+            self.assertTrue((resum_docents(df).dies_mati_tarda > 0).all())
+            with patch('components.grafics.st.plotly_chart') as mostra, patch('components.grafics.st.info') as avis:
+                grafics(self.troballa('docents-cavall', df))
+            self.assertEqual(mostra.call_count, int(any(dies)))
+            if not any(dies):
+                self.assertIn('cap docent', avis.call_args.args[0])
+
+    def test_fora_torn_semestre_encara_que_setmana_buida(self):
+        from components.taules import taula_presentacio
+        t = self.troballa('fora-torn', pd.DataFrame(columns=['cohort','sessions']),
+            {'per_cohort':pd.DataFrame({'abast':['semestre','setmana'],
+                 'cohort':['GXX:1r','GXX:1r'], 'sessions':[12,0]})})
+        with patch('components.grafics.st.plotly_chart') as mostra:
+            grafics(t)
+        self.assertEqual(list(mostra.call_args.args[0].data[0].x), [12])
+        self.assertEqual(list(taula_presentacio(t).sessions), [12])
+
+    def test_dates_context_i_criteris(self):
+        from presentacio import dates_setmana, etiqueta_setmana
+        from components.vistes import franja_context
+        self.assertEqual(dates_setmana('2027-W06'), '8/2 – 12/2')
+        self.assertIn('més classes alhora (8/2 – 12/2)', etiqueta_setmana('2027-W06'))
+        self.assertIn('més demanda de matí', etiqueta_setmana('2027-W06','demanda_mati'))
+        self.assertIn('sense dades', franja_context(2,None))
+        html = franja_context(2,('2027-W06', '2027-02-08', 500))
+        self.assertIn('8/2 – 12/2 · 500 classes', html)
+        self.assertNotIn('2027-W', html)
+
+    def test_aforament_amb_tots_els_casos(self):
+        t = self.troballa('aforament', extra={'sessions_total':101,
+            'sessions_heretades':58, 'grups_afectats':6}, xifra='43')
+        frase = text(t)['frase']
+        for fragment in ('101 classes', '6 grups', '43 classes on no hi caben tots els alumnes es poden corregir', '58 són de grups fixats'):
+            self.assertIn(fragment, frase)
+
+    def test_validats_sense_metode_provisional(self):
+        for id_ in ('hi-cap-mati', 'marge-grau-nou'):
+            t = dades_inventades()[id_]
+            info = text(t)
+            self.assertIn('ho confirma: comprovat', info['metode_planer'])
+            self.assertNotIn('encara', info['metode_planer'])
+            self.assertNotIn('5.2', info['frase'])
+            if id_ == 'hi-cap-mati':
+                self.assertEqual(info['proposem'], 'Aplicar l’horari proposat.')
+
+    def test_error_no_recarrega_la_mateixa_pregunta(self):
+        app = AppTest.from_string("""
+import streamlit as st
+from unittest.mock import patch
+from components.vistes import carrega, carrega_grup
+st.session_state.resultats = {}
+st.session_state.semestre = 2
+st.session_state.setmana = None
+st.session_state.versio = ()
+with patch('components.vistes.una', side_effect=RuntimeError('Error inventat')) as consulta, patch('components.vistes.mostra_error'):
+    carrega_grup(['hores-aula'])
+    carrega('hores-aula')
+    st.write('Consultes: ' + str(consulta.call_count))
+""").run(timeout=90)
+        self.assertEqual(list(app.exception), [])
+        self.assertTrue(any(m.value == 'Consultes: 1' for m in app.markdown))
+
+    def test_setmanes_lectives_i_ocupacio_amb_mateixa_base(self):
+        import duckdb
+        con = duckdb.connect(':memory:')
+        try:
+            con.execute("""CREATE TABLE sessions(id_sessio VARCHAR, sem INTEGER,
+                setmana VARCHAR, data DATE, aula_partida VARCHAR,
+                aules_addicionals_partida VARCHAR, sense_espai BOOLEAN)""")
+            # Quatre classes, dues (exactament 50 %) i una: només dues setmanes lectives.
+            files = [(f'S{90000+i}', 2, setmana, data, 'Q9/0001', '', False)
+                     for i,(setmana,data) in enumerate([
+                         ('2027-W06','2027-02-08'),('2027-W06','2027-02-09'),
+                         ('2027-W06','2027-02-10'),('2027-W06','2027-02-11'),
+                         ('2027-W07','2027-02-15'),('2027-W07','2027-02-16'),
+                         ('2027-W08','2027-02-22')])]
+            con.executemany('INSERT INTO sessions VALUES (?,?,?,?,?,?,?)', files)
+            con.execute("CREATE TABLE aules AS SELECT 'Q9/0001' AS aula")
+            con.execute('CREATE TABLE sessio_blocs AS SELECT id_sessio, 0 AS bloc FROM sessions')
+            consultes = ARREL.parent/'nivell1'/'consultes'
+            params = {'semestre':2,'setmana':None}
+            setmanes = con.execute((consultes/'semestre_setmanes.sql').read_text(), params).fetchone()[0]
+            self.assertEqual(setmanes, 2)
+            ocupacio = con.execute((consultes/'ocupacio_resum.sql').read_text(), params).fetchone()[1]
+            self.assertAlmostEqual(ocupacio, 100*6/(2*125))
+        finally:
+            con.close()
+
+
+    def test_propostes_resoltes_nomes_amb_validacio(self):
+        for id_ in ('hores-aula', 'fora-torn', 'aforament', 'ocupacio'):
+            t = self.troballa(id_, extra={'sessions_total':11, 'sessions_heretades':4}, xifra='7')
+            pendent = text(t)
+            t.extra['validat_part2'] = {'valida': True}
+            validada = text(t)
+            self.assertNotIn('verificador oficial', validada['proposem'])
+            self.assertTrue(validada['c']['proposta_validada'])
+            self.assertEqual(validada['c']['xifra'], pendent['c']['xifra'])
+            self.assertEqual(validada['estat'], 'gris' if id_ == 'ocupacio' else 'verd')
+            if id_ == 'aforament':
+                self.assertTrue(validada['frase'].startswith('7 classes'))
+                self.assertIn('corregeix les 7 classes; les 4', validada['proposem'])
+            t.extra['validat_part2'] = {'valida': False}
+            self.assertNotIn('verificador oficial', text(t)['proposem'])
+
+    def test_peus_expliquen_setmana_del_pic_i_del_detall(self):
+        app = portada_inventada()
+        self.assertEqual(list(app.exception), [])
+        self.assertTrue(any('moment més ple, setmana del' in m.value for m in app.markdown))
+        app.button(key='obre-hi-cap-mati').click().run(timeout=30)
+        captions = ' '.join(c.value for c in app.caption)
+        self.assertIn('la comparació mostra la setmana amb més classes alhora', captions)
+        self.assertNotIn('setmana seleccionada', captions)
+
+    def test_docents_expliquen_el_torn_de_cada_classe(self):
+        info = text(self.troballa('docents-cavall', xifra='17'))
+        self.assertIn('Segons el torn que li toca a cada classe', info['frase'])
+        self.assertIn('segons el torn que li toca a cada classe', info['metode_planer'])
+        self.assertIn('17 docents', info['frase'])
 
 
 class TestValidacioPart2Inventada(unittest.TestCase):
@@ -623,14 +789,122 @@ class TestValidacioPart2Inventada(unittest.TestCase):
                 with patch.object(Path, 'read_text', side_effect=AssertionError('Lectura duplicada')):
                     info = text(t)
                     frase = frase_grau(t, info)
-                self.assertIn('235 sessions', frase)
-                self.assertIn('29 sessions noves fora de la seva franja original', frase)
-                self.assertIn('0 classes del 5.2 mogudes', frase)
+                self.assertIn('235 classes', frase)
+                self.assertIn('29 classes noves queden en una hora diferent de la que demanaven per reduir esperes', frase)
+                self.assertIn('sense moure cap classe de la resta de l’horari', frase)
                 (carpeta / 'proposta.csv').write_bytes(proposta + b'CANVIADA,AULA\n')
                 t.extra['validat_part2'] = servei.validacio_part2('5.4')
                 info = text(t)
                 self.assertNotEqual(info['estat'], 'verd')
-                self.assertEqual(info['etiqueta'], 'Pendent de comprovar')
+                self.assertEqual(info['etiqueta'], 'Cal decidir')
+
+
+class TestClassesInventades(unittest.TestCase):
+    def files(self):
+        return pd.DataFrame([
+            dict(id_sessio='S90001', assignatura='Assignatura Inventada I', grup='TE/81',
+                 data='2027-02-15', dia='L', h_ini='08:30', h_fi='10:30',
+                 titulacions_curs='GXX:1r|GYY:2n', torn_actual='mati', torn_requerit='tarda'),
+            dict(id_sessio='S90002', assignatura='Assignatura Inventada II', grup='PAUL/811',
+                 data='2027-02-16', dia='M', h_ini='15:00', h_fi='17:00',
+                 titulacions_curs='GXX:2n', torn_actual='tarda', torn_requerit='mati'),
+            dict(id_sessio='S90003', assignatura='Assignatura Inventada III', grup='TE/82',
+                 data='2027-02-17', dia='X', h_ini='08:30', h_fi='10:30',
+                 titulacions_curs='', torn_actual='mati', torn_requerit='tarda')])
+
+    def test_filtres_parelles_i_noms(self):
+        from components.taules import filtra_classes, taula_classes
+        df = self.files()
+        self.assertEqual(len(filtra_classes(df)), 3)
+        self.assertEqual(len(filtra_classes(df, 'GXX', '1r')), 1)
+        self.assertEqual(len(filtra_classes(df, 'GXX', '2n')), 1)
+        self.assertEqual(len(filtra_classes(df, 'GYY', '1r')), 0)
+        self.assertEqual(len(filtra_classes(df, 'GYY', '2n')), 1)
+        taula = taula_classes(df)
+        self.assertEqual(len(taula), 3)
+        self.assertIn('Assignatura', taula)
+        self.assertIn('Torn que té', taula)
+        self.assertIn('Torn que li toca', taula)
+        self.assertNotIn('id_sessio', taula)
+        self.assertEqual(taula.iloc[0]['Assignatura'], 'Assignatura Inventada I')
+        self.assertEqual(taula.iloc[0]['Dia'], 'Dilluns')
+        self.assertEqual(taula.iloc[0]['Torn que té'], 'Matí')
+        self.assertEqual(taula.iloc[0]['Data'], '15/02/2027')
+
+    def test_filtres_visibles_i_recompte_sense_lectures(self):
+        app = AppTest.from_string("""
+import streamlit as st
+from unittest.mock import patch
+from test_app import TestClassesInventades
+from nivell1.troballes import Troballa
+from components.taules import mostra_classes
+st.session_state.semestre = 2
+t = Troballa('fora-torn', 'Inventat', '3', 'Inventat', 'Inventat', '-- prova',
+    __import__('pandas').DataFrame(), extra={'classes_detall': TestClassesInventades().files()})
+with patch('servei.classes_detall', side_effect=AssertionError('Només dades inventades')):
+    mostra_classes(t)
+""").run(timeout=30)
+        self.assertEqual(list(app.exception), [])
+        self.assertEqual(len(app.dataframe[0].value), 3)
+        app.selectbox(key='classes-titulacio-fora-torn').select('GYY').run()
+        self.assertEqual(len(app.dataframe[0].value), 1)
+        self.assertTrue(any('1 classes amb aquests filtres · 3 classes en total' in m.value for m in app.markdown))
+        app.selectbox(key='classes-curs-fora-torn').select('1r').run()
+        self.assertEqual(len(app.dataframe), 0)
+        self.assertTrue(any('Cap classe coincideix' in e.value for e in app.info))
+
+    def test_consultes_exclouen_fixades_laboratoris_i_dobles(self):
+        import duckdb
+        from nivell1.dades import CONSULTES
+        con = duckdb.connect(':memory:')
+        try:
+            df = self.files()
+            df['sem'] = 2
+            df['aula_partida'] = None
+            df['demanda_aulari'] = [True, False, False]
+            df['fixada'] = ['', '', 'R1: GXX 1r']
+            con.register('sessions', df)
+            sense = con.execute((CONSULTES / 'hores_aula_classes.sql').read_text(), {'semestre': 2}).df()
+            fora = con.execute((CONSULTES / 'fora_torn_classes.sql').read_text(), {'semestre': 2}).df()
+            self.assertEqual(len(sense), 1)
+            self.assertEqual(len(fora), 2)
+            self.assertEqual(len(con.execute((CONSULTES / 'fora_torn_classes.sql').read_text(), {'semestre': 1}).df()), 0)
+        finally:
+            con.close()
+
+    def test_comparacio_i_estats_amb_recomptes_inventats(self):
+        t = dades_inventades()['hores-aula']
+        t.extra['validat_part2'] = {'valida': True, 'restriccions': {
+            'R5-SENSE-AULA': {'compten': 0, 'declarades': 0, 'heretades': 12}}}
+        info = text(t)
+        self.assertEqual(info['c']['xifra'], '30 classes')
+        self.assertEqual(info['c']['comparacio'], 'Avui 30 classes → 0 classes amb la proposta')
+        self.assertEqual(info['etiqueta'], 'Resolt amb la proposta')
+        t.extra['validat_part2'] = None
+        self.assertEqual(text(t)['c']['comparacio'], '')
+        self.assertEqual(text(t)['etiqueta'], 'Cal decidir')
+
+    def test_files_reals_coincideixen_amb_els_recomptes(self):
+        from nivell1.preguntes import hores_aula, fora_torn
+        for semestre in (1, 2):
+            sense = hores_aula.calcula(semestre)
+            self.assertEqual(len(hores_aula.classes(semestre)), sense.extra['desglos']['per_assignar'])
+            fora = fora_torn.calcula(semestre)
+            self.assertEqual(len(fora_torn.classes(semestre)), int(valor_fora(fora.xifra)))
+
+    def test_targetes_sense_paraules_tecnices(self):
+        prohibits = r'(?i)(?:5\.[1-4]|verificador oficial|franja original|heretat|sessi[óo]|R[1-8]\b|\d{4}-W\d{2})'
+        for escenari in ('Validat', 'Pendent de validar', 'Falten aules'):
+            for t in dades_inventades(escenari).values():
+                info = text(t)
+                self.assertNotRegex(' '.join(str(info[k]) for k in ('titol', 'frase', 'proposem')), prohibits)
+                self.assertIn(info['etiqueta'], ('Resolt amb la proposta', 'Cal decidir', 'Per saber-ho'))
+                self.assertTrue(info['titol'].endswith('?'))
+
+
+def valor_fora(xifra):
+    from presentacio import valor
+    return valor(xifra)
 
 
 if __name__ == '__main__':

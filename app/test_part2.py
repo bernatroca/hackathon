@@ -70,7 +70,7 @@ def posicio_classe(attrs):
 
 
 class TestGraellaResponsive(unittest.TestCase):
-    def test_dia_sencer_amb_mati_tarda_i_setmana_buida(self):
+    def test_retalla_hores_buides_amb_mati_tarda_i_setmana_buida(self):
         from dataclasses import replace
         from components.graella import Cella
         mati = Cella('INVENTADA-MATI', 'L', 548, 803, '', 'Assignatura Inventada',
@@ -78,10 +78,12 @@ class TestGraellaResponsive(unittest.TestCase):
         tarda = replace(mati, id_sessio='INVENTADA-TARDA', ini=905, fi=1010, dia='X')
         for classes in ([mati], [tarda], [mati, tarda], []):
             graella = estructura_graella(taula_html(classes))
-            assert [int(h['data-minut']) for h in graella.hores] == list(range(510, 1261, 30))
-            assert len(graella.dies) == 5
+            inici = min(c.ini for c in classes) // 30 * 30 if classes else 0
+            final = (max(c.fi for c in classes) + 29) // 30 * 30 if classes else -1
+            assert [int(h['data-minut']) for h in graella.hores] == list(range(inici, final + 1, 30))
+            assert len(graella.dies) == (5 if classes else 0)
         buit = taula_html([])
-        assert 'No hi ha classes aquesta setmana.' in buit and 'class="horari"' in buit
+        assert 'No hi ha classes aquesta setmana.' in buit and 'class="horari"' not in buit
 
     def test_linies_continues_alineades_amb_files_exactes(self):
         from components.graella import Cella, CSS
@@ -89,10 +91,10 @@ class TestGraellaResponsive(unittest.TestCase):
                   'Teoria', 'TE/81', False, False)
         html = taula_html([c])
         graella = estructura_graella(html)
-        assert [h['class'] for h in graella.hores[:4]] == ['hora', 'hora hora-plena', 'hora', 'hora hora-plena']
-        assert posicio_classe(graella.classes[0][1]) == (46, 136, 1, 2)
-        assert '--files:repeat(750,1.6px)' in html
-        assert '#efeee9 0 1px,transparent 1px 48px,#d9d8d2 48px 49px' in html
+        assert [h['class'] for h in graella.hores[:4]] == ['hora hora-plena', 'hora', 'hora hora-plena', 'hora']
+        assert posicio_classe(graella.classes[0][1]) == (16, 106, 1, 2)
+        assert '--files:repeat(120,1.6px)' in html
+        assert '#d9d8d2 0 1px,transparent 1px 48px,#efeee9 48px 49px' in html
         assert '.dia-horari{column-gap:6px;background-image:var(--linies)' in CSS
         assert 'background-position:0 6px' in CSS
         assert 'tbody' not in CSS and '<td' not in html
@@ -236,7 +238,7 @@ class TestGraellaResponsive(unittest.TestCase):
             assert (llum(fons) + .05) / (llum(text) + .05) >= 4.5
             assert f'background:{fons}' in CSS and f'color:{text}' in CSS
 
-    def test_filtres_blancs_i_estat_persistent(self):
+    def test_filtres_blancs_i_reinici_amb_setmana(self):
         from components.graella import CSS_FILTRES, filtres_html
         from components.prova_graella import setmana_inventada
         html = filtres_html(setmana_inventada())
@@ -251,7 +253,7 @@ class TestGraellaResponsive(unittest.TestCase):
             at.button(key='p2-boto-aula-nova').click().run(timeout=30)
             assert at.session_state['p2-filtre'] == 'aula-nova'
             at.selectbox(key='p2-setmana').select(date(2027, 3, 15)).run(timeout=30)
-            assert at.session_state['p2-filtre'] == 'aula-nova'
+            assert at.session_state['p2-filtre'] == 'totes'
             assert not at.exception and not at.error
 
     def test_prova_comparteix_html_i_css(self):
@@ -281,7 +283,7 @@ def crea_base():
 
 
 @contextmanager
-def app_inventada(sessions_extra=()):
+def app_inventada(sessions_extra=(), prepara_propostes=None):
     """Cap prova nova de pàgina depèn de les dades del repte."""
     from tempfile import TemporaryDirectory
     from streamlit.testing.v1 import AppTest
@@ -295,13 +297,16 @@ def app_inventada(sessions_extra=()):
     proposta = Proposta.de_base(base)
     proposta.files['S90001'].aula = 'Q9/0001'
     proposta.files['S90002'].h_ini = '10:00'
+    propostes = prepara_propostes(base) if prepara_propostes else {'5.2': proposta}
     with TemporaryDirectory(dir=ARREL.parent) as carpeta:
         arrel = Path(carpeta)
-        (arrel / '5.2').mkdir()
-        (arrel / '5.2' / 'proposta.csv').touch()
+        for nom in propostes:
+            (arrel / nom).mkdir()
+            (arrel / nom / 'proposta.csv').touch()
         with patch('pagines.part2.RESULTATS', arrel), \
-             patch('pagines.part2.carrega_dades', return_value=(base, {'100001': 'Desenvolupament d’aplicacions per a Enginys Inventats'}, {'GXX': 'Grau inventat'})), \
-             patch('pagines.part2.carrega_proposta', return_value=proposta):
+             patch('pagines.part2.carrega_motius_imprevistos', return_value={}), \
+             patch('pagines.part2.carrega_dades', return_value=(base, {'100001': 'Desenvolupament d’aplicacions per a Enginys Inventats'}, {'GXX': 'Grau inventat', 'GYY': 'Grau inventat segon'})), \
+             patch('pagines.part2.carrega_proposta', side_effect=lambda path, versio: propostes[Path(path).parent.name]):
             yield AppTest.from_string('from pagines.part2 import mostra\nmostra()').run(timeout=30)
 
 
@@ -474,12 +479,12 @@ class TestMillores(unittest.TestCase):
         actuals = celles_grup(base, avui, *args)
         noves = celles_grup(base, p, *args)
         resum = resum_grup(base, p, actuals, noves)
-        assert '1 classes canvien de dia o d’hora' in resum
-        assert '2 canvien d’aula' in resum
-        assert '1 canvien de torn' in resum
-        assert '1 avui → 2 a la proposta' in resum
+        assert '1 classe canvia de dia o hora' in resum
+        assert '2 classes canvien d’aula' in resum
+        assert '1 classe canvia de torn' in resum
+        assert '1 a avui → 2 a la proposta' in resum
         p.files['S90001'].data = '2027-03-19'
-        assert '1 classes canvien de dia o d’hora' in resum_grup(base, p, actuals, celles_grup(base, p, *args))
+        assert '1 classe canvia de dia o hora' in resum_grup(base, p, actuals, celles_grup(base, p, *args))
 
     def test_excepcio_calendari_escapada(self):
         from tempfile import TemporaryDirectory
@@ -491,8 +496,9 @@ class TestMillores(unittest.TestCase):
         base = crea_base()
         dades = celles_grup(base, Proposta.de_base(base), date(2027, 3, 8), 'GXX', '1r', '81', relaxacions=motius)
         html = contingut_graella(taula_html(dades))
-        assert 'classe relaxada' in html
-        assert 'Excepció de calendari' in html
+        assert 'classe relaxada' not in html
+        assert 'classe igual' in html
+        assert 'Fora de l’hora habitual' in html
         assert 'Festiu &lt;especial&gt;' in html
 
 
@@ -504,7 +510,7 @@ class TestAssignacions(unittest.TestCase):
         assert 'Grup 81' in html and 'TE/81' not in html
         assert 'Aula no indicada a les dades' in html
         assert 'Pendent d’assignar aula' in taula_html([c])
-        assert all(t in llegenda_html() for t in ('Sense canvis', 'Aula assignada', 'Canvia', 'Cas especial'))
+        assert all(t in llegenda_html() for t in ('Sense canvis', 'Aula assignada', 'Canvia', 'Fora del patró', 'Excepció demostrada'))
 
     # Simula una aula a traslladar sense codificar noms reals de l'inventari.
     @patch('components.graella.a_traslladar', lambda aula: aula == 'Q9/0004')
@@ -527,7 +533,7 @@ class TestAssignacions(unittest.TestCase):
         assert 'Aula assignada' in html and 'class="classe canvi' not in html
         assert 'class="classe aula-nova"' in html
         resum = resum_grup(base, p, actuals, noves)
-        assert '0 canvien d’aula' in resum and '1 amb aula assignada' in resum
+        assert '0 classes' not in resum and '1 classe rep aula' in resum
 
 
 class TestRedisseny(unittest.TestCase):
@@ -691,13 +697,17 @@ class TestRedisseny(unittest.TestCase):
         c = Cella('S90001', 'L', 510, 570, 'Q9/0001', 'Inventada', 'Teoria', '81', False, False)
         casos = [(c, 'igual'), (replace(c, aula_assignada=True), 'aula-nova'),
                  (replace(c, canvi_aula=True), 'canvi'),
-                 (replace(c, canvi_franja=True, setmana_diferent=True), 'relaxada'),
-                 (replace(c, aula_assignada=True, relaxacions=('Excepció inventada',)), 'relaxada')]
+                 (replace(c, canvi_aula=True, excepcio_demostrada=True), 'canvi'),
+                 (replace(c, canvi_franja=True, setmana_diferent=True), 'fora-patro'),
+                 (replace(c, aula_assignada=True, relaxacions=('Excepció inventada',)), 'aula-nova'),
+                 (replace(c, canvi_franja=True, relaxacions=('Motiu inventat',)), 'canvi'),
+                 (replace(c, canvi_franja=True, relaxacions=('Fora de l’hora habitual: motiu inventat',)), 'fora-patro'),
+                 (replace(c, excepcio_demostrada=True), 'relaxada')]
         for cella, esperat in casos:
             assert estat_cella(cella) == esperat
             assert f'data-estat="{esperat}"' in taula_html([cella])
         assert ESTATS['igual'][1:] == ('#2a78d6', '#eef4fc', '#1d5fae')
-        assert 'border-left' not in CSS
+        assert 'border-left:4px solid' in CSS
         assert 'border:0;border-radius:10px;padding:8px 10px' in CSS
         assert 'background:#edf6ef' in CSS and 'background:#fdeeee' in CSS
         assert 'background:#fff4e5' in CSS and 'background:#eef4fc' in CSS
@@ -751,7 +761,7 @@ class TestRedisseny(unittest.TestCase):
         html = taula_html([c])
         assert '<b>Assignatura Inventada</b><small class="ubicacio">' in sense_marques_nom(html)
         assert '<span class="hora-inici">08:30</span><span class="hora-separador">–</span><span class="hora-fi">10:30</span>' in html
-        assert '<span class="aula-classe"> · Aula inventada</span></small><small>Problemes · Subgrup 999</small>' in html
+        assert '<span class="aula-classe aula-coneguda"><span class="aula-separador"> · </span>Aula inventada</span></small><small>Problemes · Subgrup 999</small>' in html
         assert '<small class="nota"><span class="nota-ampla">Abans: dijous 12:30</span>' in html
         assert 'Aula anterior inventada' in html
         igual = taula_html([replace(c, canvi_franja=False)])
@@ -823,7 +833,7 @@ class TestRedisseny(unittest.TestCase):
         p.files['S90001'] = Assignacio('M', '16:00', 'Q9/0002')
         c, = celles_grup(base, p, date(2027, 3, 8), 'GXX', '1r', '81')
         html = contingut_graella(taula_html([c]))
-        assert [int(h['data-minut']) for h in estructura_graella(html).hores] == list(range(510, 1261, 30))
+        assert [int(h['data-minut']) for h in estructura_graella(html).hores] == list(range(960, 1021, 30))
         assert 'Abans: dilluns 15:00' in html
         assert 'aria-haspopup="dialog"' in html and 'title="Canvia ·' in html
 
@@ -990,7 +1000,7 @@ assert.equal(host.listeners.resize.size,1);
         pagines = [n for n in ast.walk(crida) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == 'Page']
         titols = [next(k.value.value for k in n.keywords if k.arg == 'title') for n in pagines]
         assert 'Horari proposat' in titols
-        assert [k.value.value for n in pagines for k in n.keywords if k.arg == 'url_path'] == ['avui', 'respostes', 'part2', 'junta', 'imprevistos']
+        assert [k.value.value for n in pagines for k in n.keywords if k.arg == 'url_path'] == ['avui', 'respostes', 'part2', 'imprevistos', 'junta']
 
 
 def test_setmana_densa_cap_en_escriptori_i_dies_iguals():
@@ -1097,7 +1107,9 @@ def test_hores_i_abans_compactes_sencers_en_classes_simultanies_duna_hora():
     estret = re.search(r'@container p2-classe \(width < 180px\)\{(.*?)\n}', css, re.S)[1]
     assert '.hora-inici,.p2-horari .classe .hora-fi{display:block;}' in estret
     assert 'font-size:11px;line-height:12px;white-space:nowrap;overflow:visible;text-overflow:clip' in estret
-    assert '.hora-separador,.p2-horari .classe .aula-classe{display:none;}' in estret
+    assert '.hora-separador,.p2-horari .classe .aula-separador{display:none;}' in estret
+    assert '.aula-classe{display:block;' in estret
+    assert '.ubicacio:has(.aula-coneguda) .hora-fi{display:none;}' in estret
     assert '.resum-classe>small:not([class]){display:none;}' in estret
     assert '.nota-ampla{display:none;}' in estret
     assert '.nota-compacta,.p2-horari .classe .abans-hora{display:block;}' in estret
@@ -1177,3 +1189,437 @@ def test_paraules_noms_atomiques_amb_abreviacio_marcada():
     assert 'max-width:100%' in regla
     assert 'overflow:hidden' in regla and 'text-overflow:ellipsis' in regla
     assert '.detall-classe h4' in CSS and '.classe[open]' not in CSS
+
+
+def test_f4_nota_daula_anterior_i_canvi_combinat():
+    from dataclasses import replace
+    from components.graella import Cella
+    c = Cella('INVENTADA-AULA', 'L', 510, 630, 'Q9/0002',
+              'Assignatura inventada', 'Teoria', 'TE/81', False, True,
+              abans='Abans: dilluns 08:30 · Q9/0001 (08/03/2027)')
+    html = taula_html([c])
+    assert '<span class="nota-ampla">Abans: aula Q9/0001</span>' in html
+    assert '<span class="abans-etiqueta">Abans </span><span class="abans-aula">Q9/0001</span>' in html
+    html = taula_html([replace(c, ini=630, fi=750, canvi_franja=True)])
+    assert '<span class="nota-ampla">Abans: dilluns 08:30 · Q9/0001</span>' in html
+    assert '<span class="abans-aula">Q9/0001</span>' in html
+
+
+def test_f8_f9_noms_oficials_i_assignatures_del_grau_nou():
+    from tempfile import TemporaryDirectory
+    from pagines.part2 import carrega_dades
+    from nivell2.junta import NOMS
+    with TemporaryDirectory(dir=ARREL.parent) as carpeta:
+        arrel = Path(carpeta)
+        extra = arrel / 'escenari-inventat'
+        extra.mkdir()
+        (arrel / 'activitats.csv').write_text('codi,assignatura\n100001,Assignatura inventada\n')
+        (extra / 'sessions_extra.csv').write_text('codi,assignatura\nN900,Grau nou · assignatura inventada\n')
+        with patch('pagines.part2.PAQUET', arrel), patch('pagines.part2.GRAU_NOU', extra), \
+             patch('pagines.part2.carrega_oficial', return_value=crea_base()) as carrega:
+            _, noms, titulacions = carrega_dades.__wrapped__(True)
+            carrega.assert_called_once_with(extra)
+            assert noms['N900'] == 'Grau nou · assignatura inventada'
+            assert noms['100001'] == 'Assignatura inventada'
+            assert titulacions['GEI'] == NOMS['GEI']
+            assert titulacions['GEET'] == NOMS['GEET']
+            assert titulacions['GEST'] == NOMS['GEST']
+            assert titulacions['GNOU'] == 'Grau nou (40 places)'
+            assert titulacions['MRICSE'] == 'Màster RICSE'
+    # L'ordre visible ha de prevaler sobre l'ordre dels codis.
+    with app_inventada((sessio('INVENTADA-ORDRE', cohorts=('GYY:1r',)),)) as at:
+        from pagines import part2
+        base, noms, _ = part2.carrega_dades.return_value
+        with patch('pagines.part2.carrega_dades', return_value=(base, noms,
+                {'GXX': 'Zoologia inventada', 'GYY': 'Anàlisi inventada'})):
+            at.run(timeout=30)
+            assert at.selectbox(key='p2-titulacio').options == ['Anàlisi inventada', 'Zoologia inventada']
+
+
+def test_f9_grau_nou_sense_abans_ni_comptar_canvis():
+    from components.graella import canvis_grup, estat_cella
+    from pagines.part2 import resum_html
+    s = sessio('N90001', codi='N900', aula='', cohorts=('GNOU:1r',))
+    base = Base({s.id: s}, {})
+    p = Proposta({s.id: Assignacio('M', '10:30', 'Q9/0002')})
+    cs = celles_grup(base, p, s.data, 'GNOU', '1r', '81', noms={'N900': 'Assignatura nova inventada'})
+    c, = cs
+    assert c.horari_nou and not c.canvi and not c.setmana_diferent and not c.abans
+    assert estat_cella(c) == 'aula-nova'
+    assert canvis_grup(base, p, [], cs) == dict(franja=0, aula=0, torn=0, assignades=0)
+    html = contingut_graella(taula_html(cs))
+    assert 'Grau nou: horari nou' in html and 'Abans' not in html
+    resum = resum_html(base, p, [], cs, True)
+    assert 'Grau nou: horari nou' in resum and 'classes noves' in resum
+    assert 'canvis d’hora' not in resum and 'Canvis en aquest grup' not in resum
+
+
+def test_f10_d6_textos_planers_i_tres_estats_diferents():
+    import csv
+    from tempfile import TemporaryDirectory
+    from pagines.part2 import carrega_relaxacions, carrega_excepcions
+    from components.graella import celles, estat_cella
+    from nivell2.s52 import MOTIU_FIXADES, MOTIU_AVALUACIO
+    # Només fixtures inventades: el segon id exercita el tractament explícit de l'auditoria.
+    sessions = [sessio('S90001'), sessio('S04526'), sessio('S90003')]
+    base = Base({s.id: s for s in sessions}, {})
+    p = Proposta.de_base(base)
+    p.files['S90003'].h_ini = '10:30'
+    with TemporaryDirectory(dir=ARREL.parent) as carpeta:
+        path = Path(carpeta) / 'relaxacions.csv'
+        with path.open('w', newline='') as f:
+            w = csv.writer(f)
+            w.writerow(['restriccio', 'sessions', 'justificacio'])
+            w.writerow(['R1-TORN', 'S90001', MOTIU_FIXADES])
+            w.writerow(['R1-TORN', 'S04526', MOTIU_AVALUACIO])
+        motius = carrega_relaxacions.__wrapped__(str(path), 1)
+        ep = Path(carpeta) / 'excepcions.csv'
+        with ep.open('w', newline='') as f:
+            w = csv.writer(f)
+            w.writerow(['id_sessio', 'data', 'minut_inici', 'motiu'])
+            w.writerow(['S90003', '2027-03-08', 630,
+                'Restauració al patró rebutjada: restriccions oficials: R2-CALENDARI; '
+                'R4-ALUMNAT; R4-AULA; R4-DOCENT; supera el límit de qualitat de la variant de referència'])
+        motius.update(carrega_excepcions.__wrapped__(str(ep), 1))
+    cs = {c.id_sessio: c for c in celles(base, p, date(2027, 3, 8), relaxacions=motius)}
+    assert estat_cella(cs['S90001']) == 'igual'
+    assert estat_cella(cs['S04526']) == 'relaxada'
+    assert estat_cella(cs['S90003']) == 'fora-patro'
+    html = contingut_graella(taula_html(list(cs.values())))
+    for tecnic in ('R1-TORN', 'R2-CALENDARI', 'R4-', 'R1 dura', 'variant de referència', 'diagnostic.md', 'S04526'):
+        assert tecnic not in html
+    for text in ('Classe fixada de 1r/2n', 'Excepció demostrada', 'Fora del patró',
+                 'hi ha una aturada o un dia sense classes al calendari', 'coincideix amb una altra classe del grup',
+                 'l’aula està ocupada', 'el professor té una altra classe', 'empitjorava massa'):
+        assert text in html
+
+
+def test_f11_frases_amb_singular_plural_i_sense_zeros():
+    from components.graella import Cella
+    from pagines.part2 import resum_html
+    c = Cella('S90001', 'L', 510, 570, '', 'Inventada', 'Teoria', 'TE/81', False, False)
+    base = crea_base()
+    p = Proposta.de_base(base)
+    for n, esperat in ((1, '1 classe canvia de dia o hora'), (2, '2 classes canvien de dia o hora')):
+        with patch('pagines.part2.canvis_grup', return_value=dict(franja=n, aula=0, assignades=0)):
+            html = resum_html(base, p, [c], [c], True)
+        assert esperat in html and '0 classes' not in html and 'reben aula' not in html
+    with patch('pagines.part2.canvis_grup', return_value=dict(franja=0, aula=1, assignades=2)):
+        html = resum_html(base, p, [c], [c], True)
+    assert '1 classe canvia d’aula; 2 classes reben aula.' in html
+    with patch('pagines.part2.canvis_grup', return_value=dict(franja=0, aula=0, assignades=0)):
+        assert 'Cap classe d’aquest grup canvia.' in resum_html(base, p, [c], [c], True)
+
+
+def test_f12_compara_amb_la_proposta_de_referencia():
+    from components.graella import canvis_grup
+    base = crea_base()
+    ref = Proposta.de_base(base)
+    p = Proposta.de_base(base)
+    for proposta in (ref, p):
+        for a in proposta.files.values():
+            a.h_ini, a.aula = '10:30', 'Q9/0002'
+    p.files['S90001'] = Assignacio('V', '11:30', 'Q9/0003', '2027-03-19')
+    args = date(2027, 3, 8), 'GXX', '1r', '81'
+    actuals = celles_grup(base, ref, *args, referencia=ref)
+    noves = celles_grup(base, p, *args, referencia=ref)
+    assert all(not c.canvi for c in actuals + noves)
+    assert canvis_grup(base, p, actuals, noves, referencia=ref) == dict(franja=1, aula=1, torn=0, assignades=0)
+    futura = celles_grup(base, p, date(2027, 3, 15), 'GXX', '1r', '81', referencia=ref)
+    c = next(c for c in futura if c.id_sessio == 'S90001')
+    assert c.abans == 'Abans: dilluns 10:30 · Q9/0002 (08/03/2027)'
+
+
+def test_f12_pagina_imprevistos_i_comparacio_amb_52():
+    from copy import deepcopy
+    def propostes(base):
+        ref = Proposta.de_base(base)
+        for a in ref.files.values():
+            a.h_ini = '10:30'
+        nova = deepcopy(ref)
+        nova.files['S11527'] = Assignacio('V', '11:30', 'Q9/0002', '2027-03-19')
+        return {'5.1': ref, '5.2': ref, '5.3': nova, '5.4': ref}
+    with app_inventada((sessio('S11527'),), prepara_propostes=propostes) as at:
+        for nom in ('5.1', '5.2', '5.4'):
+            at.selectbox(key='p2-proposta').select(nom).run(timeout=30)
+            assert not at.exception and not at.error
+            assert not any('inclouen els imprevistos' in m.value for m in at.markdown)
+            assert not any('imprevistos' in op for op in at.selectbox(key='p2-setmana').options)
+        at.selectbox(key='p2-proposta').select('5.3').run(timeout=30)
+        html = '\n'.join(m.value for m in at.markdown)
+        assert 'Comparació amb Torns nous (5.2)' in html
+        assert 'respecte de Torns nous (5.2)' in html
+        assert 'Les aules tancades afecten les setmanes del 8 i del 15 de març' in html
+        assert 'valen per a tot el semestre' in html
+        assert '<b>1</b><span>canvis d’hora' in html
+        assert any('08/03' in op and 'imprevistos' in op for op in at.selectbox(key='p2-setmana').options)
+        at.selectbox(key='p2-setmana').select(date(2027, 3, 15)).run(timeout=30)
+        html = '\n'.join(m.value for m in at.markdown)
+        assert 'Recuperació de la classe cancel·lada' in html
+        assert 'Abans: dilluns 10:30' in html
+        assert not at.exception and not at.error
+
+
+def test_f23_exportacio_identificada_i_escapada():
+    base = crea_base()
+    p = Proposta.de_base(base)
+    nom = 'Torns inventats <prova> (5.2)'
+    html = exporta_aula_html(base, p, date(2027, 3, 8), 'Q9/0001', nom_proposta=nom)
+    assert '<title>Aula Q9/0001 · Torns inventats &lt;prova&gt; (5.2)' in html
+    assert '<h1>Aula Q9/0001 · Torns inventats &lt;prova&gt; (5.2)' in html
+
+
+def test_f23_f31_selector_amb_places_i_descarrega_abans_de_la_graella():
+    from types import SimpleNamespace
+    from components.ajuda_part2 import PASSOS
+    def propostes(base):
+        base.aules['Q9/0001'] = SimpleNamespace(capacitat=90)
+        return {'5.2': Proposta.de_base(base)}
+    with app_inventada(prepara_propostes=propostes) as at:
+        assert 'Q9/0001 · 90 places' in at.selectbox(key='p2-aula').options
+        aula = next(n for n in at.get('flex_container') if n.proto.id.endswith('-p2-vista-aula'))
+        tipus = [n.type for n in aula.children.values()]
+        assert tipus.index('selectbox') < tipus.index('download_button') < tipus.index('markdown')
+        assert not at.exception and not at.error
+    assert PASSOS[0][0] == '.st-key-p2-controls'
+    assert 'Al mòbil, llisca la graella cap al costat' in PASSOS[4][2]
+
+
+def test_f23_nom_del_fitxer_i_titol_distingeixen_proposta_i_avui():
+    import streamlit as st
+    with patch('pagines.part2.st.download_button', wraps=st.download_button) as descarrega:
+        with app_inventada() as at:
+            assert '-5.2-' in descarrega.call_args.kwargs['file_name']
+            assert 'Torns nous (5.2)' in descarrega.call_args.args[1]
+            at.get('button_group')[0].set_value('Només avui').run(timeout=30)
+            assert '-Avui-' in descarrega.call_args.kwargs['file_name']
+            assert 'Horari d’avui' in descarrega.call_args.args[1]
+            assert not at.exception and not at.error
+
+
+def test_f32_reinici_del_filtre_amb_grup_proposta_i_comptatge_buit():
+    with app_inventada(prepara_propostes=lambda base: {'5.1': Proposta.de_base(base),
+            '5.2': Proposta.de_base(base)}) as at:
+        at.session_state['p2-filtre'] = 'canvi'
+        at.run(timeout=30)
+        assert at.session_state['p2-filtre'] == 'totes'
+        for clau, valor in (('p2-grup', '914'), ('p2-proposta', '5.1'), ('p2-curs', '3r')):
+            at.button(key='p2-boto-igual').click().run(timeout=30)
+            assert at.session_state['p2-filtre'] == 'igual'
+            at.selectbox(key=clau).select(valor).run(timeout=30)
+            assert at.session_state['p2-filtre'] == 'totes'
+            assert not at.exception and not at.error
+
+
+def test_f32_avui_mostra_classes_hores_i_sense_aula():
+    from pagines.part2 import resum_html
+    base = crea_base()
+    base.sessions['S90001'].aula = ''
+    p = Proposta.de_base(base)
+    cs = celles_grup(base, p, date(2027, 3, 8), 'GXX', '1r', '81')
+    html = resum_html(base, p, cs, cs, False)
+    assert '<b>3</b><span>classes</span>' in html
+    assert '<b>3</b><span>hores de classe</span>' in html
+    assert '<b>1</b><span>sense aula a les dades</span>' in html
+    assert 'canvis d’hora' not in html and 'canvis d’aula' not in html
+
+
+def test_b15_tipica_exclou_setmanes_residuals_de_la_mediana():
+    from types import SimpleNamespace
+    recomptes = ((date(2027, 2, 1), 1), (date(2027, 2, 8), 61),
+                 (date(2027, 2, 15), 200), (date(2027, 2, 22), 483),
+                 (date(2027, 3, 1), 541), (date(2027, 3, 8), 599))
+    base = SimpleNamespace(sessions={f'INVENTADA-{d}-{i}': SimpleNamespace(data=d)
+        for d, n in recomptes for i in range(n)})
+    assert setmana_tipica(base) == date(2027, 3, 1)
+
+
+def test_exemple_preparat_i_restabliment():
+    from pagines.part2 import tria_exemple
+    base = crea_base()
+    proposta = Proposta.de_base(base)
+    assert tria_exemple(base, proposta) is None
+    # Dos candidats; el grup 914 només té una classe i cap coincidència.
+    proposta.files['S90001'] = Assignacio('M', '10:00', 'Q9/0002')
+    proposta.files['S90004'] = Assignacio('X', '11:00', 'Q9/0002')
+    assert tria_exemple(base, proposta) == ('GXX', '1r', '914', 'S90004')
+
+    def prepara(base):
+        p = Proposta.de_base(base)
+        p.files['S90004'] = Assignacio('J', '11:00', 'Q9/0002')
+        return {'5.2': p}
+
+    with app_inventada(prepara_propostes=prepara) as at:
+        assert not at.error and not at.exception
+        assert at.selectbox(key='p2-grup').value == '914'
+        at.selectbox(key='p2-curs').select('3r').run(timeout=30)
+        at.selectbox(key='p2-setmana').select(date(2027, 3, 15)).run(timeout=30)
+        next(b for b in at.button if b.label == 'Mira l’exemple').click().run(timeout=30)
+        assert not at.error and not at.exception
+        assert at.selectbox(key='p2-grup').value == '914'
+        assert at.selectbox(key='p2-curs').value == '1r'
+        assert at.selectbox(key='p2-setmana').value is None
+        assert at.session_state['p2-filtre'] == 'totes'
+        assert any('Exemple ·' in c.value and '→ dijous 11:00' in c.value for c in at.caption)
+
+
+def test_hores_buides_grup_aula_i_html_amb_arrodoniment_i_posicio_exacta():
+    """El mateix interval de tarda governa files, hores i blocs a les tres vistes."""
+    a = sessio('S90001', ini=887, durada=78)
+    b = sessio('S90002', data=date(2027, 3, 12), dia='V', ini=990, durada=32)
+    base = Base({s.id: s for s in (a, b)}, {})
+    p = Proposta.de_base(base)
+    grup = celles_grup(base, p, a.data, 'GXX', '1r', '81')
+    aula = celles_aula(base, p, a.data, 'Q9/0001')
+    for html in (taula_html(grup), taula_html(aula),
+                 exporta_aula_html(base, p, a.data, 'Q9/0001')):
+        graella = estructura_graella(html)
+        assert [int(h['data-minut']) for h in graella.hores] == list(range(870, 1051, 30))
+        assert '--files:repeat(180,1.6px)' in html
+        assert [posicio_classe(attrs)[:2] for _, attrs in graella.classes] == [(18, 96), (121, 153)]
+        assert len(graella.caps) == 5 and len(graella.dies) == 5
+    buit = exporta_aula_html(base, p, a.data, 'Q9/0999')
+    assert 'No hi ha classes aquesta setmana.' in buit
+    assert estructura_graella(buit).hores == []
+
+
+def test_f5_54_referencia_52_i_grau_nou_absent_de_la_referencia():
+    from components.graella import celles
+    base = crea_base()
+    ref = Proposta.de_base(base)
+    for a in ref.files.values():
+        a.h_ini = '14:30'
+    s = sessio('N90001', cohorts=('GNOU:1r',))
+    base.sessions[s.id] = s
+    p = Proposta({**ref.files, s.id: Assignacio('M', '15:30', 'Q9/0002')})
+    cs = celles(base, p, s.data, referencia=ref)
+    assert all(not c.canvi for c in cs)
+    assert next(c for c in cs if c.id_sessio == s.id).horari_nou
+    with app_inventada(prepara_propostes=lambda base: {
+            '5.2': Proposta.de_base(base), '5.4': Proposta.de_base(base)}) as at:
+        at.selectbox(key='p2-proposta').select('5.4').run(timeout=30)
+        assert not at.error and not at.exception
+        assert 'Comparació amb Torns nous (5.2)' in '\n'.join(m.value for m in at.markdown)
+
+
+def test_f6_d9_excepcio_calendari_sense_causa_falsa_ni_duplicat():
+    from tempfile import TemporaryDirectory
+    from pagines.part2 import carrega_excepcions
+    with TemporaryDirectory(dir=ARREL.parent) as carpeta:
+        p = Path(carpeta) / 'excepcions.csv'
+        p.write_text('id_sessio,data,minut_inici,motiu\n'
+                     'S90001,2027-03-08,870,R2-CALENDARI\n'
+                     'S04526,2027-03-08,870,R2-CALENDARI\n')
+        motius = carrega_excepcions.__wrapped__(str(p), 1)
+    assert 'S04526' not in motius
+    assert 'a la seva hora habitual no hi cabia: hi ha una aturada o un dia sense classes al calendari' in motius['S90001'][0]
+    assert 'perquè dia no lectiu' not in motius['S90001'][0]
+
+
+def test_f7_color_i_motiu_del_patro_abans_de_la_nota_abans():
+    from components.graella import Cella, CSS, ESTATS, estat_cella
+    from dataclasses import replace
+    c = Cella('S90001', 'L', 870, 990, 'Q9/0002', 'Inventada', 'Teoria', 'TE/81',
+              False, True, relaxacions=('Aula tancada per un imprevist',),
+              abans='Abans: dilluns 14:30 · Q9/0001')
+    assert estat_cella(c) == 'canvi'
+    motiu = 'Fora de l’hora habitual: hi ha una aturada al calendari'
+    html = taula_html([replace(c, relaxacions=(motiu,))])
+    assert f'<span class="nota-ampla">{motiu}</span>' in html
+    assert ESTATS['fora-patro'][2] == '#fbe7a6'
+    for clau, (_, color, _, _) in ESTATS.items():
+        if clau != 'totes':
+            assert f'border-left:4px solid {color}' in CSS
+
+
+def test_f16_d20_setmanes_sense_repetir_tipica_i_filtres_buits():
+    from types import SimpleNamespace
+    from pagines.part2 import opcions_setmana, resum_html
+    tipica, residual, completa = date(2027, 4, 12), date(2027, 6, 7), date(2027, 4, 19)
+    base = SimpleNamespace(sessions={f'INVENTADA-{d}-{i}': SimpleNamespace(data=d)
+        for d, n in ((tipica, 250), (completa, 200), (residual, 2)) for i in range(n)})
+    assert opcions_setmana(base, tipica) == [date(2027, 3, 8), date(2027, 3, 15), completa]
+    base = crea_base()
+    html = resum_html(base, Proposta.de_base(base), [], [], True)
+    assert 'Aquest grup no té classes aquesta setmana' in html
+    assert 'estat verd' not in html and 'Es conserva' not in html
+    with app_inventada() as at:
+        assert at.button(key='p2-boto-fora-patro').disabled
+        assert not at.button(key='p2-boto-totes').disabled
+        opcions = at.selectbox(key='p2-setmana').options
+        assert sum('08/03' in op for op in opcions) == 1
+        at.get('button_group')[0].set_value('Només avui').run(timeout=30)
+        assert [b.key for b in at.button if b.key and b.key.startswith('p2-boto-')] == ['p2-boto-totes']
+
+
+def test_d11_classes_compartides_un_cop_i_aula_del_grup_amfitrio():
+    from components.graella import canvis_grup, recomptes_estat, Cella
+    from pagines.part2 import resum_html
+    from dataclasses import replace
+    a = sessio('S90001', compartida='C90001')
+    b = sessio('S90002', compartida='C90001')
+    base = Base({s.id: s for s in (a, b)}, {})
+    ref, p = Proposta.de_base(base), Proposta.de_base(base)
+    for assig in p.files.values():
+        assig.h_ini = '14:30'
+    args = a.data, 'GXX', '1r', '81'
+    actuals, noves = celles_grup(base, ref, *args), celles_grup(base, p, *args)
+    assert canvis_grup(base, p, actuals, noves)['franja'] == 1
+    assert recomptes_estat(noves) == {'canvi': 1}
+    c = Cella(a.id, 'L', 510, 570, '', 'Inventada', 'Teoria', 'TE/81', False, False,
+              ubicacio_compartida='Amb el grup 99 · Aula Q9/0002')
+    assert '<b>1</b><span>aules a la setmana' in resum_html(base, ref, [c], [c], True)
+    base.sessions[a.id].aula = ''
+    p = Proposta.de_base(base)
+    p.files[a.id].aula = 'Q9/0001'
+    cs = celles_grup(base, p, *args)
+    assert '<b>1</b><span>classe rep aula' in resum_html(base, p, [], cs, True)
+
+
+def test_d10_motius_directes_i_de_suport_sense_canviar_els_colors():
+    from types import SimpleNamespace
+    from copy import deepcopy
+    from pagines.part2 import motius_imprevistos
+    from components.graella import estat_cella, celles
+    sessions = [sessio('S90001'), sessio('S90002', aula='Q9/0002'),
+                sessio('S90003', aula='Q9/0003')]
+    base = Base({s.id: s for s in sessions}, {})
+    contingencies = deepcopy(base)
+    contingencies.sessions['S90001'].alumnes = 90
+    contingencies.cancellades = {}
+    contingencies.tancaments = [SimpleNamespace(aula='Q9/0003',
+        data_ini=date(2027, 3, 8), data_fi=date(2027, 3, 8), ini=0, fi=1440)]
+    ref, p = Proposta.de_base(base), Proposta.de_base(base)
+    for sid, aula in (('S90001', 'Q9/0002'), ('S90002', 'Q9/0004'), ('S90003', 'Q9/0005')):
+        p.files[sid].aula = aula
+    motius = motius_imprevistos(base, contingencies, ref, p, {'100001': 'Inventada'})
+    assert set(motius) == set(base.sessions)
+    assert 'de 20 a 90 alumnes durant tot el semestre' in motius['S90001']
+    assert 'deixar l’aula al grup 81 de Inventada' in motius['S90002']
+    assert 'Q9/0003 està tancada el 08/03' in motius['S90003']
+    cs = celles(base, p, date(2027, 3, 8), relaxacions={s: [m] for s, m in motius.items()}, referencia=ref)
+    assert all(estat_cella(c) == 'canvi' for c in cs)
+    assert all(m in taula_html(cs) for m in motius.values())
+
+
+def test_b5_exportacio_no_atribueix_una_proposta_a_avui():
+    base = crea_base()
+    p = Proposta.de_base(base)
+    p.files['S90001'].h_ini = '14:30'
+    html = exporta_aula_html(base, p, date(2027, 3, 8), 'Q9/0001')
+    assert 'Horari proposat' in html and 'Horari d’avui' not in html
+    html = exporta_aula_html(base, p, date(2027, 3, 8), 'Q9/0001',
+        nom_proposta='Incorporar el grau nou (5.4)', noms={'100001': 'Assignatura inventada'})
+    assert 'Incorporar el grau nou (5.4) · setmana del 08/03/2027' in html
+    assert 'Assignatura inventada' in html
+
+
+def test_f14_noms_de_proposta_i_curs_master():
+    with app_inventada((sessio('INVENTADA-MASTER', cohorts=('GXX:M',)),),
+            prepara_propostes=lambda base: {n: Proposta.de_base(base) for n in ('5.1', '5.2', '5.3', '5.4')}) as at:
+        assert at.selectbox(key='p2-proposta').options == [
+            'Aules assignades (5.1)', 'Torns nous (5.2)',
+            'Resoldre els imprevistos (5.3)', 'Incorporar el grau nou (5.4)']
+        assert 'Màster' in at.selectbox(key='p2-curs').options
+        at.selectbox(key='p2-curs').select('M').run(timeout=30)
+        assert not at.error and not at.exception

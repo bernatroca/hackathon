@@ -71,14 +71,18 @@ def test_empaquetat(tmp_path, sense_zip):
          patch.object(empaqueta, 'verifica_pregunta', return_value=report) as verify:
         assert empaqueta.empaqueta(output, arrel=root, sense_zip=sense_zip) == 0
         assert verify.call_count == 4
+        assert all(call.kwargs['desa'] is False for call in verify.call_args_list)
         people.assert_called_once_with(resultats=root)
     archive = output/'lliurament-nivell2.zip'
     assert archive.exists() != sense_zip
     if not sense_zip:
         with zipfile.ZipFile(archive) as z:
-            assert len(z.namelist()) == 22 + len(empaqueta.OPCIONALS[1:]) + len(empaqueta.JUNTA)
-            assert all(f'nivell2/5.2/{name}' in z.namelist() for name in empaqueta.OPCIONALS[1:])
-            assert all(f'junta/5.2/{name}' in z.namelist() for name in empaqueta.JUNTA)
+            assert len(z.namelist()) == 23 + len(empaqueta.OPCIONALS[1:]) + len(empaqueta.JUNTA)
+            assert all(f'resultats/nivell2/5.2/{name}' in z.namelist() for name in empaqueta.OPCIONALS[1:])
+            assert all(f'resultats/nivell2/junta/5.2/{name}' in z.namelist() for name in empaqueta.JUNTA)
+            index = z.read('LLEGEIX-ME.md').decode('utf-8')
+            assert '5.2 | VALIDA AMB RELAXACIONS DECLARADES | OK' in index
+            assert 'resultats/nivell2/junta/5.2/junta.html' in index
             assert 'graelles/index.html' in z.namelist()
             assert 'graelles/aula-000.html' in z.namelist()
 
@@ -151,13 +155,13 @@ def test_ordre_readme_es_la_que_executa_verificacio(tmp_path, q, relaxacions):
     readme = normalitza('```sh\npython -m nivell2.verificacio ' + q + '\n```', q, root)
     command = verificacio.ordre_oficial(q, root)
     assert command in readme
-    documented = shlex.split(command.splitlines()[1])
+    documented = shlex.split(command.splitlines()[2])
     path_flags = {'--json', '--violacions', '--referencia', '--relaxacions', '--escenari'}
     virtual_cwd = tmp_path/'repte/repte-horaris-escola'
     for i, token in enumerate(documented):
         if i == 4 or (i and documented[i-1] in path_flags):
             cwd = base.REPTE if documented[i-1] == '--escenari' else virtual_cwd
-            documented[i] = str((cwd/token).resolve())
+            documented[i] = str((cwd/token.replace('$REPOSITORI', str(tmp_path))).resolve())
     (root/q/'proposta.csv').write_text('id_sessio,dia,h_ini,aula\n')
     def official(cmd, **kwargs):
         import hashlib
@@ -229,11 +233,26 @@ def test_graelles_autonomes(tmp_path):
     b.aules = {'A': object(), 'B': object()}
     (tmp_path/'5.4').mkdir()
     Proposta.de_base(b).escriu(tmp_path/'5.4/proposta.csv')
-    with patch.object(delivery, 'carrega_oficial', return_value=b):
+    (tmp_path/'5.2').mkdir()
+    referencia = Proposta.de_base(b)
+    del referencia.files['0']  # sessió nova, absent al 5.2
+    referencia.escriu(tmp_path/'5.2/proposta.csv')
+    (tmp_path/'5.4/relaxacions.csv').write_text('restriccio,sessions,justificacio\n')
+    paquet = tmp_path/'paquet'
+    grau = tmp_path/'grau'
+    paquet.mkdir()
+    grau.mkdir()
+    (paquet/'activitats.csv').write_text('codi,assignatura\n1,Assignatura inventada\n')
+    (grau/'sessions_extra.csv').write_text('codi,assignatura\nN900,Grau inventat\n')
+    with patch.object(delivery, 'carrega_oficial', return_value=b), patch.object(delivery, 'PAQUET', paquet), patch.object(delivery, 'GRAU_NOU', grau):
         folder = delivery.graelles(tmp_path/'sortida', tmp_path)
     assert len(list(folder.glob('*.html'))) == 3
     index = (folder/'index.html').read_text()
     assert 'aula-000.html' in index and 'aula-001.html' in index
+    assert 'Incorporar el grau nou (5.4)' in index and '01/02/2027' in index
+    html = (folder/'aula-000.html').read_text()
+    assert 'Incorporar el grau nou (5.4)' in html
+    assert 'Assignatura' in html
     assert '<!doctype html>' in (folder/'aula-000.html').read_text()
 
 
@@ -243,10 +262,10 @@ def test_xifres_referencia_real(tmp_path):
     from nivell2.xifres import compara
     b = base_petita()
     ref = Proposta.de_base(b)
-    ref.files['0'].h_ini = '09:00'
+    ref.files['0'].h_ini = '15:00'
     refpath = ref.escriu(tmp_path/'proposta.csv')
     proposal = Proposta.de_base(b)
-    proposal.files['0'].h_ini = '09:00'
+    proposal.files['0'].h_ini = '15:00'
     proposal.files['1'].aula = 'B'
     report = Informe({'veredicte': 'VALIDA', 'restriccions': {
         'R1': {'compten': 0, 'heretades': 2, 'declarades': 3}},
@@ -255,8 +274,12 @@ def test_xifres_referencia_real(tmp_path):
          patch('nivell2.xifres.verifica', return_value=report):
         result = compara(proposal, b, referencia=refpath)
     rows = {r['xifra']: r for r in result.files}
-    assert rows['sessions_canvien_hora']['despres'] == 0
+    assert rows['sessions_canvien_hora']['despres'] == 1
     assert rows['sessions_nomes_canvien_aula']['despres'] == 1
+    assert rows['sessions_canvien_hora_vs_referencia']['despres'] == 0
+    assert rows['sessions_nomes_canvien_aula_vs_referencia']['despres'] == 1
+    assert rows['canvis_torn']['abans'] == rows['canvis_torn']['despres'] == 1
+    assert rows['canvis_torn_vs_referencia']['despres'] == 0
     assert rows['incompliments_declarats']['despres'] == 3
     assert rows['incompliments_heretats']['despres'] == 2
 
@@ -276,7 +299,7 @@ def test_normalitza_bloc_mixt(verification):
     assert result.count(verificacio.ordre('5.2')) == 1
 
 
-def test_conserva_explicacions_nomes_si_xifra_igual(tmp_path):
+def test_conserva_explicacions_per_clau_i_arrodoneix(tmp_path):
     from nivell2 import xifres_lliurament as delivery
     out = tmp_path/'5.2'
     out.mkdir()
@@ -286,15 +309,15 @@ def test_conserva_explicacions_nomes_si_xifra_igual(tmp_path):
                     '- canvis_aula: 0 → 1; Explicació antiga.\n')
     comparison = SimpleNamespace(files=[
         {'xifra': 'hores_mortes_min', 'abans': 1, 'despres': 2},
-        {'xifra': 'canvis_aula', 'abans': 0, 'despres': 3}])
-    with patch.object(delivery.Proposta, 'llegeix'), patch.object(delivery, 'compara', return_value=comparison):
+        {'xifra': 'canvis_aula', 'abans': 0.0, 'despres': 3.1234567}])
+    with patch.object(delivery.Proposta, 'llegeix'), patch.object(delivery, 'compara', return_value=comparison), patch.object(delivery, 'comptatge_verificador'), patch.object(delivery, 'explica_comptatge', side_effect=lambda text, *args: text):
         delivery.genera('5.2', tmp_path)
         first = path.read_text()
         delivery.genera('5.2', tmp_path)
     assert path.read_text() == first
     assert 'Explicació conservada.' in first
-    assert 'Explicació antiga.' not in first
-    assert '- canvis_aula: 0 → 3; per explicar.' in first
+    assert '- canvis_aula: 0,00 → 3,12; Explicació antiga.' in first
+    assert 'per explicar.' not in first
 
 
 def test_seccio_comptatge_idempotent():
@@ -377,7 +400,7 @@ def test_conserva_xifres_propies_i_migra_resum(tmp_path):
     from nivell2 import xifres_lliurament as delivery
     out = tmp_path/'5.3'
     out.mkdir()
-    (out/'README.md').write_text('Introducció')
+    (out/'README.md').write_text('Introducció\n\n## Què empitjora i per què\n\n- general: 0 → 1; Explicació inventada.\n')
     (out/'resum.json').write_text(json.dumps({'total': 1, 'comparacio_anterior': {'abans': 69}}))
     (out/'execucio.json').write_text(json.dumps({'intents': []}))
     (out/'xifres.csv').write_text('xifra,abans,despres\ngeneral,0,9\nsessions_52_mogudes,0,2\nsessions_52_mogudes,0,2\nsessions_grau_nou_fora_franja,0,0\n')
@@ -401,6 +424,58 @@ def test_elimina_cd_verificacio():
     assert normalitza(text, '5.3') == text
 
 
+def test_rebutja_empitjorament_sense_explicacio(tmp_path):
+    from nivell2 import xifres_lliurament as delivery
+    out = tmp_path/'5.1'
+    out.mkdir()
+    (out/'README.md').write_text('Introducció\n')
+    (out/'xifres.csv').write_text('original\n')
+    comparison = SimpleNamespace(files=[{'xifra': 'desconeguda', 'abans': 0, 'despres': 1}])
+    with patch.object(delivery.Proposta, 'llegeix'), patch.object(delivery, 'compara', return_value=comparison), patch.object(delivery, 'comptatge_verificador'), patch.object(delivery, 'explica_comptatge', side_effect=lambda text, *args: text):
+        with pytest.raises(ValueError, match='desconeguda'):
+            delivery.genera('5.1', tmp_path)
+    assert (out/'README.md').read_text() == 'Introducció\n'
+    assert (out/'xifres.csv').read_text() == 'original\n'
+
+
+def test_readme_conserva_seccions_i_no_punt_buit():
+    from nivell2.readmes import conserva_seccions, arrodoneix_text
+    old = '## Com compta el verificador\n\nRecompte.\n\n## Què empitjora i per què\n\n- x: 0 → 1; Motiu.\n'
+    new = conserva_seccions('Introducció nova.\n', old)
+    assert 'Recompte.' in new and 'Motiu.' in new
+    assert conserva_seccions(new, old) == new
+    text = normalitza('Des del worktree `/Users/inventat/projecte`:\n', '5.4')
+    assert 'repositori:' in text and '`' not in text.splitlines()[0]
+    text = arrodoneix_text('# 5.2\n| mitjana | 1.0135501355 |\n```sh\npython -m nivell2.s52 --temps 1.234567\n```\n')
+    assert '# 5.2' in text and '| 1,01 |' in text and '--temps 1.234567' in text
+    assert arrodoneix_text('Cost: 1.740 minuts; 4.541 sessions.\n') == 'Cost: 1.740 minuts; 4.541 sessions.\n'
+
+
+def test_verifica_sense_sobreescriure_informes(tmp_path):
+    with patch.object(verificacio, 'verifica') as verify:
+        verificacio.verifica_pregunta('5.1', tmp_path, desa=False)
+    assert 'json_path' not in verify.call_args.kwargs
+    assert 'violacions_path' not in verify.call_args.kwargs
+
+
+def test_documents_auditoria_idempotents(tmp_path):
+    from nivell2.readmes import documenta
+    out = tmp_path/'5.2'
+    out.mkdir()
+    (out/'diagnostic.md').write_text('# Diagnòstic\n\nResultat anterior.\n')
+    text = documenta('5.2', out, '`execucio.json` registra els intents i les proves R1.\n')
+    diagnostic = (out/'diagnostic.md').read_text()
+    assert '## Prova de S04526' in diagnostic and 'R1 dura: INFEASIBLE' in diagnostic
+    assert 'dues sessions' in diagnostic and 'Resultat anterior.' in diagnostic
+    assert 'registra els intents i les proves R1' not in text
+    assert '80 de 231' in text and 'sense aquesta declaració' in text
+    assert documenta('5.2', out, text) == text
+    assert (out/'diagnostic.md').read_text() == diagnostic
+    degree = documenta('5.4', out, '41 sessions per encaixar el grau nou.\n')
+    assert '0 sessions mogudes' in degree and '1.740 minuts' in degree
+    assert documenta('5.4', out, degree) == degree
+
+
 @pytest.mark.parametrize('failure', ['junta.html', 'junta.md', 'junta.json', 'empremta', 'json_invalid'])
 def test_contracte_exigeix_junta_actualitzada(tmp_path, failure):
     prepara(tmp_path)
@@ -421,7 +496,7 @@ def test_xifres_nomes_admet_complements_54_del_resum(tmp_path, q):
     from nivell2 import xifres_lliurament as delivery
     out = tmp_path/q
     out.mkdir()
-    (out/'README.md').write_text('Introducció')
+    (out/'README.md').write_text('Introducció\n\n## Què empitjora i per què\n\n- general: 0 → 1; Explicació inventada.\n')
     (out/'resum.json').write_text(json.dumps({'sessions_52_mogudes': 2,
         'sessions_grau_nou_fora_franja': 3, 'declarats:R9-INVENTADA': 7}))
     (out/'xifres.csv').write_text('xifra,abans,despres\ndeclarats:R9-INVENTADA,0,9\nsessions_52_mogudes,0,99\nsessions_52_mogudes,0,99\n')
@@ -473,3 +548,24 @@ def test_contracte_rebutja_relaxacions_canviades(tmp_path, capsys):
     relax.write_text('restriccio,sessions,justificacio\nR9-INVENTADA,S90001,Inventada\n')
     assert not empaqueta.contracte(out, '5.2')
     assert "resum de la Junta desactualitzat; regenera'l" in capsys.readouterr().out
+
+
+def test_auditoria_decimals_i_ordres():
+    from nivell2.readmes import arrodoneix_text
+    text = ('Proposta 5.2; mitjana 2.933; percentatge 4.5 %.\n'
+            'Temps total: 70.233 s\n'
+            '```sh\npython -m nivell2.s52 --temps 70.233\n```\n')
+    result = arrodoneix_text(text)
+    assert '5.2; mitjana 2,93; percentatge 4,5 %' in result
+    assert 'Temps total: 70,2 s' in result
+    assert '--temps 70.233' in result
+
+
+def test_auditoria_explicacions_i_republicacio(tmp_path):
+    from nivell2.readmes import documenta
+    from nivell2.xifres_lliurament import EXPLICACIONS_54
+    text = documenta('5.2', tmp_path, 'Introducció.\n')
+    assert 'variant-referencia.csv és la proposta final desada' in text
+    assert 'sense redescobrir-la' in text
+    assert documenta('5.2', tmp_path, text) == text
+    assert 'regla oficial hi caben sense moure’n cap' in EXPLICACIONS_54['canvis_franja']

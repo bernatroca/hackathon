@@ -22,10 +22,10 @@ def calcula(semestre=2, setmana=None):
     total = float(resum.hores.sum()) / max(int(setmanes.setmanes.iloc[0]), 1)
     xifra = f'{total:,.1f}'.translate(str.maketrans({',': '.', '.': ','}))
     return Troballa(ID, 'Hores mortes: mitjana setmanal', f'{xifra} h',
-        f'{xifra} h mortes de mitjana setmanal al semestre, sumant les agendes d’alumnat.',
-        'La xifra és la mitjana de totes les setmanes del semestre i el detall és setmanal; són hores de grup, no per estudiant. Incloem PLAB i dobles, en SQL reunim les teories compatibles amb cada subgrup i sumem buits dins del torn, unint solapaments i comptant compartides un cop per agenda.',
+        f'{xifra} h mortes de mitjana per setmana lectiva al semestre, sumant les agendes d’alumnat.',
+        'La xifra és la mitjana del total del semestre per setmana lectiva i el detall és setmanal; són hores de grup, no per estudiant. Incloem PLAB i dobles, en SQL reunim les teories compatibles amb cada subgrup i sumem buits dins del torn, unint solapaments i comptant compartides un cop per agenda.',
         sql_setmanes + '\n-- Resum del semestre\n' + sql_resum + '\n-- Detall setmanal\n' + sql, taula, exemples, 'barres',
-        extra={'setmana': setmana, 'hores_semestre': float(resum.hores.sum())})
+        extra={'setmanes_lectives': int(setmanes.setmanes.iloc[0]), 'setmana': setmana, 'hores_semestre': float(resum.hores.sum())})
 
 
 def comprova():

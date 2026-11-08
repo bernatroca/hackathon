@@ -18,7 +18,9 @@ from nivell2.comprova_persones import comprova as comprova_persones
 from nivell2.verificacio import OPCIONS, VALIDES, ordre, ordre_oficial, verifica_pregunta
 
 OPCIONALS = ('relaxacions.csv', 'diagnostic.md', 'diagnostic-pista.md', 'resum.json', 'execucio.json',
-             'excepcions.csv', 'titulacions.csv')
+             'excepcions.csv', 'titulacions.csv', 'pista-inicial.csv', 'relaxacions-pista-inicial.csv',
+             'variant-referencia.csv', 'comparacio-lliurament.json', 'referencia_anterior.csv',
+             'comparacio.json', 'inicial_51.json')
 
 JUNTA = ('junta.html', 'junta.md', 'junta.json')
 
@@ -68,12 +70,13 @@ def empaqueta(sortida, *, sense_zip=False, arrel=RESULTATS):
     desti = sortida / 'lliurament-nivell2.zip'
     desti.unlink(missing_ok=True)
     valid = True
+    veredictes = []
     print('Pregunta | Veredicte | Contracte')
     print('--- | --- | ---')
     for pregunta in OPCIONS:
         try:
             # És la mateixa entrada que executa l'ordre publicada al README.
-            report = verifica_pregunta(pregunta, arrel)
+            report = verifica_pregunta(pregunta, arrel, desa=False)
             verdict = report.veredicte
             ok = verdict in VALIDES and not report.compten()
             genera(pregunta, arrel)
@@ -82,6 +85,7 @@ def empaqueta(sortida, *, sense_zip=False, arrel=RESULTATS):
             verdict, ok, complete = 'ERROR de verificació o contracte', False, False
         valid &= ok and complete
         print(f'{pregunta} | {verdict} | {"OK" if complete else "ERROR"}')
+        veredictes.append(f'{pregunta} | {verdict} | {"OK" if complete else "ERROR"}')
     try:
         # La funció és també l'entrada del CLI; només publiquem el veredicte.
         with contextlib.redirect_stdout(io.StringIO()):
@@ -97,15 +101,22 @@ def empaqueta(sortida, *, sense_zip=False, arrel=RESULTATS):
         temporary = sortida / 'lliurament-nivell2.zip.tmp'
         try:
             with zipfile.ZipFile(temporary, 'w', zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr('LLEGEIX-ME.md', '# Lliurament de la part 2\n\n'
+                    'Descomprimiu aquest ZIP a l’arrel del repositori. Les propostes i els README amb '
+                    'les ordres de generació i verificació són a `resultats/nivell2/5.1/`–`5.4/`.\n\n'
+                    'Pregunta | Veredicte | Contracte\n--- | --- | ---\n' + '\n'.join(veredictes) +
+                    '\n\nPersones: CORRECTE.\n\nResum de la Junta: `resultats/nivell2/junta/5.2/junta.html` '
+                    '(també `.md` i `.json`). Graelles: `graelles/index.html`.\n'
+                    'Calen el codi del repositori i el paquet oficial, que es lliuren separadament.\n')
                 for path in sorted(folder.glob('*.html')):
                     archive.write(path, f'graelles/{path.name}')
                 for name in JUNTA:
-                    archive.write(arrel / 'junta' / '5.2' / name, f'junta/5.2/{name}')
+                    archive.write(arrel / 'junta' / '5.2' / name, f'resultats/nivell2/junta/5.2/{name}')
                 for pregunta in OPCIONS:
                     for name in (*OBLIGATORIS, *OPCIONALS):
                         path = arrel / pregunta / name
                         if path.is_file():
-                            archive.write(path, f'nivell2/{pregunta}/{name}')
+                            archive.write(path, f'resultats/nivell2/{pregunta}/{name}')
             temporary.replace(desti)
         finally:
             temporary.unlink(missing_ok=True)

@@ -28,16 +28,32 @@ ETIQUETES = {
     'canvis_aula': 'Sessions amb canvi d’aula segons el verificador (canvis_aula)',
     'canvis_franja_vs_referencia': 'Canvis de dia o hora respecte de la referència',
     'canvis_aula_vs_referencia': 'Canvis d’aula respecte de la referència',
+    'canvis_torn_vs_referencia': 'Sessions que canvien de torn respecte de la referència',
+    'sessions_canvien_hora': 'Sessions que canvien de dia o hora respecte d’avui',
+    'sessions_nomes_canvien_aula': 'Sessions que només canvien d’aula respecte d’avui',
+    'sessions_canvien_hora_vs_referencia': 'Sessions que canvien de dia o hora respecte de la referència',
+    'sessions_nomes_canvien_aula_vs_referencia': 'Sessions que només canvien d’aula respecte de la referència',
+    'incompliments_declarats': 'Incompliments declarats',
+    'incompliments_heretats': 'Incompliments heretats',
+    'aules_assignades': 'Sessions que reben una aula que faltava',
+    'sessions_grau_nou_fora_franja': 'Sessions noves fora de la franja original',
+    'sessions_52_mogudes': 'Sessions del 5.2 mogudes',
 }
 
 
 def etiqueta(clau):
+    for prefix, text in (('heretats:', 'Incompliments heretats: '),
+                         ('declarats:', 'Incompliments declarats: '),
+                         ('relaxacions:', 'Relaxacions declarades: ')):
+        if clau.startswith(prefix):
+            return text + clau.split(':', 1)[1]
     if clau.startswith('incompliments:'):
         return 'Incompliments que compten: ' + clau.split(':', 1)[1]
     if clau.startswith('relaxacio:'):
         return 'Relaxacions declarades: ' + clau.split(':', 1)[1]
     if clau.startswith('pitjor_cohort_'):
-        return 'Titulació i curs amb més canvis de ' + clau.removeprefix('pitjor_cohort_').replace('_pct', ' (%)')
+        canvi = clau.removeprefix('pitjor_cohort_').replace('_pct', ' (%)')
+        return 'Titulació i curs amb més canvis ' + ("d’" if canvi.startswith('aula') else 'de ') + canvi
     return ETIQUETES.get(clau, clau)
 
 
@@ -76,8 +92,10 @@ def main(argv=None):
                 a = abans.get(r['cohort'])
                 av = f"{format_valor(a[canvi + '_pct'])}% ({a[canvi]}/{a['sessions']})" if a else 'No existia'
                 dv = f"{format_valor(r[canvi + '_pct'])}% ({r[canvi]}/{r['sessions']})"
-                print(f"{r['cohort']}: sessions que canvien de {canvi} | {av} | {dv}")
-        print('Els canvis es comparen amb avui; els percentatges per cohort inclouen totes les seves sessions. '
+                preposicio = 'd’' if canvi == 'aula' else 'de '
+                print(f"{r['cohort']}: sessions que canvien {preposicio}{canvi} | {av} | {dv}")
+        print('Els canvis es comparen amb avui, excepte els indicadors etiquetats «respecte de la referència»; '
+              'els percentatges per cohort inclouen totes les seves sessions. '
               'Cada sessió compartida compta a cadascuna de les seves cohorts.')
         if args.sortida:
             escriu_csv(args.sortida, resultat.files)

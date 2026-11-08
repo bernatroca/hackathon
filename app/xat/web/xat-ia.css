@@ -286,3 +286,16 @@
 @media (prefers-reduced-motion: reduce) {
   .stApp { transition: none; }
 }
+
+/* Evidència de cada resposta, també en el plafó estret. */
+.xatia-consultes { margin-top: 12px; border-top: 1px solid var(--xatia-vora); padding-top: 8px; min-width: 0; }
+.xatia-consultes summary { cursor: pointer; color: var(--xatia-accent); font-weight: 600; }
+.xatia-consulta { min-width: 0; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--xatia-vora); }
+.xatia-consulta p { color: var(--xatia-text-fluix); overflow-wrap: anywhere; }
+.xatia-consulta pre { margin: 8px 0 0; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; }
+.xatia-consulta pre code { display: block; padding: 8px; }
+.xatia-consulta-ids { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.xatia-consulta-ids > span { min-width: 0; overflow-wrap: anywhere; }
+.xatia-consulta-ids button { font: inherit; padding: 4px 8px; border: 1px solid var(--xatia-vora); border-radius: 4px; background: var(--xatia-paper); color: var(--xatia-accent); cursor: pointer; }
+.xatia-consultes summary:focus-visible, .xatia-consulta-ids button:focus-visible { outline: 2px solid var(--xatia-accent); outline-offset: 3px; }
+.xatia-consulta-estat { color: var(--xatia-text-fluix); font-size: 0.9em; }

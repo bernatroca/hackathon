@@ -8,7 +8,8 @@ Copiat de com ho fa Armari (server/api/pregunta.php + ia.php), passat a Python:
 - Cada missatge es reconstrueix camp a camp: no hi passa res més del que toca.
 - Les captures només poden ser data URI d'imatge (les que fa el xat), poques i petites.
 - La resposta surt en directe com a esdeveniments (SSE):
-      data: {"tros": "..."}                      mentre escriu
+      data: {"estat": "Comprovant la resposta…"}  mentre acumula i comprova
+      data: {"tros": "..."}                      text final comprovat
       data: {"fi": true, "tallada": false, "model": "..."}   al final
       data: {"error": "..."}                     si es talla a mig camí
   Si falla ABANS de començar, és un error normal en JSON amb el seu codi (l'adaptador ho fa).
@@ -21,6 +22,7 @@ from __future__ import annotations
 
 import json
 import html
+import http.client
 import errno
 import importlib
 import subprocess
@@ -29,6 +31,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import os
 import re
 import time
+from decimal import Decimal
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -166,7 +169,9 @@ def valida(entrada: object) -> list[dict]:
 # Responses per defecte; IA_API=chat conserva Chat Completions.
 
 class ErrorIA(Exception):
-    pass
+    def __init__(self, missatge, estat=502):
+        super().__init__(missatge)
+        self.estat = estat
 
 
 def _input_responses(missatges):
@@ -201,7 +206,7 @@ def _trossos_api(p: dict, missatges: list[dict]) -> Iterator[tuple[str, object]]
                    input=_input_responses(missatges), max_output_tokens=4000)
     else:
         cos["messages"] = missatges
-    disponibles = _eines()
+    disponibles = None if p.get('sense_eines') else _eines()
     if disponibles is not None and disponibles.EINES:
         tools = disponibles.EINES
         if responses:
@@ -214,79 +219,109 @@ def _trossos_api(p: dict, missatges: list[dict]) -> Iterator[tuple[str, object]]
         headers={"Authorization": f"Bearer {p['clau']}", "Content-Type": "application/json", "Accept": "text/event-stream", "User-Agent": "espais-escola/1.0"},
         method="POST",
     )
-    try:
-        resposta = urllib.request.urlopen(peticio, timeout=TEMPS_MAXIM)
-    except urllib.error.HTTPError as e:
-        detall = ""
+    for intent in range(2):
         try:
-            dada = json.loads(e.read().decode("utf-8", "replace"))
-            error = dada.get("error") if isinstance(dada, dict) else None
-            missatge = error.get("message") if isinstance(error, dict) else None
-            if isinstance(missatge, str):
-                detall = _sense_claus(missatge)[:300]
-        except (OSError, ValueError):
-            pass
-        finally:
-            e.close()
-        raise ErrorIA(_sense_claus(
-            f"La IA ha respost HTTP {e.code}" + (f": {detall}" if detall else ".")
-        )) from None
-    except (OSError, urllib.error.URLError, TimeoutError) as e:
-        motiu = _sense_claus(str(getattr(e, "reason", e)))
-        raise ErrorIA(f"No s’ha pogut parlar amb la IA ({motiu}).") from None
+            resposta = urllib.request.urlopen(peticio, timeout=TEMPS_MAXIM)
+            break
+        except urllib.error.HTTPError as e:
+            saturada = e.code == 429 or 500 <= e.code <= 599
+            detall = ""
+            try:
+                dada = json.loads(e.read().decode("utf-8", "replace"))
+                error = dada.get("error") if isinstance(dada, dict) else None
+                missatge = error.get("message") if isinstance(error, dict) else None
+                if isinstance(missatge, str):
+                    detall = _sense_claus(missatge)[:300]
+            except (OSError, ValueError, http.client.HTTPException):
+                pass
+            finally:
+                e.close()
+            if saturada:
+                if intent == 0:
+                    time.sleep(2)
+                    continue
+                raise ErrorIA("La IA està saturada; torna-ho a provar d’aquí a uns segons.") from None
+            if e.code in (401, 403, 404):
+                raise ErrorIA("L’assistent no està ben configurat (clau o model del fitxer .env). Avisa qui manté l’app.",
+                              estat=424) from None
+            raise ErrorIA(_sense_claus(
+                f"La IA ha respost HTTP {e.code}" + (f": {detall}" if detall else ".")
+            )) from None
+        except (OSError, urllib.error.URLError, http.client.HTTPException) as e:
+            motiu = _sense_claus(str(getattr(e, "reason", e)))
+            raise ErrorIA(f"No s’ha pogut parlar amb la IA ({motiu}).") from None
 
     tallada, model = False, p["model"]
     crides = {}
-    with resposta:
-        for cru in resposta:
-            linia = cru.decode("utf-8", "replace").strip()
-            if not linia.startswith("data:"):
-                continue
-            dada = linia[5:].strip()
-            if dada == "[DONE]":
-                break
-            try:
+    acabat = False
+    try:
+        with resposta:
+            for cru in resposta:
+                linia = cru.decode("utf-8", "replace").strip()
+                if not linia.startswith("data:"):
+                    continue
+                dada = linia[5:].strip()
+                if dada == "[DONE]":
+                    acabat = True
+                    break
                 e = json.loads(dada)
-            except ValueError:
-                continue
-            if e.get("error") or e.get("type") in ("error", "response.failed"):
-                error = e.get("error") or (e.get("response") or {}).get("error") or e
-                detall = error.get("message", "") if isinstance(error, dict) else str(error)
-                raise ErrorIA("La IA ha retornat un error durant la resposta" +
-                              (": " + _sense_claus(detall)[:300] if detall else "."))
-            if responses:
-                tipus = e.get("type")
-                if tipus == "response.output_text.delta" and e.get("delta"):
-                    yield "tros", e["delta"]
-                elif tipus == "response.output_item.done":
-                    item = e.get("item") or {}
-                    if item.get("type") == "function_call":
-                        crides[e["output_index"]] = {
-                            "id": item["call_id"], "type": "function",
-                            "function": {"name": item["name"], "arguments": item["arguments"]},
-                            "_responses_item": item,
-                        }
-                elif tipus in ("response.completed", "response.incomplete"):
-                    resultat = e.get("response") or {}
-                    model = resultat.get("model") or model
-                    tallada = (resultat.get("status") == "incomplete" and
-                               (resultat.get("incomplete_details") or {}).get("reason") == "max_output_tokens")
-                continue
-            model = e.get("model") or model
-            eleccio = (e.get("choices") or [{}])[0]
-            delta = eleccio.get("delta") or {}
-            for fragment in delta.get("tool_calls") or []:
-                index = fragment.get("index", 0)
-                crida = crides.setdefault(index, {"id": "", "type": "function",
-                                                   "function": {"name": "", "arguments": ""}})
-                crida["id"] += fragment.get("id") or ""
-                for camp in ("name", "arguments"):
-                    crida["function"][camp] += (fragment.get("function") or {}).get(camp) or ""
-            tros = delta.get("content")
-            if tros:
-                yield "tros", tros
-            if eleccio.get("finish_reason") == "length":
-                tallada = True
+                if not isinstance(e, dict):
+                    raise ValueError("Esdeveniment SSE no vàlid")
+                if e.get("error") or e.get("type") in ("error", "response.failed"):
+                    error = e.get("error") or (e.get("response") or {}).get("error") or e
+                    detall = error.get("message", "") if isinstance(error, dict) else str(error)
+                    raise ErrorIA("La IA ha retornat un error durant la resposta" +
+                                  (": " + _sense_claus(detall)[:300] if detall else "."))
+                if responses:
+                    tipus = e.get("type")
+                    if tipus == "response.output_text.delta" and e.get("delta"):
+                        if not isinstance(e["delta"], str):
+                            raise ValueError("Text de resposta no vàlid")
+                        yield "tros", e["delta"]
+                    elif tipus == "response.output_item.done":
+                        item = e.get("item") or {}
+                        if item.get("type") == "function_call":
+                            index = e["output_index"]
+                            if type(index) is not int or not all(isinstance(item[k], str)
+                                    for k in ("call_id", "name", "arguments")):
+                                raise ValueError("Crida d’eina no vàlida")
+                            crides[index] = {
+                                "id": item["call_id"], "type": "function",
+                                "function": {"name": item["name"], "arguments": item["arguments"]},
+                                "_responses_item": item,
+                            }
+                    elif tipus in ("response.completed", "response.incomplete"):
+                        acabat = True
+                        resultat = e.get("response") or {}
+                        model = resultat.get("model") or model
+                        tallada = (resultat.get("status") == "incomplete" and
+                                   (resultat.get("incomplete_details") or {}).get("reason") == "max_output_tokens")
+                    continue
+                model = e.get("model") or model
+                eleccio = (e.get("choices") or [{}])[0]
+                delta = eleccio.get("delta") or {}
+                for fragment in delta.get("tool_calls") or []:
+                    index = fragment.get("index", 0)
+                    if type(index) is not int:
+                        raise ValueError("Índex de crida no vàlid")
+                    crida = crides.setdefault(index, {"id": "", "type": "function",
+                                                       "function": {"name": "", "arguments": ""}})
+                    crida["id"] += fragment.get("id") or ""
+                    for camp in ("name", "arguments"):
+                        crida["function"][camp] += (fragment.get("function") or {}).get(camp) or ""
+                tros = delta.get("content")
+                if tros:
+                    if not isinstance(tros, str):
+                        raise ValueError("Text de resposta no vàlid")
+                    yield "tros", tros
+                if eleccio.get("finish_reason"):
+                    acabat = True
+                if eleccio.get("finish_reason") == "length":
+                    tallada = True
+        if not acabat:
+            raise ErrorIA("S’ha perdut la connexió amb la IA a mig resposta. Torna-ho a provar.")
+    except (OSError, http.client.HTTPException, KeyError, TypeError, ValueError, AttributeError):
+        raise ErrorIA("S’ha perdut la connexió amb la IA a mig resposta. Torna-ho a provar.") from None
     if crides:
         yield "tools", [crides[i] for i in sorted(crides)]
     yield "fi", {"tallada": tallada, "model": model}
@@ -364,7 +399,7 @@ def _executa(crida):
 
 
 def _resum_consulta(nom, args, resultat):
-    """Traça per al navegador, separada dels missatges que rep la IA."""
+    """Traça compacta, guardada pel client per poder explicar la resposta anterior."""
     ids, vistos = [], set()
 
     def afegeix(valor):
@@ -392,45 +427,189 @@ def _resum_consulta(nom, args, resultat):
     resum = {"eina": nom, "args": args, "ok": resultat.get("ok") is True,
              "consulta": resultat.get("consulta", ""), "id_sessio": ids[:10],
              "total_id": len(ids)}
+    if resum["ok"]:
+        resum["resultat"] = _resum_resultat(resultat.get("resultat"))
     if not resum["ok"]:
         resum["error"] = _sense_claus(str(resultat.get("error", "")))[:200]
     return _neteja_secrets(resum)
+
+
+def _resum_resultat(valor, profunditat=0):
+    """Conserva recomptes i context; les mostres de files tenen un límit explícit."""
+    if profunditat > 6:
+        return None
+    if isinstance(valor, dict):
+        return {k: _resum_resultat(v, profunditat + 1) for k, v in valor.items()
+                if k != "id_sessio"}
+    if isinstance(valor, list):
+        return [_resum_resultat(v, profunditat + 1) for v in valor[:10]]
+    if isinstance(valor, str):
+        return valor[:300]
+    return valor
+
+
+_BLOC_CONSULTES = re.compile(r"<consultes_anteriors>.*?(?:</consultes_anteriors>|$)", re.S)
+_CODIS = re.compile(r"\b(?:[A-Z]\d+/\d{4}|[SN]\d+)\b", re.I)
+_NUMERO = re.compile(r"(?<![\w/])[-+]?\d+(?:[.,]\d+)*(?![\w/])")
+_TEMPORAL = re.compile(
+    r"\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}[/.-]\d{1,2}[/.-]\d{4}\b|"
+    r"\b\d{4}-W\d{2}\b|\b\d{1,2}:\d{2}(?::\d{2})?\b|"
+    r"\b(?:[01]?\d|2[0-3])[.][0-5]\d\b(?!\s*%)|"
+    r"(?<=a les )\d{1,2}(?:[.]\d{2})?\b|(?<=a las )\d{1,2}(?:[.]\d{2})?\b|"
+    r"\b\d{1,2}(?:[.]\d{2})?\s*(?:h\b|am\b|pm\b)|"
+    r"\b\d{1,2}(?=\s+(?:de |d['’])(?:gener|febrer|març|abril|maig|juny|juliol|agost|setembre|octubre|novembre|desembre)\b)",
+    re.I,
+)
+
+
+def _normalitza_numero(text):
+    # Punt amb grups de tres = milers; coma = decimal, tal com mostra l'app.
+    if re.fullmatch(r"[-+]?\d{1,3}(?:\.\d{3})+(?:,\d+)?", text):
+        text = text.replace(".", "")
+    return str(Decimal(text.replace(",", ".")).normalize())
+
+
+def _afirmacions(text):
+    """Tokens atòmics: els dígits d'una aula, data o sessió no avalen recomptes."""
+    text = html.unescape(text)
+    tokens = [(m.group().upper(), m.group()) for m in _CODIS.finditer(text)]
+    text = _CODIS.sub(" ", text)
+    text = _TEMPORAL.sub(" ", text)
+    for m in _NUMERO.finditer(text):
+        try:
+            tokens.append((_normalitza_numero(m.group()), m.group()))
+        except ArithmeticError:
+            continue
+    return tokens
+
+
+def _evidencia(valor):
+    """Llegeix valors, mai noms de columna ni números d'una consulta SQL."""
+    if isinstance(valor, dict):
+        return set().union(*(_evidencia(v) for k, v in valor.items()
+                             if k not in ("consulta", "error")))
+    if isinstance(valor, list):
+        return set().union(*(_evidencia(v) for v in valor))
+    if type(valor) in (int, float):
+        return {str(Decimal(str(valor)).normalize())}
+    if isinstance(valor, str):
+        return {token for token, _ in _afirmacions(valor)}
+    return set()
+
+
+def _evidencia_conversa(missatges):
+    fonts = set()
+    for m in missatges:
+        contingut = m.get("content", "")
+        text = contingut if isinstance(contingut, str) else "\n".join(
+            p.get("text", "") for p in (contingut or []) if p.get("type") == "text")
+        if m["role"] == "user":
+            fonts.update(_evidencia(text))
+        elif m["role"] == "assistant":
+            for bloc in _BLOC_CONSULTES.findall(text):
+                cru = bloc.removeprefix("<consultes_anteriors>").removesuffix("</consultes_anteriors>").strip()
+                try:
+                    valor = json.loads(cru)
+                except ValueError:
+                    valor = cru
+                fonts.update(_evidencia(valor))
+    return fonts
+
+
+def _no_comprovades(text, fonts):
+    return list(dict.fromkeys(original for token, original in _afirmacions(text) if token not in fonts))
+
+
+def _llengua(missatges):
+    ultima = next((m["content"] for m in reversed(missatges) if m["role"] == "user"), "")
+    text = ultima if isinstance(ultima, str) else " ".join(
+        p.get("text", "") for p in ultima if p.get("type") == "text")
+    text = re.sub(r"<(pantalla|context)>.*?</\1>", "", text, flags=re.S).lower()
+    paraules = set(re.findall(r'\w+', text))
+    catala = len(paraules & set(('quantes quants quines quins què quina quin aula aules hi ha té tenen '
+        'dilluns dimarts dimecres dijous divendres matí tarda lliures lliure grup avui proposta '
+        'aquesta aquest canvien canvis alumnes places sense més com ho saps').split()))
+    castella = len(paraules & set(('qué cuántas cuántos cuál cuáles cuantas cuantos cual cuales aulas '
+        'clases dónde donde horario tiene quiero puedes libre libres hay lunes martes miércoles '
+        'miercoles jueves viernes personas grupo clase enseña ensena').split()))
+    angles = len(paraules & set(('what which who where when how many room rooms free schedule please '
+        'available teaches group monday tuesday wednesday thursday friday students seats').split()))
+    if re.search(r'[¿¡ñ]', text):
+        return 'es'
+    if castella >= 2 and castella > max(catala, angles):
+        return 'es'
+    if angles >= 2 and angles > max(catala, castella):
+        return 'en'
+    return 'ca'
+
+
+_IDIOMES = {'ca': 'Respon en català.', 'es': 'Respon en castellà.', 'en': 'Answer in English.'}
+_LIMIT_VOLTES = {
+    'ca': 'No he pogut trobar la resposta amb les dades. Pots concretar més la pregunta?',
+    'es': 'No he podido encontrar la respuesta con los datos. ¿Puedes concretar más la pregunta?',
+    'en': 'I could not find the answer in the data. Could you make the question more specific?',
+}
 
 
 def _trossos(p: dict, missatges: list[dict]):
     if p["nom"] == "prova":
         yield from _trossos_prova(missatges)
         return
-    conversa = list(missatges)
-    for _ in range(6):
-        crides, contingut = [], []
-        final = {"tallada": False, "model": p["model"]}
-        for tipus, valor in _trossos_api(p, conversa):
-            if tipus == "tools":
-                crides.extend(valor)
-            elif tipus == "tros":
-                contingut.append(valor)
-                yield tipus, valor
-            elif tipus == "fi":
-                final = valor
-        if not crides:
+    llengua = _llengua(missatges)
+    conversa = [*missatges, {"role": "system", "content": _IDIOMES[llengua]}]
+    fonts = _evidencia_conversa(missatges)
+    for correccio in range(2):
+        for i in range(6):
+            crides, contingut = [], []
+            final = {"tallada": False, "model": p["model"]}
+            avisat = False
+            for tipus, valor in _trossos_api({**p, 'sense_eines': True} if i == 5 else p, conversa):
+                if tipus == "tools":
+                    crides.extend(valor)
+                elif tipus == "tros":
+                    contingut.append(valor)
+                    if not avisat:
+                        yield "estat", "Comprovant la resposta…"
+                        avisat = True
+                elif tipus == "fi":
+                    final = valor
+            if crides and i < 5:
+                conversa.append({"role": "assistant", "content": "".join(contingut) or None,
+                                 "tool_calls": crides})
+                for crida in crides:
+                    yield "eina", crida["function"]["name"]
+                    resultat = _executa(crida)
+                    if resultat.get("ok") is True:
+                        fonts.update(_evidencia(resultat))
+                    try:
+                        args = _arguments_crida(crida)
+                    except (ValueError, TypeError):
+                        args = {}
+                    yield "consulta", _resum_consulta(crida["function"]["name"], args, resultat)
+                    conversa.append({"role": "tool", "tool_call_id": crida["id"],
+                                     "content": "<dades>\n" + json.dumps(resultat, ensure_ascii=False)
+                                     + "\n</dades>"})
+                continue
+            # Cap fragment de text de la IA arriba al client abans de comprovar-lo.
+            text = _BLOC_CONSULTES.sub("", "".join(contingut)).strip()
+            if not text and i == 5:
+                text = _LIMIT_VOLTES[llengua]
+            pendents = _no_comprovades(text, fonts)
+            if pendents and correccio == 0:
+                conversa.append({"role": "assistant", "content": text})
+                conversa.append({"role": "system", "content":
+                    "Aquestes dades de la teva resposta no surten de cap resultat d'eina: "
+                    + json.dumps(pendents, ensure_ascii=False)
+                    + ". Torna a cridar l'eina adequada si cal i corregeix la resposta; no inventis."})
+                break
+            if pendents:
+                prefix = {'ca': 'No he pogut comprovar', 'es': 'No he podido comprobar',
+                          'en': 'I could not verify'}[llengua]
+                text += "\n(" + prefix + ": " + ", ".join(pendents) + ")"
+            if text:
+                yield "tros", text
             yield "fi", final
             return
-        conversa.append({"role": "assistant", "content": "".join(contingut) or None,
-                         "tool_calls": crides})
-        for crida in crides:
-            yield "eina", crida["function"]["name"]
-            resultat = _executa(crida)
-            try:
-                args = _arguments_crida(crida)
-            except (ValueError, TypeError):
-                args = {}
-            yield "consulta", _resum_consulta(crida["function"]["name"], args, resultat)
-            conversa.append({"role": "tool", "tool_call_id": crida["id"],
-                             "content": "<dades>\n" + json.dumps(resultat, ensure_ascii=False)
-                             + "\n</dades>"})
-    yield "tros", "No he pogut acabar la consulta en sis voltes. Pots concretar la pregunta?"
-    yield "fi", {"tallada": False, "model": p["model"]}
 
 
 def _sense_claus(text):
@@ -465,12 +644,12 @@ def flux(missatges: list[dict]) -> Iterator[str]:
     try:
         primer = next(trossos)
     except (ErrorIA, StopIteration) as exc:
-        raise ErrorXat(502, str(exc) or "Cap IA configurada.") from None
+        raise ErrorXat(getattr(exc, 'estat', 502), str(exc) or "Cap IA configurada.") from None
     return _segueix(primer, trossos)
 
 
 def _amb_reserva(missatges):
-    error = "Cap IA configurada."
+    error = ErrorIA("Cap IA configurada.")
     for p in proveidors():
         escrit = False
         try:
@@ -480,10 +659,10 @@ def _amb_reserva(missatges):
                 yield tipus, valor
             return
         except ErrorIA as exc:
-            error = _sense_claus(str(exc)) or "No s’ha pogut obtenir una resposta de la IA."
+            error = ErrorIA(_sense_claus(str(exc)) or "No s’ha pogut obtenir una resposta de la IA.", exc.estat)
             if escrit:
-                raise ErrorIA(error) from None
-    raise ErrorIA(error)
+                raise error from None
+    raise error
 
 
 def _filtra_consultes(consultes):
@@ -512,13 +691,16 @@ def _segueix(primer, trossos) -> Iterator[str]:
             if tipus == "tros":
                 escrit = True
                 yield _sse({"tros": valor})
+            elif tipus == "estat":
+                yield _sse({"estat": valor})
             elif tipus == "eina":
                 yield _sse({"eina": valor})
             elif tipus == "consulta":
                 consultes.append(valor)
             elif tipus == "fi":
                 if not escrit:
-                    yield _sse({"error": "La IA no ha tornat cap resposta."})
+                    yield _sse({"error": ("La resposta s’ha tallat abans d’escriure res. Prova una pregunta més concreta."
+                                          if valor.get("tallada") else "La IA no ha tornat cap resposta.")})
                     return
                 if consultes:
                     yield _sse({"consultes": _filtra_consultes(consultes)})
@@ -609,51 +791,35 @@ class Handler(BaseHTTPRequestHandler):
             pass
 
 
+class _ServidorLocal(ThreadingHTTPServer):
+    allow_reuse_address = False
+
+
 _servidor = None
-_url_reutilitzada = None
 _fil = None
 _pany = threading.Lock()
 
 
-def _respon_xat(url: str, timeout: float) -> bool:
-    """Comprova la salut d'un servidor local sense propagar errors de connexió."""
-    try:
-        with urllib.request.urlopen(url, timeout=timeout) as resposta:
-            dada = json.load(resposta)
-        return isinstance(dada, dict) and dada.get("ok") is True
-    except (OSError, ValueError):
-        return False
-
-
-def arrenca(port: int = 8502) -> str:
-    """Arrenca una sola instància local per procés, també amb crides concurrents."""
-    global _servidor, _fil, _url_reutilitzada
+def arrenca(port: int = 0) -> str:
+    """Un servidor propi per procés, amb port lliure per defecte i URL real."""
+    global _servidor, _fil
     with _pany:
         if _servidor is not None:
             if _fil is not None and _fil.is_alive():
                 return f"http://127.0.0.1:{_servidor.server_address[1]}/api/xat"
             _servidor.server_close()
             _servidor, _fil = None, None
-        if _url_reutilitzada is not None:
-            if _respon_xat(_url_reutilitzada, timeout=0.5):
-                return _url_reutilitzada
-            _url_reutilitzada = None
-        if _servidor is None:
-            carrega_env()
-            try:
-                servidor = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-            except OSError as exc:
-                if exc.errno != errno.EADDRINUSE:
-                    raise
-                url = f"http://127.0.0.1:{port}/api/xat"
-                if not _respon_xat(url, timeout=2):
-                    raise RuntimeError(
-                        f"El port {port} està ocupat i no respon com un servidor del xat. "
-                        "Allibera el port o tria’n un altre."
-                    ) from None
-                _url_reutilitzada = url
-                return url
-            fil = threading.Thread(target=servidor.serve_forever, daemon=True)
-            fil.start()
-            _servidor, _fil = servidor, fil
-        return f"http://127.0.0.1:{_servidor.server_address[1]}/api/xat"
+        carrega_env()
+        try:
+            servidor = _ServidorLocal(("127.0.0.1", port), Handler)
+        except OSError as exc:
+            if exc.errno != errno.EADDRINUSE:
+                raise
+            raise RuntimeError(
+                f"El port {port} està ocupat per un altre servei. "
+                "Tria un altre port o deixa que el sistema n’assigni un de lliure."
+            ) from None
+        fil = threading.Thread(target=servidor.serve_forever, daemon=True)
+        fil.start()
+        _servidor, _fil = servidor, fil
+        return f"http://127.0.0.1:{servidor.server_address[1]}/api/xat"

@@ -139,6 +139,20 @@ def test_assignacions_i_exclusions_com_verificador():
     assert all(r['aules_assignades'] == 1 for r in cohorts)
 
 
+def test_relaxacions_mateixa_prova_amb_cami_referencia():
+    b = base_petita()
+    p = Proposta.de_base(b)
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / 'relax.csv'
+        path.write_text('restriccio,sessions,justificacio\n'
+                        'R1-TORN,,Vegeu diagnostic.md\n'
+                        'R1-TORN,,Vegeu ../5.2/diagnostic.md\n')
+        x, _ = calcula(p, b, INFORME, relaxacions=path)
+    assert x['relaxacio:R1-TORN: Vegeu diagnostic.md'] == 2
+    assert x['relaxacions_declarades'] == 2
+    assert not any('../5.2/' in key for key in x)
+
+
 class TestXifres(unittest.TestCase):
     """Adaptador perquè les mateixes proves funcionin sense dependències."""
 

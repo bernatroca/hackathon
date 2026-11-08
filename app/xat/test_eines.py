@@ -1,4 +1,4 @@
-"""Només dades inventades, creades sota tmp_path."""
+"""Dades inventades sota tmp_path i regressió oficial sense exposar files."""
 import copy
 import sys
 from pathlib import Path
@@ -33,7 +33,7 @@ def paquet(tmp_path, monkeypatch):
         (tmp_path/a/'resum.json').write_text('{"incompliments_no_declarats": 0}')
     (tmp_path/'activitats.csv').write_text('activitat_id,grup\nA1,TE/81\n')
     con = duckdb.connect()
-    con.execute("CREATE TABLE sessions AS SELECT 'S'||i AS id_sessio, DATE '2027-02-08' AS data, 900 AS ini_min, 960 AS fi_min, '' AS aules_addicionals_partida FROM range(65) t(i)")
+    con.execute("CREATE TABLE sessions AS SELECT 'S'||i AS id_sessio, DATE '2027-02-08' AS data, 900 AS ini_min, 960 AS fi_min, '' AS aules_addicionals_partida, '900001' AS codi, 'Assignatura inventada' AS assignatura FROM range(65) t(i)")
     con.execute("CREATE TABLE aules AS SELECT 'Q9/0001' AS aula, 60 AS capacitat")
     monkeypatch.setattr(e.dades, 'connexio', lambda: con)
     monkeypatch.setattr(e.nb, 'carrega_oficial', lambda *args, **kwargs: copy.deepcopy(b))
@@ -46,7 +46,7 @@ def paquet(tmp_path, monkeypatch):
 
 
 def test_contracte_i_errors(paquet):
-    assert len(e.EINES) == 7
+    assert len(e.EINES) == 8
     json.dumps(e.EINES)
     for nom, args in [('?', {}), ('horari_grup', {}), ('xifra', {'id': 'inexistent'}), ('consulta_sql', None), ('prova_canvi', {'apartat': '5.2', 'canvi': {'tipus': 'desconegut'}})]:
         r = e.executa(nom, args)
@@ -156,7 +156,13 @@ def test_resultat_sense_resum_conserva_informe(paquet, apartat):
     (carpeta / 'informe.json').write_text(json.dumps(informe))
     r = e.executa('resultat_proposta', {'apartat': apartat})
     assert r['ok'], r
-    assert r['resultat'] == informe
+    esperat = dict(informe)
+    if apartat == '5.4':
+        from nivell2.readmes import NOTA_GRAU_NOU
+        esperat['motius'] = {'sessions_grau_nou_fora_franja': NOTA_GRAU_NOU}
+    if apartat == '5.3':
+        esperat['imprevistos'] = e.imprevistos_53()['resultat']
+    assert r['resultat'] == esperat
     assert 'resum.json' not in r['consulta']
     assert r['id_sessio'] == []
 
@@ -258,7 +264,7 @@ def test_metadades_xifres_sense_calcular(monkeypatch):
     monkeypatch.setattr(e.dades, 'connexio', prohibit)
     ids, desc = e._metadades_xifres()
     assert ids == ['fora-torn', 'inventada']
-    assert desc.startswith("Primer opció per a xifres generals de l'horari d'avui (part 1).")
+    assert desc.startswith("Només l'horari d'avui (part 1), mai d'una proposta.")
     assert 'fora-torn: quantes sessions són al torn equivocat' in desc
     assert '\ninventada: Pregunta inventada' in desc
 
@@ -442,6 +448,8 @@ def test_recomptes_abans_limit_i_per_cohort(paquet, monkeypatch):
     graella = e._modul('components.graella')
     cella = graella.celles(paquet[0], paquet[1], dt.date(2027, 2, 8), cohort='GXX:3r', linia=paquet[0].sessions['S1'].linia)[0]
     rows = [replace(cella, id_sessio=f'I{i}', aula='Q9/0001' if i < 2 else '') for i in range(59)]
+    for fila in rows:
+        paquet[0].sessions[fila.id_sessio] = replace(paquet[0].sessions['S1'], id=fila.id_sessio)
     monkeypatch.setattr(graella, 'celles', lambda *a, **kw: rows)
     r = e.executa('horari_grup', {'grup': '81'})['resultat']
     assert len(r['horaris'][0]['files']) == 50
@@ -522,3 +530,385 @@ def test_descripcions_recomptes():
         f = definicio['function']
         if f['name'] in ('horari_grup', 'ocupacio_aula', 'aules_lliures'):
             assert 'fes servir `recomptes` per a qualsevol número' in f['description'].lower()
+
+
+# Regressions de l’auditoria: totes les files següents són inventades.
+@pytest.mark.parametrize('funcio', ['CURRENT_DATE', 'current_timestamp', 'now()', 'today()'])
+def test_b1_sql_rebutja_rellotge(paquet, funcio):
+    r = e.executa('consulta_sql', {'sql': f'SELECT count(*) FROM sessions WHERE data = {funcio}'})
+    assert r == {'ok': False, 'error': 'avui = horari de partida; no filtris per la data del sistema'}
+
+
+def test_b1_sql_rellotge_nomes_codi(paquet):
+    r = e.executa('consulta_sql', {'sql': "SELECT 'CURRENT_DATE now() today()' AS text /* current_timestamp */"})
+    assert r['ok']
+
+
+@pytest.mark.parametrize('torn,valor', [('matí', 'mati'), ('MATI', 'mati'), ('morning', 'mati'),
+                                       ('tarda', 'tarda'), ('AFTERNOON', 'tarda')])
+def test_b1_sql_torns(paquet, torn, valor):
+    e.dades.connexio().execute("ALTER TABLE sessions ADD COLUMN torn_actual VARCHAR DEFAULT 'mati'")
+    r = e.executa('consulta_sql', {'sql': f"SELECT count(*) AS n FROM sessions WHERE torn_actual = '{torn}'"})
+    assert r['ok']
+    assert r['resultat']['files'][0]['n'] == (65 if valor == 'mati' else 0)
+    assert f"'{valor}'" in r['consulta']
+
+
+def test_b1_sql_abast_propostes_i_anuals(paquet):
+    e.dades.connexio().execute("ALTER TABLE sessions ADD COLUMN semestre VARCHAR DEFAULT 'C/2'")
+    for sql, abast in [
+        ("SELECT count(*) FROM proposta_5_2 WHERE h_ini >= '14:30'", '2n semestre'),
+        ('WITH p AS (SELECT * FROM proposta_5_2) SELECT count(*) FROM p', '2n semestre'),
+        ("SELECT count(*) FROM sessions WHERE semestre = 'C/2'", 'assignatures C/2, sense les anuals'),
+        ('SELECT count(*) FROM proposta_5_2 CROSS JOIN sessions', 'tot el curs (els dos semestres)'),
+    ]:
+        r = e.executa('consulta_sql', {'sql': sql})
+        assert r['ok'], r
+        assert r['resultat']['abast'] == abast
+    assert 'aula_partida NULL = sessió sense aula' in e._DESCRIPCIO_SQL
+    assert 'no vol dir sense aula' in e._DESCRIPCIO_SQL
+    assert 'sessions sense aula: quantes' in e._DESCRIPCIO_XIFRA
+
+
+def test_b3_aules_tancades_i_ocupacio(paquet):
+    from horaris.model import Tancament
+    b, _ = paquet
+    b.tancaments.append(Tancament('Q9/0003', dt.date(2027, 2, 8), dt.date(2027, 2, 10)))
+    r = e.executa('aules_lliures', dict(data='2027-02-08', hora_ini='15', durada_min=60,
+                                      places_min=0, tipus='Seminaris', proposta='5.3'))
+    assert r['ok'] and r['resultat']['total'] == 0
+    r = e.executa('ocupacio_aula', dict(aula='Q9/0003', proposta='5.3'))
+    assert r['ok']
+    assert r['resultat']['tancada'] == ['2027-02-08', '2027-02-09', '2027-02-10']
+    r = e.executa('ocupacio_aula', dict(aula='Q9/0003', dia='X', proposta='5.3'))
+    assert r['resultat']['tancada'] == ['2027-02-10']
+
+
+def test_b13_reserva_total_sense_filtre_places_i_limit(paquet):
+    b, _ = paquet
+    for i in range(7):
+        aula = f'Q9/1{i:03}'
+        b.aules[aula] = Aula(aula, 'Q9', 'Aules docents', 30+i*10)
+    r = e.executa('aules_lliures', dict(dia='L', hora_ini='15', durada_min=60, places_min=40))
+    assert r['ok']
+    resultat = r['resultat']
+    assert resultat['recomptes'] == {'total_aules': 6, 'ordinaries_lliures': 7,
+        'respecta_reserva': True, 'sessions_sense_aula_a_la_franja': 0}
+    assert len(resultat['files']) == 5
+    assert [a['capacitat'] for a in resultat['files']] == [40, 50, 60, 70, 80]
+    for aula in list(b.aules):
+        if aula.startswith('Q9/1') and aula not in ('Q9/1000', 'Q9/1001'):
+            del b.aules[aula]
+    r = e.executa('aules_lliures', dict(dia='L', hora_ini='15', durada_min=60, places_min=0))
+    assert r['resultat']['recomptes']['ordinaries_lliures'] == 2
+    assert r['resultat']['recomptes']['respecta_reserva'] is False
+    assert all(a['respecta_reserva'] is False for a in r['resultat']['files'])
+
+
+def test_b13_demanda_sense_aula_i_dates(paquet):
+    b, _ = paquet
+    b.sessions['S1'].aula = ''
+    b.sessions['S2'].aula = ''
+    b.sessions['S2'].sense_espai = True
+    r = e.executa('aules_lliures', dict(dia='L', hora_ini='15', durada_min=120,
+                                      places_min=0, tipus='Seminaris'))
+    assert r['ok']
+    assert r['resultat']['recomptes']['sessions_sense_aula_a_la_franja'] == 1
+    for data in ('2026-10-14', '2027-02-09'):
+        r = e.executa('aules_lliures', dict(data=data, hora_ini='15', durada_min=60, places_min=0))
+        assert not r['ok']
+        assert 'Les dades són del 2n semestre (08/02/2027–08/02/2027)' in r['error']
+
+
+def test_f3_avissos_dates_i_grup(paquet):
+    r = e.executa('prova_canvi', dict(apartat='5.2', canvi={
+        'tipus': 'imprevist', 'sessions_cancel_lades': [
+            {'id_sessio': 'S3', 'recuperar_fins': '2027-02-10'}]}))
+    assert r['ok']
+    resultat = r['resultat']
+    assert resultat['data_avis'] == dt.date.today().isoformat()
+    canvi = next(c for c in resultat['canvis'] if c['id_sessio'] == 'S3')
+    assert canvi['assignatura'] == 'Assignatura inventada'
+    assert canvi['grup'] == 'Grup 82 · teoria' and canvi['tipus'] == 'TE'
+    assert canvi['abans']['data'] == '2027-02-08'
+    assert '2027-02-08' < canvi['despres']['data'] <= '2027-02-10'
+    assert canvi['abans']['h_ini'] == '15:00' and canvi['abans']['h_fi'] == '16:00'
+    assert '08/02/2027' in canvi['abans']['lloc']
+    assert 'Q9/' in canvi['despres']['lloc']
+
+
+def test_f3_sense_proposta_explica_aforament(paquet):
+    r = e.executa('prova_canvi', dict(apartat='5.2', canvi={'tipus': 'imprevist',
+        'grups_creixen': [{'codi': '900001', 'grup': 'TE/81', 'alumnes': 200}]}))
+    assert r['ok']
+    assert r['resultat']['veredicte'] == 'SENSE PROPOSTA'
+    assert '200 places' in r['resultat']['motiu'] and '60' in r['resultat']['motiu']
+    assert r['resultat']['data_avis'] == dt.date.today().isoformat()
+
+
+def test_d8_fixades_excepcions_no_conflictes_nous(paquet):
+    b, _ = paquet
+    b.sessions['S1'].fixada = 'R1: inventada'
+    r = e.executa('prova_canvi', dict(apartat='5.2', canvi={'tipus': 'imprevist',
+        'aules_tancades': [{'aula': 'Q9/0001', 'data_ini': '2027-02-08', 'data_fi': '2027-02-08'}]}))
+    assert r['ok']
+    resultat = r['resultat']
+    assert resultat['total'] == 2
+    assert resultat['total_incompliments_nous'] == 0
+    assert resultat['nous_per_regla'] == {}
+    assert resultat['veredicte'] == 'VALIDA AMB EXCEPCIONS INEVITABLES'
+    assert resultat['total_excepcions_inevitables'] == 1
+    assert resultat['excepcions_inevitables'][0]['declarada'] is True
+    assert 'mateixa hora' in resultat['excepcions_inevitables'][0]['motiu']
+
+
+def test_d8_incompliments_heretats_no_son_nous(paquet):
+    b, _ = paquet
+    b.sessions['S1'].torn = 'mati'
+    r = e.executa('prova_canvi', dict(apartat='5.2', canvi={
+        'tipus': 'moure', 'id_sessio': 'S1', 'aula': 'Q9/0003'}))
+    assert r['ok']
+    assert r['resultat']['veredicte_abans'] == 'NO VALIDA'
+    assert r['resultat']['total_incompliments_nous'] == 0
+
+
+def test_d8_regressio_escenari_oficial():
+    # Executa el projecte; no imprimeix cap fila ni modifica els resultats.
+    r = e.executa('prova_canvi', {'apartat': '5.2', 'canvi': {'tipus': 'imprevist',
+        'aules_tancades': [{'aula': 'Q1/1003', 'data_ini': '2027-03-10', 'data_fi': '2027-03-10'}]}})
+    assert r['ok'], 'La simulació oficial ha fallat; cap fila exposada.'
+    resultat = r['resultat']
+    assert resultat['total'] == 6
+    assert resultat['total_excepcions_inevitables'] == 2
+    assert resultat['total_incompliments_nous'] == 0
+    assert resultat['veredicte'] == 'VALIDA AMB EXCEPCIONS INEVITABLES'
+
+
+def test_b2_f2_imprevistos_de_dades_i_referencia(paquet, monkeypatch):
+    from horaris.model import Tancament
+    b, p52 = paquet
+    contingencies = copy.deepcopy(b)
+    contingencies.tancaments.append(Tancament('Q9/0001', dt.date(2027, 2, 8), dt.date(2027, 2, 8)))
+    contingencies.sessions['S1'].alumnes = 55
+    contingencies.cancellades['S3'] = dt.date(2027, 2, 10)
+    # L’aula de referència 5.2 difereix de l’horari de partida.
+    p52.files['S2'].aula = 'Q9/0002'
+    p52.escriu(e.nb.RESULTATS_PRINCIPAL/'5.2'/'proposta.csv')
+    p53 = copy.deepcopy(p52)
+    p53.files['S1'].aula = 'Q9/0003'
+    p53.files['S3'].dia = 'M'
+    p53.files['S3'].data = '2027-02-09'
+    p53.escriu(e.nb.RESULTATS_PRINCIPAL/'5.3'/'proposta.csv')
+    monkeypatch.setattr(e.nb, 'carrega_oficial', lambda escenari=None: copy.deepcopy(
+        contingencies if escenari == e.nb.CONTINGENCIES else b))
+    r = e.executa('imprevistos_53', {})
+    assert r['ok']
+    resultat = r['resultat']
+    assert resultat['aules_tancades'][0]['total'] == 1
+    sessio = resultat['aules_tancades'][0]['sessions'][0]
+    assert sessio['id_sessio'] == 'S1' and sessio['assignatura'] == 'Assignatura inventada'
+    assert sessio['abans']['aula'] == 'Q9/0001' and sessio['despres']['aula'] == 'Q9/0003'
+    assert resultat['alumnes'][0]['alumnes_abans'] == 20
+    assert resultat['alumnes'][0]['alumnes'] == 55
+    assert resultat['cancellades'][0]['sessions'][0]['despres']['data'] == '2027-02-09'
+    assert e.executa('resultat_proposta', {'apartat': '5.3'})['resultat']['imprevistos'] == resultat
+
+
+@pytest.mark.parametrize('apartat', e.APARTATS)
+def test_b3_d6_xifres_csv_de_cada_proposta(paquet, apartat):
+    # Xifres inventades diferents per proposta: no s’han de prendre d’avui ni del resum.
+    carpeta = e.nb.RESULTATS_PRINCIPAL / apartat
+    n = e.APARTATS.index(apartat) + 7
+    (carpeta / 'xifres.csv').write_text(
+        f'xifra,abans,despres\nveredicte,NO VALIDA,VALIDA\ncanvis_torn,0,{n}\n'
+        'heretats:R1-TORN,12,3\ndeclarats:R1-TORN,0,3\ncanvis_franja,0,9\n'
+        'canvis_aula,0,11\nactivitats_rutinaries_pct,90.5,95.25\n', encoding='utf-8')
+    r = e.executa('resultat_proposta', {'apartat': apartat})
+    assert r['ok'], r
+    xifres = {f['xifra']: (f['abans'], f['despres']) for f in r['resultat']['xifres']}
+    assert xifres['canvis_torn'] == (0, n)
+    assert xifres['veredicte'] == ('NO VALIDA', 'VALIDA')
+    assert xifres['heretats:R1-TORN'] == (12, 3)
+    assert xifres['activitats_rutinaries_pct'] == (90.5, 95.25)
+    assert 'xifres.csv' in r['consulta']
+    if apartat == '5.4':
+        motiu = r['resultat']['motius']['sessions_grau_nou_fora_franja']
+        assert '1.740' in motiu and 'PAUL/91' in motiu and '0 sessions mogudes' in motiu
+
+
+def test_b3_d6_xifra_nomes_avui(paquet, monkeypatch):
+    from nivell1 import troballes
+    import pandas as pd
+    t = troballes.Troballa('inventada', 'Prova', '1', 'Una classe', 'Recompte', 'SELECT 1', pd.DataFrame())
+    monkeypatch.setattr(troballes, 'moduls', lambda: [type('Modul', (), {'ID': 'inventada'})])
+    monkeypatch.setattr(troballes, 'una', lambda *a: t)
+    assert 'no és cap proposta' in e.xifra('inventada')['resultat']['abast']
+    assert "mai d'una proposta" in e._DESCRIPCIO_XIFRA
+
+
+def test_b3_d6_sql_torn_actual_proposta(paquet):
+    b, p = paquet
+    b.sessions['N90001'] = copy.deepcopy(b.sessions['S1'])
+    b.sessions['N90001'].id = 'N90001'
+    p.files['N90001'] = copy.deepcopy(p.files['S1'])
+    p.files['N90001'].h_ini = '08:30'
+    p.escriu(e.nb.RESULTATS_PRINCIPAL / '5.4' / 'proposta.csv')
+    r = e.consulta_sql("SELECT torn_actual, count(*) AS n FROM proposta_5_4 WHERE id_sessio LIKE 'N%' GROUP BY torn_actual")
+    assert r['ok']
+    assert r['resultat']['files'] == [{'torn_actual': 'mati', 'n': 1}]
+
+
+def test_f3_b8_aforament_no_crida_solver(paquet, monkeypatch):
+    import nivell2.reparacio as reparacio
+    def prohibit(*args, **kwargs):
+        pytest.fail('Un creixement superior a qualsevol aula no ha de cridar el solver')
+    monkeypatch.setattr(reparacio, 'repara', prohibit)
+    r = e.executa('prova_canvi', {'apartat': '5.2', 'canvi': {'tipus': 'imprevist',
+        'grups_creixen': [{'codi': '900001', 'grup': 'TE/81', 'alumnes': 200}]}})
+    assert r['ok']
+    assert r['resultat']['estat'] == 'INFEASIBLE'
+    assert '200 places' in r['resultat']['motiu'] and '60' in r['resultat']['motiu']
+
+
+def test_f3_diagnostic_aforament_en_intent_anterior(paquet, monkeypatch):
+    import nivell2.reparacio as reparacio
+    monkeypatch.setattr(reparacio, 'repara', lambda *a: reparacio.Reparacio(None, 'UNKNOWN',
+        {'intents': [{'diagnostic': {'alumnes': 50, 'aules_amb_aforament': 0}}, {'diagnostic': {}}]}))
+    r = e.executa('prova_canvi', {'apartat': '5.2', 'canvi': {'tipus': 'imprevist',
+        'grups_creixen': [{'codi': '900001', 'grup': 'TE/81', 'alumnes': 50}]}})
+    assert r['ok'] and '50 places' in r['resultat']['motiu']
+    assert 'temps' not in r['resultat']['motiu']
+
+
+def test_f3_recuperacio_pressupost_30_segons(paquet, monkeypatch):
+    import nivell2.reparacio as reparacio
+    pressupostos = []
+    original = reparacio.repara
+    def repara(p, canvi):
+        pressupostos.append(canvi.temps_s)
+        return original(p, canvi)
+    monkeypatch.setattr(reparacio, 'repara', repara)
+    r = e.executa('prova_canvi', {'apartat': '5.2', 'canvi': {'tipus': 'imprevist',
+        'sessions_cancel_lades': [{'id_sessio': 'S3', 'recuperar_fins': '2027-02-10'}]}})
+    assert r['ok'] and r['resultat']['total'] > 0
+    assert pressupostos == [30]
+
+
+@pytest.mark.parametrize('tipus', ['seminari', 'seminaris', 'SEMINARIS', 'Seminaris'])
+def test_b8_tipus_singular_i_minuscules(paquet, tipus):
+    r = e.executa('aules_lliures', {'dia': 'L', 'hora_ini': '17', 'durada_min': 60,
+        'places_min': 0, 'tipus': tipus})
+    assert r['ok'] and r['resultat']['total'] == 3
+
+
+def test_b8_resol_nom_assignatura_i_error_codi(paquet):
+    r = e.executa('prova_canvi', {'apartat': '5.2', 'canvi': {'tipus': 'imprevist',
+        'grups_creixen': [{'codi': 'Assignatura inventada', 'grup': 'TE/81', 'alumnes': 30}]}})
+    assert r['ok'], r
+    r = e.executa('prova_canvi', {'apartat': '5.2', 'canvi': {'tipus': 'imprevist',
+        'grups_creixen': [{'codi': 'TE', 'grup': 'TE/81', 'alumnes': 30}]}})
+    assert not r['ok']
+    assert 'el grup TE/81 existeix' in r['error'] and '900001 (Assignatura inventada)' in r['error']
+
+
+def test_f20_tancament_per_hores(paquet):
+    r = e.executa('prova_canvi', {'apartat': '5.2', 'canvi': {'tipus': 'imprevist',
+        'aules_tancades': [{'aula': 'Q9/0001', 'data_ini': '2027-02-08', 'data_fi': '2027-02-08',
+                            'hora_ini': '15', 'hora_fi': '16'}]}})
+    assert r['ok'], r
+    assert r['resultat']['total'] == 1
+    assert r['resultat']['canvis'][0]['id_sessio'] == 'S1'
+
+
+@pytest.mark.parametrize('hores,camp', [
+    ({'hora_ini': 'xyz', 'hora_fi': '12'}, 'hora_ini'),
+    ({'hora_ini': '12', 'hora_fi': 'xyz'}, 'hora_fi'),
+    ({'hora_ini': '12', 'hora_fi': '10'}, 'hora_fi'),
+    ({'hora_ini': '12', 'hora_fi': '12'}, 'hora_fi'),
+])
+def test_f20_hores_invalides(paquet, hores, camp):
+    r = e.executa('prova_canvi', {'apartat': '5.2', 'canvi': {'tipus': 'imprevist',
+        'aules_tancades': [{'aula': 'Q9/0001', 'data_ini': '2027-02-08', 'data_fi': '2027-02-08', **hores}]}})
+    assert not r['ok'] and camp in r['error']
+
+
+def test_d8_horari_identifica_activitat_per_moure(paquet):
+    r = e.executa('horari_grup', {'grup': '81'})
+    assert r['ok']
+    activitat = r['resultat']['horaris'][0]['files'][0]['activitat_id']
+    assert activitat == 'A1'
+    r = e.executa('prova_canvi', {'apartat': '5.2', 'canvi': {
+        'tipus': 'moure', 'activitat_id': activitat, 'hora_ini': '17'}})
+    assert r['ok'] and r['resultat']['total'] == 2
+
+
+def test_f12_d7_classes_suport_i_motiu(paquet, monkeypatch):
+    b, p52 = paquet
+    contingencies = copy.deepcopy(b)
+    contingencies.sessions['S3'].alumnes = 55
+    p53 = copy.deepcopy(p52)
+    p53.files['S3'].aula = 'Q9/0001'
+    p53.files['S1'].aula = 'Q9/0003'
+    p53.escriu(e.nb.RESULTATS_PRINCIPAL / '5.3' / 'proposta.csv')
+    monkeypatch.setattr(e.nb, 'carrega_oficial', lambda escenari=None: copy.deepcopy(
+        contingencies if escenari == e.nb.CONTINGENCIES else b))
+    r = e.imprevistos_53()['resultat']
+    assert r['classes_de_suport']['total'] == 1
+    fila = r['classes_de_suport']['sessions'][0]
+    assert fila['id_sessio'] == 'S1'
+    assert fila['per_fer_lloc_a'][0]['id_sessio'] == 'S3'
+    assert 'Assignatura inventada' in fila['motiu'] and 'Grup 82' in fila['motiu']
+    assert 'Un grup de teoria creix' in fila['motiu']
+
+
+def test_d7_distingeix_reserva_i_avaria(paquet):
+    from horaris.model import Tancament
+    b, _ = paquet
+    b.tancaments.extend([
+        Tancament('Q9/0001', dt.date(2027, 2, 8), dt.date(2027, 2, 8)),
+        Tancament('Q9/0002', dt.date(2027, 2, 8), dt.date(2027, 2, 12))])
+    tancaments = e.imprevistos_53()['resultat']['aules_tancades']
+    assert [t['tipus'] for t in tancaments] == ['avaria', 'reserva per a un acte']
+    assert all(t['descripcio'] for t in tancaments)
+
+
+def test_auditoria_xifres_i_demo_oficials():
+    # Només veredictes i recomptes; cap fila real en un missatge d’error.
+    r = e.executa('resultat_proposta', {'apartat': '5.2'})
+    assert r['ok'], 'No s’han pogut consultar les xifres oficials.'
+    canvis_torn = next(f['despres'] for f in r['resultat']['xifres'] if f['xifra'] == 'canvis_torn')
+    assert canvis_torn == 2007
+    r = e.executa('aules_lliures', {'dia': 'M', 'hora_ini': '10', 'durada_min': 60,
+                                  'places_min': 0, 'proposta': '5.2'})
+    assert r['ok'], 'La consulta de la demo ha fallat.'
+    total = r['resultat']['recomptes']['ordinaries_lliures']
+    assert total == 6
+    r = e.executa('consulta_sql', {'sql': "SELECT count(*) AS total, count(*) FILTER (WHERE torn_actual = 'tarda') AS tarda FROM proposta_5_4 WHERE id_sessio LIKE 'N%'"})
+    assert r['ok'], 'La consulta de torns del grau nou ha fallat.'
+    total = r['resultat']['files'][0]['total']
+    tarda = r['resultat']['files'][0]['tarda']
+    assert total == 235 and tarda == 0
+
+
+def test_f3_recuperacio_oficial():
+    r = e.executa('prova_canvi', {'apartat': '5.3', 'canvi': {'tipus': 'imprevist',
+        'sessions_cancel_lades': [{'id_sessio': 'S13793', 'recuperar_fins': '2027-03-26'}]}})
+    assert r['ok'], 'La simulació de recuperació ha fallat.'
+    total = r['resultat']['total']
+    assert total > 0
+    assert r['resultat']['estat'] in ('FEASIBLE', 'OPTIMAL')
+
+
+def test_f12_d7_imprevistos_oficials_inclouen_suport():
+    r = e.executa('imprevistos_53', {})
+    assert r['ok'], 'No s’han pogut consultar els imprevistos oficials.'
+    resultat = r['resultat']
+    total_suport = resultat['classes_de_suport']['total']
+    assert total_suport == 12
+    sense_destinatari = sum(not f['per_fer_lloc_a'] for f in resultat['classes_de_suport']['sessions'])
+    assert sense_destinatari == 0
+    ids = {f['id_sessio'] for bloc in ('aules_tancades', 'alumnes', 'cancellades')
+           for canvi in resultat[bloc] for f in canvi['sessions']}
+    ids.update(f['id_sessio'] for f in resultat['classes_de_suport']['sessions'])
+    total = len(ids)
+    assert total == 65

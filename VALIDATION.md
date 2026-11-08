@@ -27,7 +27,7 @@
 3. [cap @ /] Baixa fins a «Què vol dir», «Proposem» i «Com ho hem calculat» → els tres apartats hi són i es llegeixen sense saber programar.
 4. [cap @ /] Obre el desplegable «Per a tècnics: consulta SQL i sessions d'exemple» → surt la consulta SQL i uns quants `id_sessio`.
 5. [cap @ /] Copia un `id_sessio` d'exemple i busca'l a `paquet/sessions.csv` → la sessió existeix i és de 1r o 2n.
-6. [cap @ /] Clica «← Torna a les respostes» → tornes a la portada.
+6. [cap @ /] Clica «← Torna» → tornes a la portada. (reprova)
 
 ## Detall de les altres targetes de la portada
 
@@ -44,7 +44,7 @@
 4. [cap @ /respostes] A «Estat», desmarca «Vigilar» → només queden les vermelles i les verdes, i el recompte baixa.
 5. [cap @ /respostes] Torna a marcar «Vigilar» i a «Respostes» tria «Un grau nou de 40 places» → només surt aquesta targeta i diu «Es mostren 1 de 11».
 6. [cap @ /respostes] Desmarca els tres estats → surt «Cap resposta coincideix amb els filtres» amb què cal canviar.
-7. [cap @ /respostes] Llegeix la targeta del grau nou → diu 26 h a la setmana, 181 h lliures i 4.679 h de marge en tot el semestre.
+7. [cap @ /respostes] Llegeix la targeta del grau nou → diu les hores que necessita el grau nou a la setmana de més demanda del matí (27 h) contra les que queden lliures (173 h), i que el verificador oficial confirma que hi cap. (reprova)
 8. [cap @ /respostes] Prem «Com ho sabem →» d'una targeta → s'obre el detall; a «Detalls informàtics» surt la consulta SQL i cap identificador de sessió.
 9. [cap @ /respostes] Obre «Com fem servir les aules?» → surt el plànol de les 21 aules per espina (Q1 a Q4) i planta, més fosques com més ocupades.
 10. [cap @ /respostes] Passa el ratolí per sobre d'una aula del plànol → surt el codi, les places i el % d'ocupació.
@@ -60,7 +60,7 @@
 ## Canvis visuals
 
 1. [cap @ /] Mira la pàgina sencera → fons clar, menú blanc a l'esquerra i cap barra fosca de Streamlit; colors i tipografia com a la maqueta B1.
-2. [cap @ /] Mira sota el títol «Com estem avui» → hi ha una franja visible amb el semestre i la setmana que es mostren (p. ex. «2n semestre · setmana típica 2027-W05»).
+2. [cap @ /] Mira sota el títol «Com estem avui» → hi ha una franja visible amb el semestre i la setmana dita en paraules (p. ex. «2n semestre · setmana del 12 d'abril»), sense codis com «2027-W05». (reprova)
 3. [cap @ /] Mira l'etiqueta d'estat del bloc gran → és un cercle amb icona (✓, ! o ✕) i text al costat, igual que a la maqueta B1, no un caràcter solt.
 4. [cap @ /] Llegeix el bloc gran → hi ha la pregunta, «Sí, hi cap» amb l'etiqueta verda, una sola frase curta i els quadrets d'aules al costat; el text no surt del rectangle i té el mateix marge per tots quatre costats.
 5. [cap @ /] Mira els quadrets → 15 ocupats, 4 lliures i 2 de reserva amb vora discontínua, i la llegenda no parteix cap paraula.
@@ -72,7 +72,7 @@
 11. [cap @ /?resposta=fora-torn] Mira les barres → són primes (no blocs gruixuts) i cada una porta el número escrit al final.
 12. [cap @ /?resposta=fora-torn] Obre «Veure les dades» sota el gràfic → surt una taula amb noms de columna planers i números alineats a la dreta.
 13. [cap @ /?resposta=fora-torn] Llegeix «Com ho hem calculat» → frases planeres sense «cohort», «PLAB» ni «llindar»; el SQL és dins «Detalls informàtics».
-14. [cap @ /?resposta=fora-torn] Clica «← Torna a les respostes» → tornes a la portada i l'adreça perd el `?resposta=`.
+14. [cap @ /?resposta=fora-torn] Clica «← Torna» → tornes a la portada i l'adreça perd el `?resposta=`. (reprova)
 15. [cap @ /?resposta=hi-cap-mati] Mira el gràfic → 5 barres (dilluns a divendres) amb el número a sobre i una línia discontínua vermella a 19.
 16. [cap @ /respostes] Mira la graella → 2 columnes, targetes de la mateixa alçada i botons alineats.
 17. [cap @ /respostes] Obre «Com fem servir les aules?» → el plànol té el % escrit dins de cada aula i el text es llegeix bé tant a les clares com a les fosques.
@@ -123,10 +123,20 @@
 18. [cap @ /part2] Fes la finestra de mòbil (390 px) i obre la guia → el panell es veu sencer i no tapa l'apartat ressaltat.
 19. [cap @ /part2] Fes la finestra de mòbil (390 px) i desplaça lateralment la graella → arribes a Divendres dins de la mateixa taula, amb la columna d’hores sempre visible i els subgrups simultanis costat per costat.
 20. [cap @ /part2] Tria un curs amb subgrups simultanis i classes curtes i mira cada casella → cap text surt per sota de la casella ni trepitja la classe de sota; el nom llarg s'acaba amb «…».
-21. [cap @ /part2] Mira la classe més curta de la setmana (al 2n semestre no n'hi ha de 30 minuts; les més curtes són d'1 h) → hi cap el nom (escurçat si cal), l'hora i, si canvia, la línia «Abans»; tipus, grup i nota s'amaguen abans que el nom. (reprova)
+21. [cap @ /part2] Mira la classe més curta de la setmana (al 2n semestre no n'hi ha de 30 minuts; les més curtes són d'1 h) → hi cap el nom (escurçat si cal), l'hora i, si canvia, la línia «Abans»; tipus, grup i nota s'amaguen abans que el nom.
 22. [cap @ /part2] Passa el ratolí per sobre d'una classe estreta amb el nom escurçat i després clica-la → el nom sencer surt a l'etiqueta flotant i el detall s'obre en un requadre ample per sobre de la graella, sense estirar el bloc; es tanca clicant fora o amb Esc.
 23. [cap @ /part2] Tria GEET (Enginyeria Electrònica de Telecomunicació), 1r, grup 31, setmana típica, i mira el dijous → els subgrups simultanis (dos) van estrets costat per costat, els noms s'escurcen amb «…» sense partir paraules, i el selector de grup diu «Grup 31», el mateix que la graella.
 24. [cap @ /part2] Tria Enginyeria Informàtica, 3r, i mira una classe d'un doble grau → diu «Amb el grup … · Aula …» o «Classe compartida amb un altre grup», mai «Pendent d’assignar aula».
+
+## Part 2 · Verificador oficial al terminal
+
+1. [cap @ terminal] A l'arrel del repositori, executa `python -m nivell2.verificacio 5.1` → surt «5.1 | VALIDA».
+2. [cap @ terminal] Executa `python -m nivell2.verificacio 5.2` → surt «5.2 | VALIDA AMB RELAXACIONS DECLARADES».
+3. [cap @ terminal] Executa `python -m nivell2.verificacio 5.3` → surt «5.3 | VALIDA AMB RELAXACIONS DECLARADES».
+4. [cap @ terminal] Executa `python -m nivell2.verificacio 5.4` → surt «5.4 | VALIDA AMB RELAXACIONS DECLARADES».
+5. [cap @ terminal] Entra a `repte/repte-horaris-escola` i executa `python -m horaris check paquet/proposta_partida.csv --semestre 2` → l'horari d'avui surt NO VALIDA, amb els incompliments per regla.
+6. [cap @ terminal] A la mateixa carpeta, executa l'ordre del jurat amb la nostra proposta: `python -m horaris check ../../resultats/nivell2/5.2/proposta.csv --semestre 2 --relaxacions ../../resultats/nivell2/5.2/relaxacions.csv` → surt VALIDA AMB RELAXACIONS DECLARADES i cap incompliment que compti.
+7. [cap @ terminal] Torna a l'arrel i executa `python -m nivell2.empaqueta --sortida /tmp/lliurament` → torna a passar el verificador per a les quatre propostes, dona CORRECTE a la comprovació de persones i crea `lliurament-nivell2.zip`.
 
 ## Resum per a la Junta
 
@@ -134,14 +144,14 @@
 2. [cap @ /junta] Mira les fitxes de matí i tarda → «X de 19 aules» amb la frase «L'aulari té 21 aules ordinàries; en guardem 2 de reserva per a imprevistos.»; si és 19 de 19, etiqueta taronja «Sense marge» i «Si una aula falla, cal fer servir la reserva.».
 3. [cap @ /junta] Tria «Aules assignades (5.1)» i mira «Curs més afectat» → diu «Cap» i «Cap curs canvia de dia ni d'hora.», perquè la 5.1 no mou cap hora; els canvis d'aula surten a part, en un indicador propi.
 4. [cap @ /junta] Tria «Aules assignades (5.1)» i mira «Excepcions noves als torns» → 0 classes amb pastilla verda «Cap», i a sota quantes classes ja es fan avui fora del seu torn i no es toquen.
-5. [cap @ /junta] Amb «Horari complet (5.2)», mira «Excepcions noves als torns» → «1 excepció nova, demostrada» (la de la setmana d'avaluació) separada de les 458 classes fixades que ja són a la tarda per la regla 1; a sota, cada motiu amb quantes classes i quines titulacions. (reprova)
+5. [cap @ /junta] Amb «Horari complet (5.2)», mira «Excepcions noves als torns» → «1 excepció nova, demostrada» (la de la setmana d'avaluació) separada de les 458 classes fixades que ja són a la tarda per la regla 1; a sota, cada motiu amb quantes classes i quines titulacions.
 6. [cap @ /junta] Llegeix sota les fitxes → «màxim de classes alhora» del matí i de la tarda (tarda 17 a les 15:00), separat de les aules ocupades a l'hora punta (18 a la tarda), amb una frase que explica per què difereixen (un laboratori en aula ordinària ocupa aula però no compta com a classe).
 7. [cap @ /junta] Tria «Aules assignades (5.1)» i mira «Classes que canvien d'horari o d'aula, per curs» → compta també els canvis d'aula, no només els de dia o hora.
-8. [cap @ /junta] Mira la taula «Aules per mida a l'hora més plena» amb «Matí» → «Hi cap» on queden aules lliures (0 de 1, 6 de 7), «Just» on estan totes ocupades (4 de 4) i «Falten» només si n'hi ha més que aules.
+8. [cap @ /junta] Mira la taula «Aules per mida a l'hora més plena» amb «Matí» → compta les classes segons els alumnes que tenen (no l'aula on són) i marca «Falten» només si no hi ha cap aula prou gran lliure. (reprova)
 9. [cap @ /junta] Tria «Tarda» a sobre de la taula → la taula canvia a les xifres de la tarda.
 10. [cap @ /junta] Clica «Descarrega el resum A4» → es baixa un HTML; obre'l amb doble clic des de Baixades i imprimeix-lo en PDF: cap en un sol A4 i separa les excepcions noves de les d'avui.
 11. [cap @ /junta] Llegeix tota la pàgina com si fossis de la Junta → frases curtes i planeres, sense sigles tècniques; el detall tècnic queda tancat dins «Detall tècnic».
-12. [cap @ /junta] Obre «Detall tècnic» → el títol del paràgraf surt del pic real: amb «Horari complet (5.2)» diu que a la tarda queda 1 aula lliure a l'hora punta (18 de 19), i no «19 de 19»; el mateix text surt a l'A4 descarregat. (reprova)
+12. [cap @ /junta] Obre «Detall tècnic» → el títol del paràgraf surt del pic real: amb «Horari complet (5.2)» diu que a la tarda queda 1 aula lliure a l'hora punta (18 de 19), i no «19 de 19»; el mateix text surt a l'A4 descarregat.
 13. [cap @ /junta] Obre la Junta en dues pestanyes alhora i canvia de proposta a totes dues → cap mostra l'error genèric; si el resum s'ha de tornar a calcular, surt al cap d'uns segons amb les xifres de la proposta actual.
 14. [cap @ /junta] Amb «Horari complet (5.2)» llegeix les excepcions → «1 classe» (no «1 classes»), «sense curs a les dades» (no «curs desconegut») i el cas de la setmana d'avaluació en paraules planeres, sense «diagnostic.md». — també dins «Detall tècnic».
 
@@ -160,7 +170,7 @@
 Engegar l'app amb la IA de prova: `IA_PROVA=1 .venv/bin/streamlit run app/app.py` (o la configuració «part3-ia», port 8507). Amb la IA de veritat, cal `IA_URL`, `IA_CLAU` i `IA_MODEL` al `.env` de l'arrel.
 
 1. [cap @ /] Obre l'app → baix a la dreta hi ha el botó ✦ «Assistent», i al menú ja no surt «Pregunta-ho · aviat».
-2. [cap @ /] Toca «Assistent» → s'obre un plafó a la dreta amb la salutació, «Veu: Com estem avui», tres preguntes proposades i la caixa per escriure a baix.
+2. [cap @ /] Toca «Assistent» → s'obre un plafó a la dreta amb la benvinguda «Pregunta'm per aules, grups o l'horari proposat. Respondré amb les dades.», com a molt tres preguntes proposades (la primera, «Quantes aules queden lliures dimarts a les 10?») i la caixa per escriure a baix. (reprova)
 3. [cap @ /] Toca «Quantes sessions són al torn equivocat?» → surt la pregunta i, a poc a poc, una resposta «Mode de prova» que diu la pregunta i la pantalla que veu.
 4. [cap @ /part2] Ves a «Horari proposat» i obre l'assistent → «Veu:» diu la proposta i el grup triats (p. ex. «Horari proposat · 5.2 · …»), les preguntes són d'aquesta pàgina i la conversa d'abans hi és.
 5. [cap @ /part2] Canvia el grup a la graella → «Veu:» canvia al grup nou.
@@ -168,16 +178,36 @@ Engegar l'app amb la IA de prova: `IA_PROVA=1 .venv/bin/streamlit run app/app.py
 7. [cap @ /part2] Toca ↺ «Conversa nova» → la conversa es buida i torna la salutació.
 8. [cap @ /junta] Recarrega la pàgina amb una conversa feta → la conversa es manté i només hi ha un botó «Assistent».
 9. [cap @ /part2] Amb l'assistent obert, tria «Només avui» i canvia el grup → el plafó continua obert, «Veu:» canvia i la conversa es manté.
-10. [cap @ /part2] Amb l'assistent obert, mira la pàgina a 1280 i a 1920 px → a 1280 el menú lateral es plega sol (i torna en tancar l'assistent); tot el contingut (selectors, resum i la graella fins al divendres) queda a l'esquerra del plafó, sense res tapat ni barra de desplaçament horitzontal. (reprova)
+10. [cap @ /part2] Amb l'assistent obert, mira la pàgina a 1280 i a 1920 px → a 1280 el menú lateral es plega sol (i torna en tancar l'assistent); tot el contingut (selectors, resum i la graella fins al divendres) queda a l'esquerra del plafó, sense res tapat ni barra de desplaçament horitzontal.
 11. [cap @ /part2] Clica qualsevol lloc de la pàgina amb l'assistent obert → no es tanca; només es tanca amb la creu o amb Esc dins del plafó.
 
 ## Part 3 · Assistent (amb quiver.ai)
 
 1. [cap @ /] Pregunta «On té classe el grup 81 dimarts?» → respon en una o dues frases, amb hores i aules, sense «Com es comprova», SQL ni llistes d'id_sessio; si diu quantes no tenen aula, en són 7 de 9.
-2. [cap @ /] Pregunta «Quina aula de 60 places està lliure dijous a les 10?» → dona les aules amb la seva capacitat en poques línies, sense SQL. (reprova)
+2. [cap @ /] Pregunta «Quina aula de 60 places està lliure dijous a les 10?» → dona les aules amb la seva capacitat en poques línies, sense SQL.
 3. [cap @ /] Pregunta «Què passa si moc la sessió <un id_sessio de la resposta 1> a les 16:00?» → comença dient que no ha aplicat ni desat cap canvi, diu què xoca de nou i que és una comprovació ràpida, diferent de la validació oficial (la 5.2 és vàlida amb relaxacions declarades).
 4. [cap @ /] Pregunta «Em recomanes un restaurant?» → diu en una frase que només ajuda amb l'horari i proposa una pregunta.
 5. [cap @ /] Pregunta «¿Qué aulas hay libres el lunes a las 9?» → respon en castellà, i sota la resposta no surt cap intent fallit.
-6. [cap @ /] Mira sota la resposta del pas 1 → no hi ha cap bloc «Com es comprova» ni «Com ho he comprovat»: només el text de la resposta.
+6. [cap @ /] Mira sota la resposta del pas 1 → el text segueix curt, sense SQL ni llistes d'id, i a sota hi ha un plegable «Comprova-ho» tancat. (reprova)
 7. [cap @ /] Pregunta «Quantes sessions de GED 3r comencen després de les 15:00 dimecres?» → respon en una frase amb el període: 14 al 2n semestre (i, si en dona dues, 1 a la setmana típica); 42 seria tot el curs.
 8. [cap @ /] Després del pas 1, pregunta «Com ho saps?» → dona els id_sessio de les classes en codi.
+9. [cap @ /] Obre el «Comprova-ho» de la resposta del pas 1 → diu què s'ha consultat en paraules (horari del grup, dia, setmana, horari d'avui), els id_sessio en lletra de codi i la consulta feta. (reprova)
+10. [cap @ /] Prem «Copia» dins el «Comprova-ho» → al costat surt «Copiat», i en enganxar-ho surten els id_sessio separats per comes. (reprova)
+11. [cap @ /] Pregunta «Quina aula de 60 places està lliure dijous a les 10?» i obre'n el «Comprova-ho» → no hi ha id_sessio, però surt què s'ha buscat (aules lliures, dijous, 10:00, 60 places o més) i la consulta. (reprova)
+12. [cap @ /] Recarrega la pàgina i torna a obrir l'assistent → les respostes anteriors continuen tenint el seu «Comprova-ho». (reprova)
+
+## Demo i flux per a qui no en sap res (auditoria, dg 8-11)
+
+1. [cap @ /] Obre la portada → a dalt hi ha una frase que diu què hi trobaràs i què has de fer, i al final un enllaç «Pas següent: mira l'horari proposat →». (reprova)
+2. [cap @ /respostes] Mira el filtre «Estat» → hi ha una ajuda curta per deixar només «Vigilar», i per defecte es veuen totes les respostes. (reprova)
+3. [cap @ /part2] Obre «Horari proposat» → s'obre ja amb l'exemple (Horari complet 5.2, grup 430) i la línia «Exemple · Computació d'Altes Prestacions · Abans: dijous 12:30 · Q4/1013 … → dijous 14:30 · Q3/0009». (reprova)
+4. [cap @ /part2] Canvia de grup i prem «Mira l'exemple» → els selectors tornen a l'exemple; la setmana, l'aula i els filtres són dins «Més opcions». (reprova)
+5. [cap @ /part2] Mira la graella de l'exemple → no hi ha files d'hores buides: comença a les 14:30, la primera hora amb classe, i acaba després de l'última. (reprova)
+6. [cap @ /part2] Baixa fins al final → hi ha «Pas següent: un imprevist →» i porta a Imprevistos. (reprova)
+7. [cap @ /imprevistos] Prem «Mira l'exemple» → tria «Aula avariada un dia»: 6 classes canvien d'aula, cap canvia de dia ni d'hora, i la columna «Motiu» diu per què es mou cada una. (reprova)
+8. [cap @ /junta] Obre el resum → surt la 5.2 (Torns nous), la conclusió a dalt, el matí 15 de 19 i la tarda 18 de 19 a l'hora punta, i el grau nou que hi cap. (reprova)
+9. [cap @ /junta] Mira la fitxa de classes fora del seu torn → explica que 3.246 = 2.008 que compten + 1.238 heretades, i els 2.008 coincideixen amb la portada. (reprova)
+10. [cap @ /part2] Obre l'Assistent i toca «Quantes aules queden lliures dimarts a les 10?» → respon en una frase amb la proposta, la setmana i el nombre d'aules ordinàries lliures, sense SQL. (reprova)
+11. [cap @ /part2] Després de la resposta, toca «Com ho saps?» → explica d'on surt la mateixa xifra (proposta, dia, hora i què ha comptat) i no en dona una altra. (reprova)
+12. [cap @ /part2] Escriu «Quantes classes canvien de torn amb la proposta 5.2?» → respon en català amb la xifra de la 5.2 (2.007), no amb la d'avui. (reprova)
+13. [cap @ /] A la terminal, des de l'arrel, executa `python -m app.xat.pregunta "Quantes aules queden lliures dimarts a les 10?" --proposta 5.2 --setmana típica` → imprimeix la resposta i, a sota, la consulta feta amb les aules del resultat. (reprova)

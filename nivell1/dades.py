@@ -12,13 +12,14 @@ Vistes:
 from __future__ import annotations
 
 import os
+from contextlib import closing
 from functools import lru_cache
 from pathlib import Path
 
 import duckdb
 import pandas as pd
 
-REPTE_DIR = Path(os.environ.get('REPTE_DIR', '/Users/bernatroca/Bernat/Hackathon/repte/repte-horaris-escola'))
+REPTE_DIR = Path(os.environ.get('REPTE_DIR') or Path(__file__).resolve().parents[1] / 'repte' / 'repte-horaris-escola')
 PAQUET = REPTE_DIR / 'paquet'
 CONSULTES = Path(__file__).parent / 'consultes'
 
@@ -87,21 +88,29 @@ def sql(nom: str) -> str:
 def consulta(nom: str, **params) -> tuple[pd.DataFrame, str]:
     """Executa nivell1/consultes/<nom>.sql amb paràmetres $nom i torna (taula, text SQL)."""
     text = sql(nom)
-    df = connexio().execute(text, params or None).df()
+    with closing(connexio().cursor()) as cur:
+        df = cur.execute(text, params or None).df()
     return df, text
 
 
 def setmana_tipica(semestre: int) -> str:
-    """Setmana ISO amb el nombre de sessions més proper a la mediana del semestre (la primera si n'hi ha més d'una)."""
-    return connexio().execute("""
-        WITH n AS (SELECT setmana, count(*) AS c FROM sessions WHERE sem = $s GROUP BY setmana)
+    """Mediana de les setmanes amb almenys 200 classes; desempat per la primera.
+
+    Si tot el semestre és més petit, conservem les setmanes disponibles.
+    """
+    with closing(connexio().cursor()) as cur:
+        return cur.execute("""
+        WITH recomptes AS (SELECT setmana, count(*) AS c FROM sessions WHERE sem = $s GROUP BY setmana),
+        n AS (SELECT * FROM recomptes WHERE c >= 200 OR NOT EXISTS (
+            SELECT 1 FROM recomptes WHERE c >= 200))
         SELECT setmana FROM n ORDER BY abs(c - (SELECT median(c) FROM n)), setmana LIMIT 1""",
                               {'s': semestre}).fetchone()[0]
 
 
 def setmana_pitjor(semestre: int) -> str:
     """Setmana ISO amb el pic més alt de classes simultànies que demanen aulari (compartides un cop, per bloc)."""
-    return connexio().execute("""
+    with closing(connexio().cursor()) as cur:
+        return cur.execute("""
         SELECT s.setmana FROM sessions s JOIN sessio_blocs sb USING (id_sessio)
         WHERE s.sem = $s AND s.demanda_aulari
         GROUP BY s.setmana, s.data, sb.bloc
