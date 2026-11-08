@@ -25,8 +25,11 @@ def setmana_tipica(base):
     recomptes = Counter(dilluns(s.data) for s in base.sessions.values())
     if not recomptes:
         raise ValueError('No hi ha sessions al segon semestre.')
-    mig = median(recomptes.values())
-    return min(recomptes, key=lambda d: (abs(recomptes[d] - mig), d))
+    # Les setmanes residuals no representen una setmana docent completa.
+    # Bases petites (p. ex. les proves inventades) conserven totes les setmanes.
+    completes = {d: n for d, n in recomptes.items() if n > 200} or recomptes
+    mig = median(completes.values())
+    return min(completes, key=lambda d: (abs(completes[d] - mig), d))
 
 
 def grups(base):
@@ -60,14 +63,25 @@ class Cella:
     setmana_diferent: bool = False
     grups_compartits: tuple[str, ...] = ()
     ubicacio_compartida: str = ''
+    horari_nou: bool = False
+    excepcio_demostrada: bool = False
 
     @property
     def canvi(self):
         return self.canvi_franja or self.canvi_aula
 
 
+def partida(s, referencia=None):
+    """Data, inici i aula de la proposta de comparació, o dels originals."""
+    if referencia is None:
+        return s.data, s.ini, s.aula
+    a = referencia.files[s.id]
+    data = date.fromisoformat(a.data) if a.data else dilluns(s.data) + timedelta(days=DIES.index(a.dia))
+    return data, hm(a.h_ini), a.aula
+
+
 def celles(base, proposta, setmana, *, cohort=None, linia=None, aula=None,
-           noms=None, relaxacions=None):
+           noms=None, relaxacions=None, referencia=None):
     """Sessions de la setmana real (dilluns), amb canvis respecte de la partida.
 
     Una data explícita de recuperació preval sobre la setmana original.
@@ -103,6 +117,9 @@ def celles(base, proposta, setmana, *, cohort=None, linia=None, aula=None,
         inici = hm(a.h_ini)
         if not 0 <= inici < 1440:
             raise ValueError(f'Hora incorrecta a la sessió {sid}.')
+        data_abans, ini_abans, aula_abans = partida(s, referencia)
+        nou = sid.startswith('N')
+        motius = tuple((relaxacions or {}).get(sid, ()))
         shared_location = ''
         if s.sense_espai:
             candidates = [base.sessions[h] for h in hosts.get(sid, ())
@@ -114,14 +131,15 @@ def celles(base, proposta, setmana, *, cohort=None, linia=None, aula=None,
                 shared_location = 'Classe compartida amb un altre grup'
         resultat.append(Cella(sid, a.dia, inici, inici + s.durada, a.aula,
             (noms or {}).get(s.codi, s.codi), TIPUS.get(s.tipus, s.tipus), s.grup,
-            data != s.data or inici != s.ini,
-            bool(s.aula and not a_traslladar(s.aula) and not s.sense_espai and a.aula != s.aula),
-            tuple((relaxacions or {}).get(sid, ())),
-            bool(not s.aula and a.aula and not s.sense_espai),
+            not nou and (data != data_abans or inici != ini_abans),
+            bool(not nou and aula_abans and not a_traslladar(aula_abans) and not s.sense_espai and a.aula != aula_abans),
+            motius,
+            bool(not aula_abans and a.aula and not s.sense_espai),
             s.compartida,
-            f'Abans: {NOMS_DIES[s.data.weekday()].lower()} {fmt(s.ini)} · {s.aula or "aula no indicada"} ({s.data:%d/%m/%Y})',
-            dilluns(data) != dilluns(s.data),
-            ubicacio_compartida=shared_location))
+            '' if nou else f'Abans: {NOMS_DIES[data_abans.weekday()].lower()} {fmt(ini_abans)} · {aula_abans or "aula no indicada"} ({data_abans:%d/%m/%Y})',
+            not nou and dilluns(data) != dilluns(data_abans),
+            ubicacio_compartida=shared_location, horari_nou=nou,
+            excepcio_demostrada=any(m.startswith('Excepció demostrada:') for m in motius)))
     return sorted(resultat, key=lambda c: (DIES.index(c.dia), c.ini, c.id_sessio))
 
 
@@ -134,28 +152,31 @@ def celles_aula(base, proposta, setmana, aula, **kwargs):
     return celles(base, proposta, setmana, aula=aula, **kwargs)
 
 
-def canvis_grup(base, proposta, actuals, noves):
+def canvis_grup(base, proposta, actuals, noves, *, referencia=None):
     """Compara les sessions presents en qualsevol de les dues setmanes visibles."""
     ids = {c.id_sessio for c in actuals + noves}
     franja = aula = torn = assignades = 0
     for sid in ids:
+        if sid.startswith('N'):
+            continue
         s, a = base.sessions[sid], proposta.files[sid]
+        data_abans, ini_abans, aula_abans = partida(s, referencia)
         data = date.fromisoformat(a.data) if a.data else dilluns(s.data) + timedelta(days=DIES.index(a.dia))
         inici = hm(a.h_ini)
-        franja += data != s.data or inici != s.ini
-        aula += bool(s.aula and not a_traslladar(s.aula) and not s.sense_espai and a.aula != s.aula)
-        assignades += bool(not s.aula and a.aula and not s.sense_espai)
-        torn += (s.ini < 870) != (inici < 870)
+        franja += data != data_abans or inici != ini_abans
+        aula += bool(aula_abans and not a_traslladar(aula_abans) and not s.sense_espai and a.aula != aula_abans)
+        assignades += bool(not aula_abans and a.aula and not s.sense_espai)
+        torn += (ini_abans < 870) != (inici < 870)
     return {'franja': franja, 'aula': aula, 'torn': torn, 'assignades': assignades}
 
 
-def resum_grup(base, proposta, actuals, noves):
-    canvis = canvis_grup(base, proposta, actuals, noves)
+def resum_grup(base, proposta, actuals, noves, *, referencia=None, nom_referencia='avui'):
+    canvis = canvis_grup(base, proposta, actuals, noves, referencia=referencia)
     franja, aula, torn, assignades = (canvis[k] for k in ('franja', 'aula', 'torn', 'assignades'))
     abans = len({c.aula for c in actuals if c.aula})
     despres = len({c.aula for c in noves if c.aula})
     return (f'{franja} classes canvien de dia o d’hora · {aula} canvien d’aula · '
-            f'{assignades} amb aula assignada · {torn} canvien de torn · Aules diferents aquesta setmana: {abans} avui → {despres} a la proposta.')
+            f'{assignades} amb aula assignada · {torn} canvien de torn · Aules diferents aquesta setmana: {abans} {nom_referencia} → {despres} a la proposta.')
 
 
 def nom_grup(grup, tipus):
@@ -164,18 +185,20 @@ def nom_grup(grup, tipus):
     return f'{"Grup" if nom_tipus == "teoria" else "Subgrup"} {numero} · {nom_tipus}'
 
 
-# Un únic estat per bloc: els casos especials prevalen sobre els altres canvis.
+# El vermell es reserva per a una excepció demostrada.
 ESTATS = {
     'totes': ('Totes', '#2a78d6', '#eef4fc', '#1d5fae'),
     'igual': ('Sense canvis', '#2a78d6', '#eef4fc', '#1d5fae'),
     'aula-nova': ('Aula assignada', '#2f8f46', '#edf6ef', '#1f6b33'),
     'canvi': ('Canvia', '#e8820c', '#fff4e5', '#8f4c00'),
-    'relaxada': ('Cas especial', '#d03b3b', '#fdeeee', '#a12c2c'),
+    'fora-patro': ('Fora del patró', '#b77900', '#fff8df', '#795300'),
+    'relaxada': ('Excepció demostrada', '#d03b3b', '#fdeeee', '#a12c2c'),
 }
 
 
 def estat_cella(c):
-    return ('relaxada' if c.relaxacions or c.setmana_diferent else
+    return ('relaxada' if c.excepcio_demostrada else
+            'fora-patro' if (c.relaxacions and c.canvi) or c.setmana_diferent else
             'canvi' if c.canvi else 'aula-nova' if c.aula_assignada else 'igual')
 
 
@@ -194,6 +217,8 @@ def agrupa_compartides(celles):
             canvi_aula=any(x.canvi_aula for x in cs),
             aula_assignada=any(x.aula_assignada for x in cs),
             setmana_diferent=any(x.setmana_diferent for x in cs),
+            horari_nou=any(x.horari_nou for x in cs),
+            excepcio_demostrada=any(x.excepcio_demostrada for x in cs),
             relaxacions=tuple(dict.fromkeys(r for x in cs for r in x.relaxacions)),
             abans='; '.join(dict.fromkeys(x.abans for x in cs if x.abans)),
             grups_compartits=tuple(dict.fromkeys(nom_grup(x.grup, x.tipus) for x in cs))))
@@ -298,11 +323,15 @@ CSS = """
   .p2-horari .classe b{display:var(--mostra-nom-estret);-webkit-line-clamp:var(--linies-nom-estret);max-height:calc(var(--linies-nom-estret)*17.5px);}
   .p2-horari .classe .ubicacio{display:block;font-size:11px;line-height:12px;white-space:nowrap;overflow:visible;text-overflow:clip;font-variant-numeric:tabular-nums;}
   .p2-horari .classe .hora-inici,.p2-horari .classe .hora-fi{display:block;}
-  .p2-horari .classe .hora-separador,.p2-horari .classe .aula-classe{display:none;}
+  .p2-horari .classe .hora-separador,.p2-horari .classe .aula-separador{display:none;}
+  .p2-horari .classe .aula-classe{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;}
+  .p2-horari .classe .ubicacio:has(.aula-coneguda) .hora-fi{display:none;}
+  .p2-horari .classe .ubicacio:not(:has(.aula-coneguda)) .aula-classe{display:none;}
   .p2-horari .classe .nota{display:var(--mostra-nota-estret);font-size:11px;line-height:12px;white-space:normal;overflow:visible;text-overflow:clip;}
   .p2-horari .classe .nota-ampla{display:none;}
   .p2-horari .classe .nota-compacta,.p2-horari .classe .abans-hora{display:block;}
   .p2-horari .classe .abans-hora{white-space:nowrap;font-variant-numeric:tabular-nums;}
+  .p2-horari .classe .abans-aula{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 }
 /* Conservem sempre «Abans»: etiqueta, dia curt i hora en tres línies.
    El pressupost reserva aquestes tres línies també en blocs d'una hora. */
@@ -337,13 +366,13 @@ def nom_assignatura_html(nom):
         for paraula in nom.split())
 
 
-def pressupost_classe(durada, *, nota=False, estret=False):
+def pressupost_classe(durada, *, nota=False, estret=False, linies_nota=3):
     """Alçades en px, compartides amb el CSS; vàlid per qualsevol ample de carril.
 
     En ample normal, cada secundària ocupa una línia. Prioritzem una línia
     de nom, l'hora i «Abans»; després ampliem el nom i afegim el grup.
-    En estret, reservem dues línies de 12px per l'hora i fins a tres per
-    «Abans / dc / 10:30», abans d'ampliar el nom.
+    En estret, reservem dues línies de 12px per l'hora (o inici i aula),
+    i les línies necessàries per a «Abans», abans d'ampliar el nom.
     Altres notes s'amaguen.
     Els 6px de marge vertical es resten de l'àrea de la graella.
     """
@@ -351,9 +380,11 @@ def pressupost_classe(durada, *, nota=False, estret=False):
     caixa = durada * 1.6 - 6
     disponible = max(0, caixa - 2 * padding)
     if estret:
-        visible = 24  # Inici i final, sense el·lipsi.
-        mostra_nota = nota and visible + 36 + 3 <= disponible
-        visible += 39 if mostra_nota else 0
+        visible = 24  # Inici i aula; si no sabem l'aula, inici i final.
+        alt_nota = linies_nota * 12
+        # Reservem també una línia de nom abans d'afegir una nota llarga.
+        mostra_nota = nota and visible + alt_nota + 6 + 17.5 <= disponible
+        visible += alt_nota + 3 if mostra_nota else 0
         nom = min(3, max(0, int((disponible - visible - 3) // 17.5)))
         visible += nom * 17.5 + (3 if nom else 0)
         return dict(padding=padding, nom=nom, ubicacio=True, grup=False,
@@ -434,16 +465,25 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
             grup = ' / '.join(g.split(' · ', 1)[0] for g in grup.split(' / '))
             tipus = TIPUS.get(c.tipus, c.tipus)
             avisos = list(c.relaxacions)
+            if c.horari_nou:
+                avisos.insert(0, 'Grau nou: horari nou')
             if c.setmana_diferent:
                 avisos.insert(0, 'Setmana diferent.')
-            if c.canvi or c.aula_assignada:
+            if (c.canvi or c.aula_assignada) and not c.horari_nou:
                 avisos.append(c.abans or ('Aula assignada.' if c.aula_assignada else 'Canvi de dia, hora o aula.'))
             avis = ' · '.join(avisos)
             nota = ''
-            if c.canvi and c.abans:
-                nota = c.abans.split(' · ', 1)[0]
-            elif estat == 'relaxada':
-                nota = avisos[0]
+            if c.horari_nou:
+                nota = 'Grau nou: horari nou'
+            elif c.canvi and c.abans:
+                hora_abans, _, aula_abans = c.abans.partition(' · ')
+                aula_abans = re.sub(r' \(\d{2}/\d{2}/\d{4}\)$', '', aula_abans)
+                if c.canvi_aula and not c.canvi_franja:
+                    nota = 'Abans: aula ' + aula_abans
+                else:
+                    nota = hora_abans + (' · ' + aula_abans if c.canvi_aula else '')
+            elif estat in ('relaxada', 'fora-patro'):
+                nota = avisos[0] if avisos else nom
             elif estat == 'canvi':
                 nota = c.abans.split(' · ', 1)[0] if c.abans else 'Canvi de dia, hora o aula.'
             if len(nota) > 78:
@@ -454,20 +494,27 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
             if c.compartida:
                 etiqueta += ' · Classe compartida'
             nom_assignatura = nom_assignatura_html(c.assignatura)
+            aula_coneguda = ' aula-coneguda' if c.aula or c.ubicacio_compartida else ''
             contingut = (f'<b>{nom_assignatura}</b><small class="ubicacio">'
                         f'<span class="hora-inici">{fmt(c.ini)}</span><span class="hora-separador">–</span>'
-                        f'<span class="hora-fi">{fmt(c.fi)}</span><span class="aula-classe"> · {escape(ubicacio)}</span></small>'
+                        f'<span class="hora-fi">{fmt(c.fi)}</span><span class="aula-classe{aula_coneguda}"><span class="aula-separador"> · </span>{escape(ubicacio)}</span></small>'
                         f'<small>{escape(tipus)} · {escape(grup)}</small>')
-            abans = re.fullmatch(r'Abans: (dilluns|dimarts|dimecres|dijous|divendres) (\d{2}:\d{2})', nota)
+            abans = re.fullmatch(r'Abans: (dilluns|dimarts|dimecres|dijous|divendres) (\d{2}:\d{2})(?: · (.+))?', nota)
+            nomes_aula = nota.startswith('Abans: aula ')
+            linies_nota = 4 if abans and abans[3] else 3
             if nota:
                 compacta = ''
                 if abans:
                     dia_curt = dict(zip((d.lower() for d in NOMS_DIES), ('dl', 'dt', 'dc', 'dj', 'dv')))[abans[1]]
                     compacta = (f'<span class="nota-compacta" aria-hidden="true"><span class="abans-etiqueta">Abans </span>{dia_curt}'
-                                f'<span class="abans-hora">{abans[2]}</span></span>')
+                                f'<span class="abans-hora">{abans[2]}</span>'
+                                + (f'<span class="abans-aula">{escape(abans[3])}</span>' if abans[3] else '') + '</span>')
+                elif nomes_aula:
+                    compacta = ('<span class="nota-compacta" aria-hidden="true"><span class="abans-etiqueta">Abans </span>'
+                                + '<span class="abans-aula">' + escape(nota.removeprefix('Abans: aula ')) + '</span></span>')
                 contingut += f'<small class="nota"><span class="nota-ampla">{escape(nota)}</span>{compacta}</small>'
             pressupost = pressupost_classe(c.fi - c.ini, nota=bool(nota))
-            estret = pressupost_classe(c.fi - c.ini, nota=bool(abans), estret=True)
+            estret = pressupost_classe(c.fi - c.ini, nota=bool(abans) or nomes_aula, estret=True, linies_nota=linies_nota)
             ajust = (f'--padding-classe:{pressupost["padding"]}px;'
                      f'--linies-nom:{pressupost["nom"]};'
                      f'--linies-nom-estret:{estret["nom"]};'
@@ -492,7 +539,7 @@ def taula_html(celles, titol='Horari setmanal', *, originals=False, filtre='tote
     return html + '</div></div></div>' + ''.join(detalls) + '</div>'
 
 
-def exporta_aula_html(base, proposta, setmana, aula, **kwargs):
-    titol = f'Aula {aula} · setmana del {dilluns(setmana):%d/%m/%Y}'
+def exporta_aula_html(base, proposta, setmana, aula, *, nom_proposta='Horari d’avui', **kwargs):
+    titol = f'Aula {aula} · {nom_proposta} · setmana del {dilluns(setmana):%d/%m/%Y}'
     contingut = taula_html(celles_aula(base, proposta, setmana, aula, **kwargs), titol)
     return '<!doctype html><html lang="ca"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' + escape(titol) + '</title><body><h1>' + escape(titol) + '</h1>' + llegenda_html() + contingut + '</body></html>'

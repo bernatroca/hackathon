@@ -1,5 +1,6 @@
 """Part 2: comparació setmanal per estudiant i lliurament per aula."""
 import csv
+import re
 from datetime import date, timedelta
 from pathlib import Path
 from html import escape
@@ -11,6 +12,8 @@ from components.taules import mostra_taula
 from components.vistes import estat
 from errors import mostra_error
 from nivell2.base import carrega_oficial, Proposta, PAQUET, GRAU_NOU
+from nivell2 import junta
+from nivell2.s52 import MOTIU_FIXADES
 from components.graella import (grups, setmana_tipica, dilluns, celles_grup,
     celles_aula, taula_html, exporta_aula_html, resum_grup, canvis_grup, ESTATS, CSS as CSS_GRAELLA, CSS_FILTRES, recomptes_estat, nom_grup)
 
@@ -22,14 +25,36 @@ def carrega_dades(grau_nou=False):
     base = carrega_oficial(GRAU_NOU if grau_nou else None)
     with (PAQUET / 'activitats.csv').open(encoding='utf-8-sig', newline='') as f:
         noms = {r['codi']: r['assignatura'] for r in csv.DictReader(f)}
-    with (PAQUET / 'plans.csv').open(encoding='utf-8-sig', newline='') as f:
-        titulacions = {r['titulacions']: r['descripcio'] for r in csv.DictReader(f)}
+    if grau_nou:
+        with (GRAU_NOU / 'sessions_extra.csv').open(encoding='utf-8-sig', newline='') as f:
+            noms.update({r['codi']: r['assignatura'] for r in csv.DictReader(f)})
+    titulacions = {**junta.NOMS, 'GNOU': 'Grau nou (40 places)'}
     return base, noms, titulacions
 
 
 @st.cache_data
 def carrega_proposta(path, versio):
     return Proposta.llegeix(Path(path))
+
+
+def motiu_visible(text):
+    """Explica les regles a la persona que prepara l'horari."""
+    equivalencies = {
+        'R1-TORN': 'Es manté fora del seu torn perquè no es pot moure',
+        'R2-CALENDARI': 'dia no lectiu',
+        'R4-ALUMNAT': 'coincideix amb una altra classe del grup',
+        'R4-AULA': 'l’aula està ocupada',
+        'R4-DOCENT': 'el professor té una altra classe',
+    }
+    text = re.sub(r'Restauració al patró rebutjada:\s*(?:restriccions oficials:\s*)?', '', text)
+    text = text.replace('supera el límit de qualitat de la variant de referència',
+                        'empitjorava massa la resta de l’horari')
+    for codi, explicacio in equivalencies.items():
+        text = text.replace(codi, explicacio)
+    text = junta.motiu_planer(text)
+    text = re.sub(r'R\d+(?:-[A-ZÀ-Ü]+)?', 'regla de l’horari', text)
+    text = re.sub(r'(?:\.\./[\w./-]+/)?[\w-]+\.md', 'el diagnòstic', text)
+    return text.replace('variant de referència', 'horari de comparació').strip()
 
 
 @st.cache_data
@@ -41,7 +66,18 @@ def carrega_relaxacions(path, versio):
             raise ValueError('Falten columnes al fitxer de relaxacions.')
         for r in lector:
             for sid in r['sessions'].split('|'):
-                resultat.setdefault(sid.strip(), []).append(f"Excepció declarada ({r['restriccio']}): {r['justificacio']}")
+                sid = sid.strip()
+                if not sid:
+                    continue
+                if r['justificacio'] == MOTIU_FIXADES:
+                    motiu = 'Classe fixada de 1r/2n: no es mou (regla 1)'
+                elif sid == 'S04526' and junta.es_motiu_avaluacio(r['justificacio']):
+                    motiu = 'Excepció demostrada: ' + junta.motiu_planer(junta.MOTIU_S04526).replace('S04526', 'Aquesta classe')
+                else:
+                    motiu = motiu_visible(r['justificacio'])
+                    if r['restriccio'] == 'R1-TORN':
+                        motiu = 'Es manté fora del seu torn perquè no es pot moure. ' + motiu
+                resultat.setdefault(sid, []).append(motiu)
     return resultat
 
 
@@ -62,7 +98,8 @@ def carrega_excepcions(path, versio):
             if not 0 <= minut < 1440:
                 raise ValueError('Hora incorrecta a les excepcions.')
             resultat.setdefault(r['id_sessio'], []).append(
-                f"Excepció de calendari ({data:%d/%m/%Y}, {minut//60:02}:{minut%60:02}): {r['motiu']}")
+                f"Fora de l’hora habitual ({data:%d/%m/%Y}, {minut//60:02}:{minut%60:02}): "
+                f"no s’ha pogut tornar a la seva hora habitual perquè {motiu_visible(r['motiu'])}")
     return resultat
 
 
@@ -138,6 +175,8 @@ def selecciona_filtre(clau):
 def mostra_filtres(celles):
     comptes = recomptes_estat(celles)
     actiu = st.session_state.get('p2-filtre', 'totes')
+    if actiu not in ESTATS or (actiu != 'totes' and comptes[actiu] == 0):
+        st.session_state['p2-filtre'] = actiu = 'totes'
     with st.container(key='p2-filtres'):
         for columna, (clau, (nom, *_)) in zip(st.columns(len(ESTATS)), ESTATS.items()):
             with columna, st.container(key='p2-filtre-' + clau):
@@ -148,17 +187,27 @@ def mostra_filtres(celles):
     return actiu
 
 
-def resum_html(base, proposta, actuals, noves, comparar):
-    canvis = canvis_grup(base, proposta, actuals, noves)
+def resum_html(base, proposta, actuals, noves, comparar, *, referencia=None, nom_referencia='avui'):
+    canvis = canvis_grup(base, proposta, actuals, noves, referencia=referencia)
     franja, aula, assignades = (canvis[k] for k in ('franja', 'aula', 'assignades'))
     n_aules = len({c.aula for c in noves if c.aula})
     amb_canvis = franja or aula
     etiqueta = ('Canvis en aquest grup' if amb_canvis else 'Es conserva el dia i l’hora') if comparar else 'Horari d’avui · dades originals'
-    frase = (f'La proposta assigna aula a {assignades} classes que no en tenien.' if comparar
-        else 'Consulta les classes del grup a la setmana seleccionada.')
+    parts = [f'{n} {"classe " + singular if n == 1 else "classes " + plural}'
+             for n, singular, plural in ((franja, 'canvia de dia o hora', 'canvien de dia o hora'),
+                 (aula, 'canvia d’aula', 'canvien d’aula'), (assignades, 'rep aula', 'reben aula')) if n]
+    frase = ('; '.join(parts) + '.' if parts else 'Cap classe d’aquest grup canvia.') if comparar else 'Consulta les classes del grup a la setmana seleccionada.'
+    if comparar and noves and all(c.horari_nou for c in noves):
+        etiqueta, frase = 'Grau nou: horari nou', 'Aquest grup té un horari nou, sense horari anterior per comparar.'
+    elif comparar and nom_referencia != 'avui':
+        frase += f' Comparació amb {nom_referencia}.'
     classe = ('amb-canvis' if amb_canvis else '') if comparar else 'actual'
-    xifres = ''.join(f'<div><b>{n}</b><span>{text}</span></div>' for n, text in
-        ((franja, 'canvis d’hora'), (aula, 'canvis d’aula'), (n_aules, 'aules a la setmana')))
+    indicadors = ((franja, 'canvis d’hora'), (aula, 'canvis d’aula'), (n_aules, 'aules a la setmana')) if comparar else (
+        (len(actuals), 'classes'), (f'{sum(c.fi - c.ini for c in actuals) / 60:g}', 'hores de classe'),
+        (sum(not c.aula and not c.ubicacio_compartida for c in actuals), 'sense aula a les dades'))
+    if comparar and noves and all(c.horari_nou for c in noves):
+        indicadors = ((len(noves), 'classes noves'), (f'{sum(c.fi - c.ini for c in noves) / 60:g}', 'hores de classe'), (n_aules, 'aules a la setmana'))
+    xifres = ''.join(f'<div><b>{n}</b><span>{text}</span></div>' for n, text in indicadors)
     return (f'<section class="p2-resum {classe}"><div>'
         + estat({'estat': 'ambre' if amb_canvis else 'verd', 'etiqueta': etiqueta})
         + f'<p>{escape(frase)}</p></div><div class="p2-xifres">{xifres}</div></section>')
@@ -186,6 +235,13 @@ def _mostra():
                 triada = 'Avui'
             base, noms, titulacions = carrega_dades(triada == '5.4')
             avui = Proposta.de_base(base)
+            nom_referencia = 'avui'
+            referencia_path = RESULTATS / '5.2' / 'proposta.csv'
+            if triada == '5.3' and referencia_path.is_file():
+                avui = carrega_proposta(str(referencia_path), referencia_path.stat().st_mtime_ns)
+                nom_referencia = NOMS_PROPOSTES['5.2']
+            elif triada == '5.3':
+                st.info('No hi ha Torns nous (5.2) per comparar. Es compara amb l’horari original.')
             relaxacions = {}
             proposta = avui
             if comparar:
@@ -198,17 +254,21 @@ def _mostra():
                 if ep.is_file():
                     for sid, motius in carrega_excepcions(str(ep), ep.stat().st_mtime_ns).items():
                         relaxacions.setdefault(sid, []).extend(motius)
+                if triada == '5.3':
+                    relaxacions.setdefault('S11527', []).append('Recuperació de la classe cancel·lada')
             tipica = setmana_tipica(base)
             setmanes = sorted({dilluns(s.data) for s in base.sessions.values()} | {date(2027, 3, 8), date(2027, 3, 15)})
             setmana = c.selectbox('Setmana', [None] + setmanes,
-                format_func=lambda d: f'Típica · {tipica:%d/%m}' if d is None else f'{d:%d/%m} – {d + timedelta(days=4):%d/%m}', key='p2-setmana') or tipica
+                format_func=lambda d: (f'Típica · {tipica:%d/%m}' if d is None else f'{d:%d/%m} – {d + timedelta(days=4):%d/%m}')
+                    + (' · imprevistos' if triada == '5.3' and (d or tipica) in (date(2027, 3, 8), date(2027, 3, 15)) else ''), key='p2-setmana') or tipica
             arbre = grups(base)
             if not arbre:
                 st.info('No hi ha grups d’estudiants per mostrar.')
                 return
             with st.container(key='p2-seleccio-alumnat'):
                 a, b, c = st.columns([3, 1, 2])
-                tit = tria_si_cal('Estudis', sorted(arbre), format_func=lambda t: titulacions.get(t, t), key='p2-titulacio', contenidor=a)
+                tit = tria_si_cal('Estudis', sorted(arbre, key=lambda t: titulacions.get(t, 'Estudis sense nom')),
+                    format_func=lambda t: titulacions.get(t, 'Estudis sense nom'), key='p2-titulacio', contenidor=a)
                 curs = tria_si_cal('Curs', sorted(arbre[tit], key=lambda c: (c == '?', c)),
                     format_func=lambda c: 'Sense curs a les dades' if c == '?' else c, key='p2-curs', contenidor=b)
                 grups_disponibles = sorted(arbre[tit][curs])
@@ -216,22 +276,32 @@ def _mostra():
                 if st.session_state.get('p2-context-grup') != context_grup:
                     st.session_state['p2-grup'] = grups_disponibles[0]
                     st.session_state['p2-context-grup'] = context_grup
+                    st.session_state['p2-filtre'] = 'totes'
                 grup = tria_si_cal('Grup', grups_disponibles, key='p2-grup',
                     format_func=lambda g: f'Grup {g}', contenidor=c)
-        actuals = celles_grup(base, avui, setmana, tit, curs, grup, noms=noms)
-        noves = celles_grup(base, proposta, setmana, tit, curs, grup, noms=noms, relaxacions=relaxacions)
+        context_filtre = (tit, curs, grup, triada, setmana, comparar)
+        if st.session_state.get('p2-context-filtre') != context_filtre:
+            st.session_state['p2-filtre'] = 'totes'
+            st.session_state['p2-context-filtre'] = context_filtre
+        actuals = celles_grup(base, avui, setmana, tit, curs, grup, noms=noms, referencia=avui)
+        noves = celles_grup(base, proposta, setmana, tit, curs, grup, noms=noms, relaxacions=relaxacions, referencia=avui)
         with st.container(key='p2-context-dades'):
-            st.markdown(resum_html(base, proposta, actuals, noves, comparar), unsafe_allow_html=True)
+            st.markdown(resum_html(base, proposta, actuals, noves, comparar, referencia=avui, nom_referencia=nom_referencia), unsafe_allow_html=True)
         with st.container(key='p2-graelles'):
             st.subheader('La setmana del grup')
             with st.container(key='p2-clau-colors'):
                 filtre = mostra_filtres(noves)
             titol = f'{"Proposta" if comparar else "Avui"} · Grup {grup} · {setmana:%d/%m} – {setmana + timedelta(days=4):%d/%m}'
+            if comparar and nom_referencia != 'avui':
+                titol += f' · respecte de {nom_referencia}'
             st.markdown(taula_html(noves, titol, originals=not comparar, filtre=filtre, estils=False), unsafe_allow_html=True)
         with st.expander('Més informació', expanded=False):
             st.write('«Avui» és l’horari dels fitxers originals, no la data d’avui. La graella inclou la teoria i els subgrups de problemes i seminaris; els subgrups simultanis no impliquen que cada estudiant assisteixi a tots.')
-            st.write('Setmana típica: una setmana representativa del segon semestre. Les setmanes del 8 i del 15 de març inclouen els imprevistos. El resum descriu canvis, no és un veredicte de validació.')
-            st.write(resum_grup(base, proposta, actuals, noves))
+            st.write('Setmana típica: una setmana representativa del segon semestre. El resum descriu canvis, no és un veredicte de validació.')
+            if triada == '5.3':
+                st.write('Les setmanes del 8 i del 15 de març inclouen els imprevistos.')
+            if not (noves and all(c.horari_nou for c in noves)):
+                st.write(resum_grup(base, proposta, actuals, noves, referencia=avui, nom_referencia=nom_referencia))
             if len(arbre[tit][curs]) == 1:
                 st.caption(f'Aquest curs té un únic grup d’estudiants: {grup}.')
         with st.expander('Veure les dades', expanded=False):
@@ -243,12 +313,14 @@ def _mostra():
         if aules:
             with st.container(key='p2-vista-aula'):
                 st.subheader('Consulta una aula')
-                aula = tria_si_cal('Aula', aules, key='p2-aula')
-                dades = celles_aula(base, proposta, setmana, aula, noms=noms, relaxacions=relaxacions)
-                st.markdown(taula_html(dades, 'Aula ' + aula, originals=not comparar, estils=False), unsafe_allow_html=True)
+                aula = tria_si_cal('Aula', aules, key='p2-aula', format_func=lambda a:
+                    f'{a} · {base.aules[a].capacitat} places' if a in base.aules else a)
+                dades = celles_aula(base, proposta, setmana, aula, noms=noms, relaxacions=relaxacions, referencia=avui)
                 st.download_button('Descarrega l’horari d’aquesta aula',
-                    exporta_aula_html(base, proposta, setmana, aula, noms=noms, relaxacions=relaxacions),
-                    file_name=f'horari-{aula.replace("/", "-")}-{setmana}.html', mime='text/html')
+                    exporta_aula_html(base, proposta, setmana, aula, noms=noms, relaxacions=relaxacions,
+                        referencia=avui, nom_proposta=NOMS_PROPOSTES.get(triada, 'Horari d’avui')),
+                    file_name=f'horari-{aula.replace("/", "-")}-{triada}-{setmana}.html', mime='text/html')
+                st.markdown(taula_html(dades, 'Aula ' + aula, originals=not comparar, estils=False), unsafe_allow_html=True)
         enfoca_pas()
     except Exception:
         mostra_error()
