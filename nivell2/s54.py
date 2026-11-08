@@ -10,6 +10,7 @@ import copy
 import datetime as dt
 import itertools
 import json
+import re
 import shutil
 import tempfile
 import time
@@ -24,6 +25,8 @@ from nivell2.franges import _candidats, _referencia, _regles, _setmana
 from nivell2.franges import _hores_mortes
 from nivell2.alumnat import ReglaAlumnat
 from nivell2.s52 import escriu_csv
+from nivell2.readmes import explica_comptatge
+from nivell2.xifres_lliurament import comptatge_verificador
 from nivell2.comprova_persones import (colloca_avui, comprova_dobles, conflictes, conflictes_docents,
                                       parelles_dobles)
 from horaris.check import (FRANGES, RESERVA_MIN, Informe as InformeIntern,
@@ -84,8 +87,7 @@ def _objectiu(model, base, acts, slots, roomvars, options, regla):
 
     El 5.2 té cost zero provat perquè està congelat. Les cotes de cada
     nivell fan que cap millora inferior compensi una sessió nova moguda.
-    Les agendes de subgrup inclouen l'única teoria de tota la cohort,
-    també quan la seva numeració no coincideix amb la de problemes.
+    Les agendes conserven les línies i els subgrups del verificador.
     """
     moves = []
     for a, rows in enumerate(acts):
@@ -98,13 +100,13 @@ def _objectiu(model, base, acts, slots, roomvars, options, regla):
     units, starts, weeks = defaultdict(list), {}, defaultdict(list)
     for a, rows in enumerate(acts):
         for s in rows:
-            row = copy.copy(s)
-            if any(len(regla.teories[c]) == 1 for c in s.cohorts):
-                # Només per a l'agenda del cost: no alterem dades ni grups
-                # de la proposta/verificador. Cada subgrup conserva agenda.
-                row.grup = 'TE/99' if s.tipus == 'TE' else 'PAUL/99'+s.num_grup
-            units[s.unitat].append(row)
+            units[s.unitat].append(s)
             starts[s.unitat] = slots[a]
+    # _hores_mortes itera conjunts: claus enteres estables eviten que el
+    # hash aleatori dels identificadors alteri l'ordre de creació de variables.
+    keys = sorted(units, key=lambda u: min(s.id for s in units[u]))
+    units = {i: units[u] for i, u in enumerate(keys)}
+    starts = {i: starts[u] for i, u in enumerate(keys)}
     for u, rows in units.items():
         weeks[_setmana(rows[0])].append(u)
     gaps = _hores_mortes(model, base, units, starts, weeks)
@@ -258,7 +260,7 @@ def resol_congelat(base, referencia, *, temps_s=60, llavor=0):
                 if _setmana(s) == _setmana(t):
                     if s.unitat != t.unitat:
                         durations.add((s.durada, t.durada, bool(regles(s, t))))
-        for da, db, people in durations:
+        for da, db, people in sorted(durations):
             before = model.new_bool_var('abans')
             after = model.new_bool_var('despres')
             model.add(slots[a]+da <= slots[b]).only_enforce_if(before)
@@ -331,8 +333,8 @@ def resol_congelat(base, referencia, *, temps_s=60, llavor=0):
         for s in rows:
             original_model.add(slots[a] == DIES.index(s.dia)*1440+s.ini)
     first = cp_model.CpSolver()
-    first.parameters.max_time_in_seconds = max(.001, min(10, (temps_s-(time.monotonic()-begin))*.2))
-    first.parameters.num_search_workers = 2
+    first.parameters.max_deterministic_time = min(10, temps_s*.2)
+    first.parameters.num_search_workers = 1
     first.parameters.random_seed = llavor
     first.parameters.stop_after_first_solution = True
     initial_status = first.solve(original_model)
@@ -344,15 +346,18 @@ def resol_congelat(base, referencia, *, temps_s=60, llavor=0):
         for v in slots + roomvars:
             model.add_hint(v, first.value(v))
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = max(.001, temps_s-(time.monotonic()-begin))
-    solver.parameters.num_search_workers = 2
+    solver.parameters.max_deterministic_time = max(.001, temps_s-first.response_proto.deterministic_time)
+    solver.parameters.num_search_workers = 1
     solver.parameters.random_seed = llavor
     stats['temps_construccio_s'] = time.monotonic()-begin
     status = solver.solve(model)
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE) and original_ok:
         solver, status = first, initial_status
     stats.update(estat=solver.status_name(status), temps_s=time.monotonic()-begin,
-                 branques=solver.num_branches, conflictes_solver=solver.num_conflicts)
+                 branques=solver.num_branches, conflictes_solver=solver.num_conflicts,
+                 treballadors=1, limit_determinista=temps_s,
+                 temps_determinista=first.response_proto.deterministic_time + (
+                     solver.response_proto.deterministic_time if solver is not first else 0))
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         return None, stats
     stats.update(sessions_noves_fora_franja=sum(solver.value(v) for v in moves),
@@ -406,8 +411,18 @@ def relaxacions_necessaries(official, proposal, relaxations):
         ids = needed[r.restriccio] & (set(r.sessions) if r.sessions else set(official.sessions))
         if ids:
             rows.append({'restriccio': r.restriccio, 'sessions': '|'.join(sorted(ids)),
-                         'justificacio': r.justificacio})
+                         'justificacio': re.sub(r'(?<![\w/])diagnostic\.md',
+                                               '../5.2/diagnostic.md', r.justificacio)})
     return rows
+
+
+def hores_mortes_grau_nou(official, proposal, referencia):
+    """Avalua només les sessions afegides, amb les agendes oficials."""
+    base = copy.copy(official)
+    base.sessions = {sid: s for sid, s in official.sessions.items() if sid not in referencia.files}
+    base.ordre = [sid for sid in official.ordre if sid in base.sessions]
+    files = [f for f in proposal.a_files() if f.id in base.sessions]
+    return avalua(base, files).objectius['hores_mortes_min']
 
 
 def publica(stage, out):
@@ -428,7 +443,8 @@ def publica(stage, out):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--temps', type=float, default=300)
+    parser.add_argument('--temps', type=float, default=300,
+                        help='pressupost de cerca en unitats de temps determinista (no segons de rellotge)')
     parser.add_argument('--llavor', type=int, default=0)
     parser.add_argument('--referencia', type=Path, default=RESULTATS/'5.2'/'proposta.csv')
     args = parser.parse_args(argv)
@@ -449,8 +465,12 @@ def main(argv=None):
         return 1
     out.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='.s54-', dir=out.parent) as tmp:
-        stage = Path(tmp)/'nou'
+        stage = Path(tmp)/'5.4'
         stage.mkdir()
+        # El comptatge compartit espera 5.4 i 5.2 sota una mateixa arrel.
+        # L'àlies només serveix per llegir la referència durant la preparació.
+        (Path(tmp)/'5.2').mkdir()
+        (Path(tmp)/'5.2'/'proposta.csv').symlink_to(path52)
         relax_path = stage/'relaxacions.csv'
         rows = relaxacions_necessaries(official, proposal, relaxations)
         escriu_csv(relax_path, rows, ['restriccio', 'sessions', 'justificacio'])
@@ -481,7 +501,9 @@ def main(argv=None):
         before = avalua(official52, ref.a_files(), relaxacions=relaxations)
         summary['hores_mortes_52_min'] = before.objectius['hores_mortes_min']
         summary['hores_mortes_min'] = report.objectius['hores_mortes_min']
-        summary['hores_mortes_grau_nou_min'] = stats['objectiu_hores_mortes_min']
+        summary['hores_mortes_grau_nou_min'] = hores_mortes_grau_nou(official, proposal, ref)
+        if summary['hores_mortes_grau_nou_min'] != stats['objectiu_hores_mortes_min']:
+            raise ValueError('Les hores mortes del grau nou no coincideixen amb l’objectiu')
         escriu_csv(stage/'xifres.csv', [{'xifra': k, 'abans': before.objectius.get(k, 0), 'despres': v}
                                       for k, v in report.objectius.items()] + [
                     {'xifra': 'sessions_grau_nou_fora_franja', 'abans': 0,
@@ -497,6 +519,7 @@ def main(argv=None):
         'Model conjunt de dia, hora i aula per activitat, rutina setmanal, mateix torn i sense desdoblaments. '
         'El 5.2 queda congelat; només es conserven les seves relaxacions necessàries. '
         'Objectiu lexicogràfic: franges originals de les sessions noves, hores mortes i aula base/canvis d’aula. '
+        'Cerca reproduïble amb un treballador i pressupost de temps determinista (`--temps`), sense límit de rellotge. '
         'La regla addicional d’alumnat és a `nivell2/alumnat.py`: teoria de cohort completa i subgrups prudents. '
         'Només admet PAUL simultanis quan són germans per prefix complet del TE, sufix de la mateixa longitud '
         'i suma d’aforaments compatible. Els altres subgrups es separen perquè les dades no proven que siguin disjunts. '
@@ -512,13 +535,17 @@ def main(argv=None):
         '```\n\nProves i comprovació de persones:\n```sh\n'
         f'{PYTHON} -m pytest -q nivell2 app\n'
         f'RESULTATS_DIR=$PWD/resultats/nivell2 {PYTHON} -m nivell2.comprova_persones\n```\n', encoding='utf-8')
+        readme = stage/'README.md'
+        readme.write_text(explica_comptatge(readme.read_text(encoding='utf-8'),
+                                           comptatge_verificador('5.4', Path(tmp)), '5.4'),
+                          encoding='utf-8')
         publica(stage, out)
     print('Resposta:', summary['resposta'], '; solver:', stats['estat'])
     print('Activitats noves:', stats['activitats_noves'], '; opcions:', sum(stats['opcions_per_activitat']))
     print('Temps de construcció:', round(stats.get('temps_construccio_s', stats['temps_s']), 3),
           '; temps total:', round(stats['temps_s'], 3))
     for key in ('sessions_grau_nou_collocades', 'sessions_grau_nou_fora_franja', 'sessions_52_mogudes',
-                'canvis_aula', 'hores_mortes_52_min', 'hores_mortes_min',
+                'canvis_aula', 'hores_mortes_52_min', 'hores_mortes_grau_nou_min', 'hores_mortes_min',
                 'conflictes_persones_nous', 'conflictes_docents_nous', 'incompliments_no_declarats'):
         print(key, ':', summary[key])
     if 'veredicte' in summary:

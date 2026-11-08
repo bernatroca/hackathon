@@ -5,7 +5,8 @@ import datetime as dt
 import pytest
 
 from nivell2.base import Proposta, avalua_rapid
-from nivell2.s54 import comprova_proposta, referencia_completa, resol_congelat
+from nivell2.s54 import (comprova_proposta, hores_mortes_grau_nou,
+                         referencia_completa, resol_congelat)
 from nivell2.test_franges import base_petita, sessio
 from horaris.model import Aula, Tancament
 
@@ -153,12 +154,15 @@ def test_dobles_conserven_vincle_i_cap_aula_propia():
 
 
 def test_unknown_no_es_infeasible(monkeypatch):
+    from types import SimpleNamespace
     from ortools.sat.python import cp_model
     new = nova()
     base = base_petita(new)
     monkeypatch.setattr(cp_model.CpSolver, 'solve', lambda *a: cp_model.UNKNOWN)
     monkeypatch.setattr(cp_model.CpSolver, 'num_branches', property(lambda s: 0))
     monkeypatch.setattr(cp_model.CpSolver, 'num_conflicts', property(lambda s: 0))
+    monkeypatch.setattr(cp_model.CpSolver, 'response_proto',
+                        property(lambda s: SimpleNamespace(deterministic_time=0)))
     result, stats = resol_congelat(base, referencia(base, new), temps_s=5)
     assert result is None and stats['estat'] == 'UNKNOWN'
 
@@ -196,6 +200,50 @@ def test_objectiu_prioritza_franja_davant_hores_mortes_i_aula_base():
     assert stats['sessions_noves_fora_franja'] == 0
     assert stats['objectiu_hores_mortes_min'] == 120
     assert result.files[a.id].aula == result.files[b.id].aula
+
+
+@pytest.mark.parametrize('grup, esperat', [('PAUL/811', 120), ('PAUL/91', 0)])
+def test_objectiu_te_paul_coincideix_amb_agenda_oficial(grup, esperat):
+    te = nova('te-inventada', grup='TE/81', ini=540)
+    paul = nova('paul-inventada', tipus='PAUL', grup=grup, ini=720,
+                alumnes=20, docents=frozenset({'docent-paul'}))
+    # Una altra cohort congelada no forma part del cost del grau nou.
+    host = sessio('host-inventat', ini=900, aula='0', cohorts=('ALTRE:1r',))
+    base = base_petita(te, paul, host)
+    ref = referencia(base, te, paul)
+    result, stats = resol_congelat(base, ref, temps_s=5)
+    assert stats['estat'] == 'OPTIMAL'
+    assert stats['sessions_noves_fora_franja'] == 0
+    assert stats['objectiu_hores_mortes_min'] == esperat
+    assert hores_mortes_grau_nou(base, result, ref) == esperat
+    assert avalua_rapid(base, result).objectius['hores_mortes_min'] == esperat
+
+
+def test_csv_reproduible_entre_processos_i_hash_seeds(tmp_path):
+    import os
+    import subprocess
+    import sys
+    script = '''
+from pathlib import Path
+import sys
+from nivell2.test_s54 import nova, referencia
+from nivell2.test_franges import base_petita
+from nivell2.s54 import resol_congelat
+rows = [nova('te', grup='TE/81'),
+        nova('paul-a', tipus='PAUL', grup='PAUL/811', ini=660),
+        nova('paul-b', tipus='PAUL', grup='PAUL/812', ini=660)]
+base = base_petita(*rows)
+result, stats = resol_congelat(base, referencia(base, *rows), temps_s=5, llavor=17)
+assert stats['estat'] == 'OPTIMAL'
+assert stats['treballadors'] == 1
+result.escriu(Path(sys.argv[1]))
+'''
+    paths = [tmp_path/f'execucio-{seed}.csv' for seed in (1, 2)]
+    for seed, path in enumerate(paths, 1):
+        subprocess.run([sys.executable, '-c', script, str(path)],
+                       env={**os.environ, 'PYTHONHASHSEED': str(seed)}, check=True,
+                       capture_output=True, text=True)
+    assert paths[0].read_bytes() == paths[1].read_bytes()
 
 
 def test_objectiu_enganxa_classe_que_cal_moure():
@@ -280,6 +328,42 @@ def test_relaxacions_nomes_per_violacions_que_compten(monkeypatch):
              Obj(restriccio='R1-TORN', sessions=('doble-heretada',), justificacio='dobles')]
     assert s54.relaxacions_necessaries(base, Proposta.de_base(base), relax) == [
         {'restriccio': 'R1-TORN', 'sessions': 'necessaria', 'justificacio': 'torn'}]
+
+
+@pytest.mark.parametrize('motiu', ['vegeu diagnostic.md', 'vegeu ../5.2/diagnostic.md'])
+def test_relaxacio_apunta_al_diagnostic_52(monkeypatch, motiu):
+    from types import SimpleNamespace as Obj
+    import nivell2.s54 as s54
+    base = base_petita(nova())
+    monkeypatch.setattr(s54, 'avalua', lambda *a: Obj(violacions=[
+        Obj(regla='R1-TORN', sessions=('inventada',), compta=True)]))
+    rows = s54.relaxacions_necessaries(base, Proposta.de_base(base), [
+        Obj(restriccio='R1-TORN', sessions=('inventada',), justificacio=motiu)])
+    assert rows[0]['justificacio'] == 'vegeu ../5.2/diagnostic.md'
+
+
+def test_main_publica_hores_mortes_del_verificador(tmp_path, monkeypatch):
+    import json
+    from types import SimpleNamespace
+    s54, base, _, out, _ = prepara_main(tmp_path, monkeypatch)
+    paul = nova('paul-inventada', tipus='PAUL', grup='PAUL/811', ini=720)
+    base.sessions[paul.id] = paul
+    base.ordre.append(paul.id)
+    monkeypatch.setattr(s54, 'comptatge_verificador', lambda *a: dict.fromkeys([
+        'simultanis_proposta', 'simultanis_partida', 'te_partida', 'te_oficial',
+        'te_partida_sense_dobles', 'te_sense_dobles'], 0))
+    def verify(path, **kw):
+        report = avalua_rapid(base, Proposta.llegeix(path))
+        return SimpleNamespace(veredicte=report.veredicte, objectius=report.objectius,
+                               compten=lambda: {})
+    monkeypatch.setattr(s54, 'verifica', verify)
+    assert s54.main(['--temps', '5']) == 0
+    summary = json.loads((out/'resum.json').read_text())
+    stats = json.loads((out/'execucio.json').read_text())
+    assert summary['hores_mortes_grau_nou_min'] == stats['objectiu_hores_mortes_min'] == 120
+    assert summary['sessions_52_mogudes'] == 0
+    assert not (out/'antic.txt').exists()
+    assert '## Com compta el verificador' in (out/'README.md').read_text()
 
 
 def test_publicacio_fallida_restaura_directori(tmp_path, monkeypatch):
