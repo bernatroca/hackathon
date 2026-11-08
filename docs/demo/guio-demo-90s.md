@@ -1,6 +1,6 @@
 # Vídeo demo de 90 s per a la presentació
 
-Vídeo de la diapositiva 5 i de la carpeta `demo/` de l'entrega: [`demo-90s.mp4`](demo-90s.mp4), **82,1 s**, gravat amb el codi de `main` 0556bc7. Tots els rètols, amb imatge i temps: [`retols-demo-90s.html`](retols-demo-90s.html). Segueix [`docs/GUIO-VIDEO-DEMO.md`](../GUIO-VIDEO-DEMO.md).
+Vídeo de la diapositiva 5 i de la carpeta `demo/` de l'entrega: [`demo-90s.mp4`](demo-90s.mp4), **68,1 s**, gravat amb el codi de `main` 0556bc7. Tots els rètols, amb imatge i temps: [`retols-demo-90s.html`](retols-demo-90s.html). Segueix [`docs/GUIO-VIDEO-DEMO.md`](../GUIO-VIDEO-DEMO.md).
 
 - **Un sol pla continu de l'app de debò,** arrencada just abans de gravar amb el codi de `main`. La finestra de terminal entra i surt amb una fosa de 0,45 s.
 - **El cursor es mou a poc a poc i el desplaçament és suau.** Es veu canviar la pantalla a cada clic: el detall que s'obre, un altre grup que es redibuixa, «Mira l'exemple», la pastilla «Canvia», el detall d'una classe, l'imprevist que filtra la taula la resposta de l'assistent i el seu «Comprova-ho».
@@ -16,7 +16,6 @@ Vídeo de la diapositiva 5 i de la carpeta `demo/` de l'entrega: [`demo-90s.mp4`
 | Portada | Com estem avui | Nivell 1 · Anàlisi | «1r i 2n al matí: sí, hi cabem» · 15 de 19 aules a l'hora més plena, i en guardem 2 de reserva. «Avui → amb la proposta» · 2.008 fora de torn → 459 excepcions declarades; 4.541 sense aula → 0 |
 | Detall | «Mira el detall de les aules →» | Nivell 1 · Com ho sabem | «Cada xifra explica com s'ha calculat» · sense laboratoris ni dobles titulacions, que no necessiten aula pròpia |
 | Horari proposat | «Mira l'horari proposat →», un altre curs (4t), «Mira l'exemple» (grup 430), pastilla «Canvia», detall de Computació d'Altes Prestacions | Nivell 2 · 5.2 Torns nous | «1r i 2n al matí; 3r i 4t a la tarda» · cada grup veu què canvia respecte d'avui. «Cada classe diu on era abans» · dijous 12:30 → dijous 14:30, a la Q3/0009 |
-| Terminal | Verificador oficial, des de `repte/repte-horaris-escola` | Nivell 2 · Verificador oficial | «La mateixa ordre que farà servir el jurat» · horari d'avui NO VALIDA → proposta 5.2 VALIDA, amb 459 excepcions declarades i justificades |
 | Imprevistos | Resum dels quatre imprevistos i «Mira l'exemple» | Nivell 2 · 5.3 Imprevistos | «Quatre imprevistos alhora, pocs canvis». «Aula avariada un dia: 6 classes canvien d'aula» · mateix dia i hora |
 | Junta | Les quatre targetes | Nivell 2 · Resum per a la Junta (5.2 i 5.4) | «La Junta decideix amb una pàgina» · matí 15 de 19, tarda 18 de 19, i el grau nou de 40 places també hi cap |
 | Assistent | Pregunta escrita i «Comprova-ho» obert | Nivell 3 · Intel·ligència artificial | «Pregunta amb les teves paraules» · respon només amb dades de l'horari, i a «Comprova-ho» hi ha la consulta i les aules que ha trobat |
@@ -51,3 +50,5 @@ python docs/demo/eines/grava_demo90.py
 - **Control de l'assistent:** la gravació només es dona per bona si el nombre d'aules de la resposta és el mateix que el d'aules que llista «Comprova-ho», i la resposta no diu «No ho puc». Si no, es torna a gravar, fins a 4 vegades.
 
 Durada final: 82,1 s.
+
+- **Terminal:** l'equip va decidir no ensenyar la terminal. El tram del verificador (de 40,6 s a 54,2 s de la versió de 82,1 s) s'ha tret amb una fosa de 0,4 s de l'horari proposat als imprevistos. Ara el vídeo dura **68,1 s**. La versió de 2 minuts, sense terminal, és a [`guio-demo-2min.md`](guio-demo-2min.md).

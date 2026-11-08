@@ -1,0 +1,186 @@
+[
+ {
+  "t": 0.28,
+  "tipus": "part",
+  "valor": "<b>Nivell 1</b> · Anàlisi: hi cap el model nou?"
+ },
+ {
+  "t": 0.91,
+  "tipus": "rotol",
+  "valor": {
+   "titol": "1r i 2n al matí: sí, hi cabem",
+   "part": "Nivell 1 · Anàlisi de dades",
+   "detall": "A l’hora més plena, 15 de 19 aules ocupades, i en guardem 2 de reserva per a imprevistos"
+  }
+ },
+ {
+  "t": 11.94,
+  "tipus": "rotol",
+  "valor": {
+   "titol": "Avui → amb la proposta",
+   "part": "Nivell 1 · Anàlisi de dades",
+   "detall": "2.008 classes fora de torn → 459 excepcions declarades · 4.541 classes sense aula → 0"
+  }
+ },
+ {
+  "t": 18.6,
+  "tipus": "part",
+  "valor": "<b>Nivell 2 · 5.4</b> · Grau nou"
+ },
+ {
+  "t": 18.6,
+  "tipus": "rotol",
+  "valor": {
+   "titol": "Hi cap un grau nou de 40 places: sí",
+   "part": "Nivell 2 · 5.4 Grau nou",
+   "detall": "L’horari proposat hi col·loca les 235 classes del grau nou sense moure cap classe de la resta"
+  }
+ },
+ {
+  "t": 26.2,
+  "tipus": "part",
+  "valor": "<b>Nivell 1</b> · Anàlisi: hi cap el model nou?"
+ },
+ {
+  "t": 26.2,
+  "tipus": "rotol",
+  "valor": {
+   "titol": "Avui l’horari té 7 tipus de problemes",
+   "part": "Nivell 1 · Anàlisi de dades",
+   "detall": "Els més freqüents: classes sense aula, i professorat o alumnat amb dues classes alhora"
+  }
+ },
+ {
+  "t": 36.67,
+  "tipus": "rotol",
+  "valor": ""
+ },
+ {
+  "t": 38.11,
+  "tipus": "rotol",
+  "valor": {
+   "titol": "Cada xifra explica com s’ha calculat",
+   "part": "Nivell 1 · Com ho sabem",
+   "detall": "No hi comptem laboratoris ni dobles titulacions, que no necessiten aula pròpia"
+  }
+ },
+ {
+  "t": 44.73,
+  "tipus": "rotol",
+  "valor": ""
+ },
+ {
+  "t": 44.73,
+  "tipus": "part",
+  "valor": ""
+ },
+ {
+  "t": 46.18,
+  "tipus": "part",
+  "valor": "<b>Nivell 2 · 5.2</b> · Torns nous"
+ },
+ {
+  "t": 46.19,
+  "tipus": "rotol",
+  "valor": {
+   "titol": "1r i 2n al matí; 3r i 4t a la tarda",
+   "part": "Nivell 2 · 5.2 Torns nous",
+   "detall": "Cada grup veu la seva setmana i què canvia respecte d’avui"
+  }
+ },
+ {
+  "t": 60.99,
+  "tipus": "rotol",
+  "valor": {
+   "titol": "Cada classe diu on era abans",
+   "part": "Nivell 2 · 5.2 Torns nous",
+   "detall": "Grup 430: Computació d’Altes Prestacions passa de dijous 12:30 a dijous 14:30, a la Q3/0009"
+  }
+ },
+ {
+  "t": 73.96,
+  "tipus": "rotol",
+  "valor": ""
+ },
+ {
+  "t": 75.51,
+  "tipus": "part",
+  "valor": "<b>Nivell 2 · 5.3</b> · Imprevistos"
+ },
+ {
+  "t": 75.51,
+  "tipus": "rotol",
+  "valor": {
+   "titol": "Quatre imprevistos alhora, pocs canvis",
+   "part": "Nivell 2 · 5.3 Imprevistos",
+   "detall": "Aula reservada, grup que creix, aula avariada i classe cancel·lada · comprovat amb el verificador"
+  }
+ },
+ {
+  "t": 83.17,
+  "tipus": "rotol",
+  "valor": {
+   "titol": "Aula avariada un dia: 6 classes canvien d’aula",
+   "part": "Nivell 2 · 5.3 Imprevistos",
+   "detall": "Es fan el mateix dia i a la mateixa hora; només canvia l’aula"
+  }
+ },
+ {
+  "t": 90.23,
+  "tipus": "rotol",
+  "valor": ""
+ },
+ {
+  "t": 90.24,
+  "tipus": "part",
+  "valor": ""
+ },
+ {
+  "t": 91.81,
+  "tipus": "part",
+  "valor": "<b>Nivell 2 · 5.2 i 5.4</b> · Resum per a la Junta"
+ },
+ {
+  "t": 91.81,
+  "tipus": "rotol",
+  "valor": {
+   "titol": "La Junta decideix amb una pàgina",
+   "part": "Nivell 2 · Resum per a la Junta",
+   "detall": "Matí 15 de 19 aules · tarda 18 de 19 · i el grau nou de 40 places també hi cap"
+  }
+ },
+ {
+  "t": 102.23,
+  "tipus": "part",
+  "valor": "<b>Nivell 3</b> · Assistent d’IA"
+ },
+ {
+  "t": 102.23,
+  "tipus": "rotol",
+  "valor": {
+   "titol": "Pregunta amb les teves paraules",
+   "part": "Nivell 3 · Intel·ligència artificial",
+   "detall": "Respon només amb dades de l’horari, i a «Comprova-ho» hi ha la consulta i les aules que ha trobat"
+  }
+ },
+ {
+  "t": 115.49,
+  "tipus": "rotol",
+  "valor": ""
+ },
+ {
+  "t": 115.49,
+  "tipus": "part",
+  "valor": ""
+ },
+ {
+  "t": 116.88,
+  "tipus": "rotol",
+  "valor": ""
+ },
+ {
+  "t": 116.88,
+  "tipus": "part",
+  "valor": ""
+ }
+]

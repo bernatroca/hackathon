@@ -70,45 +70,7 @@
   }
  },
  {
-  "t": 40.87,
-  "tipus": "rotol",
-  "valor": ""
- },
- {
-  "t": 40.87,
-  "tipus": "part",
-  "valor": "<b>Nivell 2</b> · Verificador oficial"
- },
- {
-  "t": 41.32,
-  "tipus": "rotol",
-  "valor": {
-   "titol": "La mateixa ordre que farà servir el jurat",
-   "part": "Nivell 2 · Verificador oficial",
-   "detall": "Horari d’avui: NO VALIDA → proposta 5.2: VALIDA, amb 459 excepcions declarades i justificades"
-  }
- },
- {
-  "t": 52.13,
-  "tipus": "rotol",
-  "valor": ""
- },
- {
-  "t": 54.14,
-  "tipus": "part",
-  "valor": "<b>Nivell 2 · 5.3</b> · Imprevistos"
- },
- {
-  "t": 54.14,
-  "tipus": "rotol",
-  "valor": {
-   "titol": "Quatre imprevistos alhora, pocs canvis",
-   "part": "Nivell 2 · 5.3 Imprevistos",
-   "detall": "Aula reservada, grup que creix, aula avariada i classe cancel·lada · comprovat amb el verificador"
-  }
- },
- {
-  "t": 59.51,
+  "t": 45.91,
   "tipus": "rotol",
   "valor": {
    "titol": "Aula avariada un dia: 6 classes canvien d’aula",
@@ -117,22 +79,22 @@
   }
  },
  {
-  "t": 63.97,
+  "t": 50.37,
   "tipus": "rotol",
   "valor": ""
  },
  {
-  "t": 63.98,
+  "t": 50.38,
   "tipus": "part",
   "valor": ""
  },
  {
-  "t": 65.54,
+  "t": 51.94,
   "tipus": "part",
   "valor": "<b>Nivell 2 · 5.2 i 5.4</b> · Resum per a la Junta"
  },
  {
-  "t": 65.55,
+  "t": 51.95,
   "tipus": "rotol",
   "valor": {
    "titol": "La Junta decideix amb una pàgina",
@@ -141,12 +103,12 @@
   }
  },
  {
-  "t": 71.98,
+  "t": 58.38,
   "tipus": "part",
   "valor": "<b>Nivell 3</b> · Assistent d’IA"
  },
  {
-  "t": 71.98,
+  "t": 58.38,
   "tipus": "rotol",
   "valor": {
    "titol": "Pregunta amb les teves paraules",
@@ -155,12 +117,12 @@
   }
  },
  {
-  "t": 80.6,
+  "t": 67.0,
   "tipus": "rotol",
   "valor": ""
  },
  {
-  "t": 80.6,
+  "t": 67.0,
   "tipus": "part",
   "valor": ""
  }
