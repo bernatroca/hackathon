@@ -174,12 +174,25 @@ ESTIL = """<style>
 </style>"""
 
 
+def grau_nou_preparat():
+    """Consulta el resum existent, sense regenerar ni escriure resultats."""
+    d = llegeix(ruta_resum('5.4'))
+    if (d and d.get('versio_resum') == junta.VERSIO_RESUM
+            and d.get('versio_calcul') == junta.VERSIO_CALCUL
+            and d.get('empremtes') == empremtes('5.4')
+            and d.get('empremtes_referencia') == empremtes('5.2')):
+        return d.get('grau_nou')
+    return None
+
+
 def mostra():
     st.markdown(ESTIL, unsafe_allow_html=True)
+    st.write('Aquí tens el resum per decidir: mira les aules ocupades al matí i a la tarda i si hi cap el grau nou. Pots descarregar-lo per a la Junta.')
     opcions = disponibles()
-    triada = st.selectbox('Proposta', opcions,
-                         index=opcions.index('5.2') if '5.2' in opcions else len(opcions)-1,
-                         format_func=lambda nom: NOMS_PROPOSTES.get(nom, nom), key='junta-proposta')
+    with st.expander('Més opcions', expanded=False):
+        triada = st.selectbox('Proposta', opcions,
+                             index=opcions.index('5.2') if '5.2' in opcions else len(opcions)-1,
+                             format_func=lambda nom: NOMS_PROPOSTES.get(nom, nom), key='junta-proposta')
     try:
         d = carrega(triada)
         try:
@@ -196,7 +209,15 @@ def mostra():
             from datetime import datetime
             hora = datetime.fromisoformat(d['data']).strftime('%H:%M')
             st.warning(f"Resum de les {hora}; no s'ha pogut actualitzar")
+        st.caption('Proposta: ' + NOMS_PROPOSTES.get(triada, triada))
         st.markdown(fitxes(d), unsafe_allow_html=True)
+        if triada == '5.2':
+            grau = grau_nou_preparat()
+            if grau and grau.get('hi_cap'):
+                st.success(f"Hi cap el grau nou de 40 places: {grau['sessions_collocades']} classes col·locades. "
+                           f"Classes de l’horari complet que cal moure: {grau['sessions_52_mogudes']}.")
+            else:
+                st.caption('Consulta la proposta «Amb el grau nou (5.4)» a «Més opcions» per veure’n la cabuda.')
         st.caption(junta.resum_canvis_aula(d))
         for torn, etiqueta in [('mati', 'Matí'), ('tarda', 'Tarda')]:
             pic = d['pics'][torn].get('simultani')
@@ -262,3 +283,5 @@ def mostra():
             st.download_button('Descarrega el resum A4', html, file_name=f'junta-{triada}.html', mime='text/html')
     except Exception:
         mostra_error()
+    finally:
+        st.write('Pas següent: pregunta-ho a l’Assistent (botó de baix a la dreta)')
