@@ -77,7 +77,8 @@ def planol(t):
                 color = '#f1f0ec' if intensitat is None else 'rgb(' + ','.join(str(round(a+(b-a)*intensitat)) for a,b in zip((205,226,251),(24,79,149))) + ')'
                 tinta = '#ffffff' if intensitat is not None and intensitat >= .72 else '#000000'
                 tip = f'{r.aula} · {numero(r.capacitat)} places · ' + (f'{numero(pct)} % ocupada' if pct is not None else 'ocupació no disponible')
-                html += f'<div class="rajola" tabindex="0" title="{escape(tip)}" aria-label="{escape(tip)}" style="background:{color};color:{tinta}"><b>{escape(r.aula)}</b>{escape(numero(r.capacitat))} places<small class="ocupacio-rajola">{escape(numero(pct)) + ' %' if pct is not None else 'Sense dada'}</small></div>'
+                text_pct = escape(numero(pct)) + ' %' if pct is not None else 'Sense dada'
+                html += f'<div class="rajola" tabindex="0" title="{escape(tip)}" aria-label="{escape(tip)}" style="background:{color};color:{tinta}"><b>{escape(r.aula)}</b>{escape(numero(r.capacitat))} places<small class="ocupacio-rajola">{text_pct}</small></div>'
             html += '</div>'
         html += '</section>'
     st.markdown(html+'</div><p class="escala">Poc ocupada <i></i> Molt ocupada</p>',unsafe_allow_html=True)

@@ -149,7 +149,7 @@ def fitxes(d):
                  f'<div class="junta-xifra">{n} <small>{junta.classe(n)}</small></div>'
                  + f'<small>{escape(junta.resum_excepcions(d))}</small>'
                  + estat({'estat': 'ambre' if n else 'verd', 'etiqueta': 'Fora del torn' if n else 'Cap'})
-                 + (f'<small>{heretades} {junta.classe(heretades)} ja es {'fa' if heretades == 1 else 'fan'} avui fora del seu torn i no es {'toca' if heretades == 1 else 'toquen'}.</small>' if heretades else '')
+                 + ((f'<small>{heretades} {junta.classe(heretades)} ja es ' + ('fa' if heretades == 1 else 'fan') + ' avui fora del seu torn i no es ' + ('toca' if heretades == 1 else 'toquen') + '.</small>') if heretades else '')
                  + '</section>')
     return ('<div class="junta-fitxes">' + ''.join(peces) + '</div>'
             + f'<p>{escape(junta.explicacio_aulari(d))}</p>'
