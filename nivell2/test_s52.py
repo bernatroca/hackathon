@@ -5,6 +5,23 @@ from nivell2.test_franges import base_petita, sessio
 from nivell2.s52 import resol, escriu_csv
 
 
+def test_conserva_prova_diagnostic_pista(tmp_path):
+    from nivell2.s52 import conserva_diagnostic_pista, diagnostic
+    source = tmp_path/'font'
+    stage = tmp_path/'stage'
+    out = tmp_path/'out'
+    for folder in (source, stage, out):
+        folder.mkdir()
+    (source/'diagnostic.md').write_text('Resum sense prova')
+    (out/'diagnostic-pista.md').write_text('Prova anterior')
+    conserva_diagnostic_pista(source/'pista-inicial.csv', stage, out)
+    assert (stage/'diagnostic-pista.md').read_text() == 'Prova anterior'
+    (out/'diagnostic-pista.md').write_text('Una altra prova')
+    conserva_diagnostic_pista(source/'pista-inicial.csv', stage, out)
+    assert (stage/'diagnostic-pista.md').read_text() == 'Prova anterior'
+    assert '## Prova de S04526' in diagnostic([], True)
+
+
 def test_integra_referencia_i_aules():
     s = sessio('a', ini=870)
     b = base_petita(s)

@@ -18,6 +18,7 @@ from nivell2.base import (Proposta, RESULTATS, carrega_model,
 from nivell2.franges import assigna_franges, proposta_franges, setmanes_avaluacio, _referencia
 from nivell2.aules import assigna_aules
 from nivell2.xifres import compara
+from nivell2.readmes import PROVA_S04526, NOTA_FIXADES, conserva_seccions
 
 
 def escriu_csv(path, rows, columns):
@@ -420,7 +421,19 @@ def diagnostic(history, proposal_found):
                              'sense els límits heurístics dels reintents ni el fals recompte horari de classes.')
     if not proposal_found:
         lines += ['', 'No es publica cap proposta nova. El lliurament anterior es conserva íntegre.']
-    return '\n'.join(lines)+'\n'
+    return '\n'.join(lines)+'\n\n' + PROVA_S04526
+
+
+def conserva_diagnostic_pista(source, stage, out):
+    """Una reproducció conserva la prova de la pista, sense substituir-la pel resum."""
+    desti = stage / 'diagnostic-pista.md'
+    if desti.exists():
+        return
+    for prior in (out / 'diagnostic-pista.md', source.with_name('diagnostic-pista.md'),
+                  source.with_name('diagnostic.md')):
+        if prior.is_file():
+            shutil.copyfile(prior, desti)
+            return
 
 
 def _executa(args, stage, out):
@@ -441,9 +454,7 @@ def _executa(args, stage, out):
             pista = Proposta.llegeix(stage/'pista-inicial.csv')
             if source_relax.exists():
                 shutil.copyfile(source_relax, stage/'relaxacions-pista-inicial.csv')
-            prior_diagnostic = source.with_name('diagnostic.md')
-            if prior_diagnostic.exists():
-                shutil.copyfile(prior_diagnostic,stage/'diagnostic-pista.md')
+            conserva_diagnostic_pista(source, stage, out)
         elif getattr(args, 'origen', None):
             raise ValueError('La proposta d’origen no és vàlida')
     base = carrega_model()
@@ -550,7 +561,9 @@ def _executa(args, stage, out):
     cost_note = ('La restauració és local i conserva les aules de les sessions no mogudes. '
                  'Els canvis de franja i d’hores mortes provenen de tornar les sessions al patró; '
                  'no es demostra que aquest cost sigui mínim ni inevitable.')
-    (stage/'README.md').write_text(f'''# 5.2 Torns nous
+    anterior_readme = out/'README.md'
+    anterior_text = anterior_readme.read_text(encoding='utf-8') if anterior_readme.exists() else ''
+    (stage/'README.md').write_text(conserva_seccions(f'''# 5.2 Torns nous
 
 Veredicte oficial: **{report.veredicte}**. Incompliments declarats: {report.json['incompliments_declarats']}.
 Temps total: {elapsed:.3f} s. Llavor: {args.llavor}.
@@ -562,7 +575,8 @@ python -m nivell2.comprova_persones --resultats resultats/nivell2
 ```
 
 `xifres.csv` compara amb l’horari de partida; `comparacio-lliurament.json` compara amb el lliurament anterior.
-`execucio.json` registra els intents i les proves R1; `diagnostic.md` n’explica l’abast.
+`execucio.json` registra els intents; `diagnostic.md`, secció «Prova de S04526», conté la prova R1.
+{NOTA_FIXADES}
 Les dobles heretades pel verificador no es declaren. Les excepcions R1 noves requereixen INFEASIBLE,
 mai UNKNOWN, amb tota la setmana oberta i sense límits heurístics.
 **Reproducció (B4): aquest lliurament parteix del 5.2 anterior verificat,
@@ -583,7 +597,7 @@ La passada final prova de restaurar cada excepció i verifica oficialment cada c
 {cost_note}
 
 No s’afirma òptim global. La proposta es publica sencera després de validar-la i comprovar les persones.
-''',encoding='utf-8')
+''', anterior_text),encoding='utf-8')
     publica(stage,out)
     print(report.veredicte,f'{elapsed:.3f} s; lliurament substituït.',flush=True)
     return 0

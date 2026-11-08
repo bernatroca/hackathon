@@ -25,7 +25,7 @@ from nivell2.franges import _candidats, _referencia, _regles, _setmana
 from nivell2.franges import _hores_mortes
 from nivell2.alumnat import ReglaAlumnat
 from nivell2.s52 import escriu_csv
-from nivell2.readmes import explica_comptatge
+from nivell2.readmes import explica_comptatge, NOTA_GRAU_NOU, conserva_seccions
 from nivell2.xifres_lliurament import comptatge_verificador
 from nivell2.comprova_persones import (colloca_avui, comprova_dobles, conflictes, conflictes_docents,
                                       parelles_dobles)
@@ -496,7 +496,7 @@ def main(argv=None):
         summary['canvis_aula'] = sum(ref.files[s].aula != proposal.files[s].aula for s in ref.files)
         summary['sessions_52_mogudes'] = sum(ref.files[s] != proposal.files[s] for s in ref.files)
         summary['minim_sessions_52_mogudes_demostrat'] = summary['sessions_52_mogudes'] == 0
-        summary['minim_sessions_noves_fora_franja_demostrat'] = stats['estat'] == 'OPTIMAL'
+        summary['minim_sessions_noves_fora_franja_demostrat_amb_regla_equip'] = stats['estat'] == 'OPTIMAL'
         # El costat «abans» és exactament el 5.2, sense sessions extra buides.
         before = avalua(official52, ref.a_files(), relaxacions=relaxations)
         summary['hores_mortes_52_min'] = before.objectius['hores_mortes_min']
@@ -513,7 +513,9 @@ def main(argv=None):
         for name, obj in [('resum.json', summary), ('execucio.json', stats)]:
             (stage/name).write_text(json.dumps(obj, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
         command = f'{PYTHON} -m nivell2.s54 --temps {args.temps:g} --llavor {args.llavor} --referencia {path52}'
-        (stage/'README.md').write_text(
+        anterior_readme = out/'README.md'
+        anterior_text = anterior_readme.read_text(encoding='utf-8') if anterior_readme.exists() else ''
+        (stage/'README.md').write_text(conserva_seccions(
         '# 5.4 Grau nou\n\n'
         f"Resposta **{summary['resposta']}**. Estat del solver: {stats['estat']}.\n\n"
         'Model conjunt de dia, hora i aula per activitat, rutina setmanal, mateix torn i sense desdoblaments. '
@@ -527,6 +529,7 @@ def main(argv=None):
         f"classes del 5.2 mogudes: {summary['sessions_52_mogudes']}. "
         'INFEASIBLE en aquestes condicions és resposta 2, no una prova d’impossibilitat global. '
         'UNKNOWN és resposta 3. El detall dels dominis i rebuigs és a `execucio.json`.\n\n'
+        + NOTA_GRAU_NOU + '\n\n'
         f'Des del worktree `{ARREL}`:\n```sh\n{command}\n```\n\n'
         'Comprovació oficial de la proposta (si hi ha solució):\n```sh\n'
         f'{PYTHON} -c "from pathlib import Path; from nivell2.base import verifica, GRAU_NOU; '
@@ -534,7 +537,7 @@ def main(argv=None):
         f"referencia=Path('{path52}'), relaxacions=Path('resultats/nivell2/5.4/relaxacions.csv')); print(r.veredicte, sum(r.compten().values()))\"\n"
         '```\n\nProves i comprovació de persones:\n```sh\n'
         f'{PYTHON} -m pytest -q nivell2 app\n'
-        f'RESULTATS_DIR=$PWD/resultats/nivell2 {PYTHON} -m nivell2.comprova_persones\n```\n', encoding='utf-8')
+        f'RESULTATS_DIR=$PWD/resultats/nivell2 {PYTHON} -m nivell2.comprova_persones\n```\n', anterior_text), encoding='utf-8')
         readme = stage/'README.md'
         readme.write_text(explica_comptatge(readme.read_text(encoding='utf-8'),
                                            comptatge_verificador('5.4', Path(tmp)), '5.4'),
