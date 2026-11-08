@@ -23,7 +23,7 @@ if not (repte / 'paquet' / 'sessions.csv').is_file() or not (repte / 'horaris').
         st.rerun()
     st.stop()
 
-from pagines import portada, preguntes, part2, junta, comprova
+from pagines import portada, preguntes, part2, junta
 from servei import setmanes, versio_registre, actualitza_dades
 from components.vistes import franja_context
 from errors import mostra_error
@@ -46,7 +46,6 @@ pagina = st.navigation({
         st.Page(part2.mostra,title='Horari proposat',url_path='part2',icon=':material/calendar_month:'),
         st.Page('pagines/imprevistos.py',title='Imprevistos',url_path='imprevistos',icon=':material/event_busy:'),
         st.Page(junta.mostra,title='Resum per a la Junta',url_path='junta',icon=':material/description:'),
-        st.Page(comprova.mostra, title='Comprova-ho tu', url_path='comprova', icon=':material/terminal:'),
     ],
 })
 st.session_state['_pagina_horari'] = st.Page(part2.mostra, title='Horari proposat', url_path='part2')
