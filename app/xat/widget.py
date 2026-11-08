@@ -19,7 +19,8 @@ PREGUNTES = {
     'Resum per a la Junta': ['Resumeix aquesta proposta en tres frases per a la Junta', 'Quin risc té aquesta proposta?'],
     'Totes les respostes': ['Quantes classes no tenen aula assignada?', 'Quantes classes tenen més alumnes que places?'],
 }
-PER_DEFECTE = ['Quantes classes no tenen aula assignada?', 'Quines propostes d’horari hi ha?']
+PREGUNTA_DEMO = 'Quantes aules queden lliures dimarts a les 10?'
+PER_DEFECTE = [PREGUNTA_DEMO, 'Quantes classes no tenen aula assignada?', 'Quines propostes d’horari hi ha?']
 
 
 def _imprevistos():
@@ -98,7 +99,7 @@ def pantalla_actual(titol, estat):
             linies.append(f'Resposta oberta: «{nom}» (identificador: {detall_id}).')
             preguntes = ['Explica’m aquesta resposta en paraules senzilles', 'Què es pot millorar en aquest cas?']
     return dict(resum=' · '.join(parts), text='\n'.join(linies),
-                preguntes=preguntes)
+                preguntes=[PREGUNTA_DEMO, *[p for p in preguntes if p != PREGUNTA_DEMO]][:3])
 
 
 def _json(valor):
@@ -113,7 +114,7 @@ def posa_widget(pantalla: dict | None = None):
         # El GET de salut del widget desactiva l'enviament sense cap port.
         api = 'data:application/json,' + '%7B%22teClau%22%3Afalse%7D'
     opcions = dict(api=api, titol='Assistent',
-                   salutacio='Pregunta’m sobre l’horari, les aules o les propostes de l’Escola.',
+                   salutacio='Pregunta’m per aules, grups o l’horari proposat. Respondré amb les dades.',
                    preguntes=PER_DEFECTE)
     css = (WEB / 'xat-ia.css').read_text()
     js = (WEB / 'xat-ia.js').read_text()

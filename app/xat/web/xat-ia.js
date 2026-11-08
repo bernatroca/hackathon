@@ -693,6 +693,7 @@
   }
 
   function preguntesAra() {
+    if (estat.missatges.some((m) => m.role === 'assistant')) return ['Com ho saps?'];
     const p = estat.pantalla;
     if (p && Array.isArray(p.preguntes)) return p.preguntes;
     return typeof op.preguntes === 'function' ? op.preguntes(p) || [] : op.preguntes || [];
