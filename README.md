@@ -72,6 +72,8 @@ el resum HTML es pot obrir directament sense recalcular el model.
 
 ## Preguntes des de la terminal
 
+Les mateixes comprovacions es poden fer des de l'app, sense terminal: la pàgina «Comprova-ho tu» (menú «La proposta») té un botó per a cada ordre (verificador oficial d'avui i de 5.1–5.4, `nivell1.comprova` i preguntes a l'Assistent) i mostra l'ordre i la sortida.
+
 Des de l'arrel del repositori, amb `REPTE_DIR` exportat. Totes s'han provat a `main`.
 
 **Part 2 · el verificador oficial.** Torna el veredicte de cada proposta:
