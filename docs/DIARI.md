@@ -294,3 +294,14 @@ Equip: … · Repte: horaris i espais Escola d'Enginyeria 2027-28 · Persona: �
 - Com ho hem resolt (Codex `gpt-6.1-sol`): el resum guarda l'empremta de la proposta i es torna a calcular si canvia. S'escriu de manera segura, i si no es pot llegir es torna a calcular. Si no es pot actualitzar, es mostra l'últim resum bo amb un avís. Textos corregits.
 - Comprovat: 503 proves; AppTest amb 5 propostes × 2 torns × 3 rondes, cap error; dues pestanyes alhora a l'app real, cap error.
 - Per a la presentació: amb el 5.2 nou, la tarda queda a 18 de 19 aules a l'hora punta (abans 19 de 19, «sense marge») i el màxim de classes alhora és 17.
+
+### [dg 02:15] IA · Segona revisió del punt 5: agents que revisen subagents
+- Com: subagents de Codex (`gpt-6.1-sol`) programen, cadascun al seu worktree, i agents revisors de Claude, en mode només lectura, revisen cadascun la feina de dos subagents. Res no entra a `main` sense l'APROVAT del revisor; quan troben errors, tornen al mateix Codex. En total, 5 revisors (A–E) i unes 12 tandes de Codex.
+- El que van trobar i s'ha arreglat:
+  - **5.4:** l'objectiu no veia les hores mortes del grau nou (3.420 → 1.620 minuts).
+  - **5.3:** un retall del temps de càlcul donava 69 canvis d'aula en lloc de 64; ara la reserva de 2 aules només compta aules obertes, i un 5.3 pitjor que l'anterior no es pot publicar.
+  - **5.2:** 14 sessions trencaven la rutina sense motiu (50 → 36 excepcions de rutina). Un primer intent repartia de nou les aules de tot el semestre i sumava 819 desplaçaments; el revisor el va rebutjar, i ara hi ha una protecció contra aquests empitjoraments.
+  - **Junta:** el resum A4 s'havia quedat antic. El títol sortia sempre «19 de 19», el «459 excepcions noves» era enganyós (n'hi ha 1 de nova i 458 de fixades que ja eren a la tarda) i el «màxim de classes alhora» comptava pràctiques de laboratori que no fan servir cap aula ordinària.
+  - **Paquet:** ara inclou el resum de la Junta, el diagnòstic i els resums, i comprova que el resum A4 és al dia. Els informes ja no porten rutes de l'ordinador.
+  - **Portada:** el grau nou només surt en verd si l'informe correspon a la proposta actual.
+- Resultat: 5.1 VALIDA; 5.2, 5.3 i 5.4 VALIDA AMB RELAXACIONS DECLARADES; persones CORRECTE; 638 proves correctes. Lliurament a `~/Downloads/lliurament-nivell2.zip`.

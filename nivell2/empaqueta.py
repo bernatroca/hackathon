@@ -17,7 +17,7 @@ from nivell2.junta import documents
 from nivell2.comprova_persones import comprova as comprova_persones
 from nivell2.verificacio import OPCIONS, VALIDES, ordre, ordre_oficial, verifica_pregunta
 
-OPCIONALS = ('relaxacions.csv', 'diagnostic.md', 'resum.json', 'execucio.json',
+OPCIONALS = ('relaxacions.csv', 'diagnostic.md', 'diagnostic-pista.md', 'resum.json', 'execucio.json',
              'excepcions.csv', 'titulacions.csv')
 
 JUNTA = ('junta.html', 'junta.md', 'junta.json')

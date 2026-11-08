@@ -33,18 +33,18 @@ Nota per a qui presenta: una relaxació és una excepció declarada amb motiu, n
 ## Xifres finals · Què guanyem i què costa
 
 - **5.1:** 369 canvis d'aula i cap canvi de franja. Les aules de teoria addicionals per grup passen de 14 a 9 segons el verificador. Sense els dobles que no necessiten espai propi, passen de 8 a 9: aquest indicador empitjora.
-- **5.2:** 459 excepcions de torn: 458 sessions fixades que ja eren a la tarda i que la regla 1 impedeix moure, més 1 sessió de la setmana d'avaluació amb impossibilitat demostrada.
-- Respecte de l'horari inicial, les hores mortes passen de 72.930 a 105.930 minuts. Els desplaçaments d'aula passen de 544 a 1.420. Reorganitzar torns i assignar les aules que faltaven té aquest cost.
-- Les aules de teoria addicionals per grup passen de 14 a 3 en el recompte oficial. El 94,05 % de les activitats manté dia, hora i aula cada setmana; hi ha 50 sessions fora del patró habitual.
-- **5.3:** 65 classes canvien d'aula al CSV respecte del 5.2; el verificador en compta 64 perquè exclou la cancel·lada. Hi ha 53 sessions afectades pels imprevistos i es mouen 12 classes més de suport. Hi ha 1 canvi de franja: només la cancel·lada canvia de dia. Cap classe canvia de torn. El resultat és òptim per al model de reparació.
-- **5.4:** hi caben les 235 sessions noves del grau de 40 places. Se'n mouen 41 de la franja original. Es mouen 0 classes del 5.2 i es creen 0 conflictes nous d'alumnat i 0 de professorat.
+- **5.2:** 459 excepcions de torn: 458 classes de 1r i 2n fixades que ja són a la tarda i que la regla 1 impedeix moure, més 1 excepció nova, demostrada, de la setmana d'avaluació. Hi ha 2.015 sessions que canvien de franja (2.007 canvien de torn per la regla 1 i 8 canvien d’hora dins el mateix torn).
+- Respecte de l'horari inicial, les hores mortes passen de 72.930 a 107.100 minuts. Els desplaçaments d'aula passen de 544 a 1.420 i els d’edifici, de 0 a 17. Hi ha 2.015 canvis de franja respecte de l’horari inicial. Reorganitzar torns i assignar les aules que faltaven té aquest cost.
+- Les aules de teoria addicionals per grup passen de 14 a 3 en el recompte oficial. El 95,60 % de les activitats manté dia, hora i aula cada setmana; hi ha 36 sessions fora del patró habitual, amb el motiu documentat a `resultats/nivell2/5.2/excepcions.csv`.
+- **5.3:** 65 classes canvien d'aula al CSV respecte del 5.2; el verificador en compta 64 perquè exclou la cancel·lada. Dels 64 canvis d’aula oficials, 52 corresponen a les afectades pels imprevistos, sense comptar la cancel·lada, i 12 a classes de suport. Hi ha 10 classes fixades que canvien d’aula perquè la seva està tancada: 8 R1-FIXADA i 2 R7-PLAB. Hi ha 1 canvi de franja: només la cancel·lada canvia de dia. Cap classe canvia de torn. S’afegeixen 10 excepcions a les 459 del 5.2, fins a 469. La reserva mínima operativa és de 2 aules i les hores mortes queden en 106.860 minuts. El resultat és òptim per al veïnat obert del model de reparació, no per al problema global.
+- **5.4:** hi caben les 235 sessions noves del grau de 40 places. Se'n mouen 41 de la franja original. Les hores mortes del grau nou són 1.620 minuts: el total passa de 107.100 a 108.720. Els desplaçaments d’aula passen de 1.420 a 1.461 i les aules de teoria addicionals, de 3 a 4. Es mouen 0 classes del 5.2 i es creen 0 conflictes nous d'alumnat i 0 de professorat.
 
 Nota per a qui presenta: fonts finals: `5.1/README.md`, els `xifres.csv`, els `resum.json` i els `informe.json` de `resultats/nivell2/`. Al 5.1 no hi ha `resum.json`. Les 12 classes de suport del 5.3 s'han recomptat comparant les propostes amb les sessions afectades que identifica el codi de reparació. No confondre canvi d'una aula ja assignada amb assignació d'una aula que faltava.
 
 ## Marge d'aules · Encaixar no és suficient
 
 - Al 5.2, el pic del matí queda igual que a l’horari inicial: 15 de 19 aules ordinàries disponibles. A la tarda és de 18 de 19: queda una aula de marge en aquest recompte.
-- Aquest pic compta aules diferents ocupades dins d'una hora. El màxim de classes simultànies a la tarda és 17.
+- Aquest pic compta aules diferents ocupades dins d'una hora. El màxim de classes simultànies és 15 al matí i 18 a la tarda; el pic d’aules de la setmana típica a la tarda és 17 de 19.
 - Es guarden 2 aules de reserva. La mida de les aules també limita el marge útil.
 - Recomanem deixar 1–2 aules lliures a l'hora punta per afrontar avaries i grups que creixen.
 
@@ -52,6 +52,7 @@ Nota per a qui presenta: font: `resultats/nivell2/junta/5.2/junta.json`, camps `
 
 ## Com sabem que és correcte
 
+- En una segona revisió, 5 agents revisors van revisar cadascun la feina de dos subagents i van trobar i fer arreglar, entre altres coses, les hores mortes del grau nou que no es veien (3.420 → 1.620 minuts), 14 sessions que trencaven la rutina sense motiu i el resum A4 de la Junta que havia quedat antic.
 - 12 revisors de Codex van revisar el punt 5. Tres per apartat: un contrastava l'enunciat, un revisava el codi i un recalculava els resultats.
 - Van trobar errors que el verificador oficial no veu. El més greu eren 12 coincidències d'alumnat del grau nou: la teoria TE/91, de 40 alumnes, coincidia amb problemes PAUL/92, on va una part d'aquests mateixos alumnes.
 - El verificador compara números de grup i no detectava aquesta relació entre 91 i 92. Hem fet explícit que la teoria de tot el grup inclou els subgrups. Només permetem problemes simultanis quan hi ha prou informació per separar l'alumnat.
@@ -96,12 +97,12 @@ Nota per a qui presenta: un model que no acaba no demostra que no hi hagi soluci
 
 ## Norma de dades · Com treballem ara
 
-- Cap agent llegeix dades reals: treballa amb l'esquema i exemples inventats.
+- L’equip ha retirat la restricció de lectura anterior i ha autoritzat el contrast dels resultats finals per a aquesta revisió documental.
 - El disseny i les proves visuals es verifiquen amb dades inventades.
-- El codi pot comprovar les dades locals, però als agents només els arriben recomptes, errors sense valors reals i veredictes.
+- Durant la restricció, el codi comprovava les dades locals i als agents només els arribaven recomptes, errors sense valors reals i veredictes.
 - Les dades i els resultats derivats queden fora del repositori; l'app és local.
 
-Nota per a qui presenta: aquesta és la norma vigent des del vespre. Abans, segons el permís inicial comunicat a l'equip, els agents sí que havien llegit dades. El README ho explica: la neteja posterior no desfà el contingut que ja havia passat pels serveis d'IA. Font: diari, 19:09 i 20:15; [README](../README.md), «Ús de les dades del repte, abans i després de la restricció».
+Nota per a qui presenta: aquesta restricció es va aplicar des del vespre i l’equip l’ha retirat per a la revisió final. Abans, segons el permís inicial comunicat a l'equip, els agents sí que havien llegit dades. El README ho explica: la neteja posterior no desfà el contingut que ja havia passat pels serveis d'IA. Font: diari, 19:09 i 20:15; [README](../README.md), «Ús de les dades del repte, abans i després de la restricció».
 
 ## Ús de la IA · Repartiment i decisions humanes
 
@@ -116,7 +117,7 @@ Nota per a qui presenta: les maquetes del migdia eren HTML locals; la graella fi
 ## Què queda per fer · Explicar els límits
 
 - Guanyar marge d'aules a l'hora punta: la validesa actual no resol la fragilitat operativa.
-- **Fet:** comparació final del 5.2 contrastada: 72.930 → 105.930 minuts d’hores mortes i 94,05 % d’activitats amb rutina setmanal.
+- **Fet:** comparació final del 5.2 contrastada: 72.930 → 107.100 minuts d’hores mortes i 95,60 % d’activitats amb rutina setmanal.
 - Revisar les excepcions amb Gestió Acadèmica i la Junta, i explicar també qualsevol indicador que empitjori.
 - Tornar a verificar els fitxers finals abans del lliurament i preparar la demo i el material de reserva.
 - Com a evolució: consulta personal de l'estudiant, peticions del professorat i assistent; les fonts no acrediten que aquestes ampliacions estiguin acabades.
