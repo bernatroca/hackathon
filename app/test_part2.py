@@ -1425,3 +1425,32 @@ def test_b15_tipica_exclou_setmanes_residuals_de_la_mediana():
     base = SimpleNamespace(sessions={f'INVENTADA-{d}-{i}': SimpleNamespace(data=d)
         for d, n in recomptes for i in range(n)})
     assert setmana_tipica(base) == date(2027, 3, 1)
+
+
+def test_exemple_preparat_i_restabliment():
+    from pagines.part2 import tria_exemple
+    base = crea_base()
+    proposta = Proposta.de_base(base)
+    assert tria_exemple(base, proposta) is None
+    # Dos candidats; el grup 914 només té una classe i cap coincidència.
+    proposta.files['S90001'] = Assignacio('M', '10:00', 'Q9/0002')
+    proposta.files['S90004'] = Assignacio('X', '11:00', 'Q9/0002')
+    assert tria_exemple(base, proposta) == ('GXX', '1r', '914', 'S90004')
+
+    def prepara(base):
+        p = Proposta.de_base(base)
+        p.files['S90004'] = Assignacio('X', '11:00', 'Q9/0002')
+        return {'5.2': p}
+
+    with app_inventada(prepara_propostes=prepara) as at:
+        assert not at.error and not at.exception
+        assert at.selectbox(key='p2-grup').value == '914'
+        at.selectbox(key='p2-curs').select('3r').run(timeout=30)
+        at.selectbox(key='p2-setmana').select(date(2027, 3, 15)).run(timeout=30)
+        next(b for b in at.button if b.label == 'Mira l’exemple').click().run(timeout=30)
+        assert not at.error and not at.exception
+        assert at.selectbox(key='p2-grup').value == '914'
+        assert at.selectbox(key='p2-curs').value == '1r'
+        assert at.selectbox(key='p2-setmana').value is None
+        assert at.session_state['p2-filtre'] == 'totes'
+        assert any('Exemple ·' in c.value for c in at.caption)
