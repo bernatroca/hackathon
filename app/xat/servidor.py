@@ -428,21 +428,21 @@ def _resum_consulta(nom, args, resultat):
              "consulta": resultat.get("consulta", ""), "id_sessio": ids[:10],
              "total_id": len(ids)}
     if resum["ok"]:
-        resum["resultat"] = _resum_resultat(resultat.get("resultat"))
+        resum["resultat"] = _resum_resultat(resultat.get("resultat"), limit=25 if nom == "aules_lliures" else 10)
     if not resum["ok"]:
         resum["error"] = _sense_claus(str(resultat.get("error", "")))[:200]
     return _neteja_secrets(resum)
 
 
-def _resum_resultat(valor, profunditat=0):
+def _resum_resultat(valor, profunditat=0, limit=10):
     """Conserva recomptes i context; les mostres de files tenen un límit explícit."""
     if profunditat > 6:
         return None
     if isinstance(valor, dict):
-        return {k: _resum_resultat(v, profunditat + 1) for k, v in valor.items()
+        return {k: _resum_resultat(v, profunditat + 1, limit) for k, v in valor.items()
                 if k != "id_sessio"}
     if isinstance(valor, list):
-        return [_resum_resultat(v, profunditat + 1) for v in valor[:10]]
+        return [_resum_resultat(v, profunditat + 1, limit) for v in valor[:limit]]
     if isinstance(valor, str):
         return valor[:300]
     return valor
@@ -497,6 +497,35 @@ def _evidencia(valor):
     return set()
 
 
+def _evidencia_entrada(valor):
+    """Paràmetres i preguntes també avalen números i hores explícits."""
+    fonts = _evidencia(valor)
+    if isinstance(valor, dict):
+        for element in valor.values():
+            fonts.update(_evidencia_entrada(element))
+        hora = str(valor.get('hora_ini', ''))
+        match = re.fullmatch(r'([01]?\d|2[0-3])(?:(?:[:.])([0-5]\d)|h)?', hora)
+        durada = valor.get('durada_min')
+        if match and type(durada) is int and durada > 0:
+            fi = int(match[1]) * 60 + int(match[2] or 0) + durada
+            if fi <= 1440:
+                fonts.add(_normalitza_numero(str(fi // 60)))
+                fonts.add(_normalitza_numero(f'{fi // 60}.{fi % 60:02d}'))
+    elif isinstance(valor, list):
+        for element in valor:
+            fonts.update(_evidencia_entrada(element))
+    elif isinstance(valor, str):
+        text = _CODIS.sub(' ', html.unescape(valor))
+        for match in _NUMERO.finditer(text):
+            try:
+                fonts.add(_normalitza_numero(match.group()))
+            except ArithmeticError:
+                continue
+        for match in re.finditer(r'\b([01]?\d|2[0-3])(?:[:.]([0-5]\d)|h\b)', text):
+            fonts.add(_normalitza_numero(match[1]))
+    return fonts
+
+
 def _evidencia_conversa(missatges):
     fonts = set()
     for m in missatges:
@@ -504,7 +533,7 @@ def _evidencia_conversa(missatges):
         text = contingut if isinstance(contingut, str) else "\n".join(
             p.get("text", "") for p in (contingut or []) if p.get("type") == "text")
         if m["role"] == "user":
-            fonts.update(_evidencia(text))
+            fonts.update(_evidencia_entrada(text))
         elif m["role"] == "assistant":
             for bloc in _BLOC_CONSULTES.findall(text):
                 cru = bloc.removeprefix("<consultes_anteriors>").removesuffix("</consultes_anteriors>").strip()
@@ -512,7 +541,7 @@ def _evidencia_conversa(missatges):
                     valor = json.loads(cru)
                 except ValueError:
                     valor = cru
-                fonts.update(_evidencia(valor))
+                fonts.update(_evidencia_entrada(valor))
     return fonts
 
 
@@ -585,6 +614,8 @@ def _trossos(p: dict, missatges: list[dict]):
                         args = _arguments_crida(crida)
                     except (ValueError, TypeError):
                         args = {}
+                    if resultat.get("ok") is True:
+                        fonts.update(_evidencia_entrada(args))
                     yield "consulta", _resum_consulta(crida["function"]["name"], args, resultat)
                     conversa.append({"role": "tool", "tool_call_id": crida["id"],
                                      "content": "<dades>\n" + json.dumps(resultat, ensure_ascii=False)

@@ -84,6 +84,31 @@ def test_sense_52():
     assert not any('El resum definitiu sortirà' in i.value for i in app.caption)
 
 
+@pytest.mark.parametrize('conclusio_desada', [False, True])
+def test_calcul_sense_frases_repetides(conclusio_desada):
+    d = dict(dades(), proposta='5.2', canvis_franja=2015, canvis_aula=373)
+    frases = junta.junta.conclusio(d)
+    if conclusio_desada:
+        d['conclusio'] = frases
+    app = obre(d, ['Avui', '5.2'])
+    calcul = next(e for e in app.expander if e.label == 'Com ho hem calculat')
+    textos = [n.value for n in calcul if n.type in ('markdown', 'caption')]
+    for frase in (junta.junta.resum_canvis_aula(d), junta.junta.explicacio_marge(d)):
+        assert textos.count(frase) == 1
+    assert [t for t in textos if t in frases[1:]] == frases[1:]
+
+
+@pytest.mark.parametrize('criteri,canvi', [('franja', 'de dia o hora'), ('aula', 'd’aula')])
+def test_text_curs_mes_afectat(criteri, canvi):
+    d = dades()
+    curs = dict(d['sessions_mogudes'][0], sessions=163,
+                **{criteri: 163, criteri + '_pct': 100})
+    d['curs_mes_afectat'] = {'criteri': criteri, 'curs': curs}
+    html = junta.fitxes(d)
+    assert f'Amb la proposta, el 100 % de les seves classes canvien {canvi} (163 de 163).' in html
+    assert 'Avui: horari actual' not in html
+
+
 def test_percentatges_ordenats_i_absoluts_al_costat():
     d = dades()
     a = d['sessions_mogudes'][0]
@@ -453,7 +478,7 @@ def test_fitxa_mes_afectat_amb_classes_i_comparacio():
     d['curs_mes_afectat'] = {'criteri': 'franja', 'curs': d['sessions_mogudes'][0]}
     d.update(fora_torn_avui=30, fora_torn_proposta=1)
     html = junta.fitxes(d)
-    assert '100 % de les classes canvien de dia o hora (10 de 10)' in html
+    assert '100 % de les seves classes canvien de dia o hora (10 de 10)' in html
     assert 'passen al torn que els toca' in html
     assert 'Avui 30 → 1 amb la proposta, en total.' in html
     assert '>Grau inventat, 1r</div>' in html
@@ -635,7 +660,7 @@ def test_curs_mes_afectat_respecta_el_camp_del_resum_sense_inventar_motiu():
         nom='Curs del resum', sessions=4, aula=3, aula_pct=75)}
     html = junta.fitxes(d)
     assert '>Curs del resum</div>' in html
-    assert '75 % de les classes canvien d’aula (3 de 4)' in html
+    assert '75 % de les seves classes canvien d’aula (3 de 4)' in html
     assert '100 %' not in html
     assert 'passen al torn' not in html and 'per fer encaixar' not in html
 

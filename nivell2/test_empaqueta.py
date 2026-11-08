@@ -82,9 +82,38 @@ def test_empaquetat(tmp_path, sense_zip):
             assert all(f'resultats/nivell2/junta/5.2/{name}' in z.namelist() for name in empaqueta.JUNTA)
             index = z.read('LLEGEIX-ME.md').decode('utf-8')
             assert '5.2 | VALIDA AMB RELAXACIONS DECLARADES | OK' in index
-            assert 'resultats/nivell2/junta/5.2/junta.html' in index
+            assert 'resultats/nivell2/junta/<proposta>/junta.html' in index
+            assert '5.2 sempre; 5.1, 5.3 i 5.4 si existeixen els tres fitxers' in index
             assert 'graelles/index.html' in z.namelist()
             assert 'graelles/aula-000.html' in z.namelist()
+
+
+@pytest.mark.parametrize('q', ['5.1', '5.3', '5.4'])
+@pytest.mark.parametrize('missing', [None, *empaqueta.JUNTA, 'carpeta'])
+def test_empaquetat_junta_opcional(tmp_path, q, missing):
+    root, output = tmp_path/'font', tmp_path/'sortida'
+    prepara(root)
+    junta = root/'junta'/q
+    if missing != 'carpeta':
+        junta.mkdir()
+        for name in empaqueta.JUNTA:
+            if name != missing:
+                (junta/name).write_text(f'inventat {q} {name}\n')
+    folder = output/'graelles'
+    folder.mkdir(parents=True)
+    report = Informe({'veredicte': 'VALIDA', 'restriccions': {}}, '')
+    with patch.object(empaqueta, 'genera'), \
+         patch.object(empaqueta, 'graelles', return_value=folder), \
+         patch.object(empaqueta, 'comprova_persones', return_value=True), \
+         patch.object(empaqueta, 'verifica_pregunta', return_value=report):
+        assert empaqueta.empaqueta(output, arrel=root) == 0
+    with zipfile.ZipFile(output/'lliurament-nivell2.zip') as archive:
+        for name in empaqueta.JUNTA:
+            path = f'resultats/nivell2/junta/{q}/{name}'
+            assert (path in archive.namelist()) == (missing is None)
+            if missing is None:
+                assert archive.read(path) == (junta/name).read_bytes()
+            assert f'resultats/nivell2/junta/5.2/{name}' in archive.namelist()
 
 
 @pytest.mark.parametrize('failure', ['veredicte', 'contracte', 'error', 'persones'])

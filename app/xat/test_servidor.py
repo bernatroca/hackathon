@@ -934,3 +934,54 @@ def test_b14_instruccions_reconsulta_mateixa_eina():
     assert 'MATEIXA eina' in text and 'MATEIXOS paràmetres' in text
     assert '(torna a cridar horari_grup amb els mateixos paràmetres' in text
     assert '(torna a cridar aules_lliures amb la mateixa proposta' in text
+
+
+def test_consulta_aules_conserva_inventari_complet():
+    files = [{'aula': f'Q9/{i:04d}', 'capacitat': 60} for i in range(21)]
+    resultat = {'ok': True, 'resultat': {'total': 21, 'files': files}}
+    resum = s._resum_consulta('aules_lliures', {}, resultat)
+    assert resum['resultat']['files'] == files
+    assert resum['resultat']['total'] == len(files)
+
+
+@pytest.mark.parametrize('hora', ['10', '10:00', '10.00', '10h'])
+@pytest.mark.parametrize('total', [6, 7])
+def test_hores_pregunta_i_final_franja_comprovables(monkeypatch, hora, total):
+    args = {'dia': 'M', 'hora_ini': hora, 'durada_min': 60,
+            'places_min': 0, 'proposta': '5.2'}
+    resposta = f"Dimarts 13 d'abril, de 10 a 11: queden {total} aules."
+    torn = 0
+    def ia(*a):
+        nonlocal torn
+        torn += 1
+        if torn == 1:
+            yield 'tools', [crida('aules_lliures', json.dumps(args))]
+        else:
+            yield 'tros', resposta
+    monkeypatch.setattr(s, '_trossos_api', ia)
+    monkeypatch.setattr(s, '_executa', lambda c: {'ok': True, 'resultat': {'total': 6}})
+    missatges = s.valida({'missatges': [
+        {'role': 'user', 'content': 'Quantes aules queden lliures dimarts a les 10 a la proposta 5.2?'},
+        {'role': 'assistant', 'content': 'Queden 6 aules.'},
+        {'role': 'user', 'content': 'Com ho saps?'},
+    ]})
+    resultat = [json.loads(e[6:]) for e in s.flux(missatges)]
+    text = ''.join(e.get('tros', '') for e in resultat)
+    if total == 6:
+        assert text == resposta
+        assert 'No he pogut comprovar' not in text
+    else:
+        assert text.endswith('(No he pogut comprovar: 7)')
+
+
+def test_hores_i_numeros_entrada_conversa():
+    consulta = {'eina': 'aules_lliures', 'args': {'hora_ini': '10h', 'durada_min': 60},
+                'resultat': {'total': 6}}
+    fonts = s._evidencia_conversa([
+        {'role': 'user', 'content': 'A les 10:00, per a 42 places?'},
+        {'role': 'assistant', 'content': '<consultes_anteriors>' + json.dumps([consulta])
+         + '</consultes_anteriors>'},
+        {'role': 'user', 'content': 'Com ho saps?'},
+    ])
+    assert not s._no_comprovades('De 10 a 11, 6 aules per a 42 places.', fonts)
+    assert s._no_comprovades('7 aules', fonts) == ['7']

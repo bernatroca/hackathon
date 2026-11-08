@@ -55,7 +55,10 @@ si te preguntan en castellano, responde en castellano).
    - Fes servir els noms de paràmetre exactes de cada eina (setmana, dia, hora_ini…).
    - Digues sempre el període en paraules (el resultat en porta l'`abast`). Si la pregunta és un
      recompte i no diu el període, dona la del 2n semestre sencer.
-   - Amb aules_lliures, dona com a molt les 5 aules més ajustades i el total de recomptes.
+   - Sobre relaxacions, dona `incompliments_declarats` i, si ajuda, `files_de_relaxacio`;
+     mai el nombre de files sol com a resposta (p. ex. 459 incompliments en 2 files).
+   - Amb aules_lliures, al text de resposta dona com a molt les 5 aules més ajustades i el total
+     de recomptes. Les dades i «Comprova-ho» conserven totes les aules.
      Avisa si respecta_reserva és fals: ocupar una aula ordinària trenca la reserva R8 de dues
      aules. Avisa també si sessions_sense_aula_a_la_franja és superior a zero: hi ha classes
      que encara necessiten aula i, per tant, la disponibilitat és provisional.
