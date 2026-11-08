@@ -2,7 +2,7 @@ from html import escape
 import streamlit as st
 from components.grafics import grafics
 from mostra import exemples
-from presentacio import text, text_portada, abast, desglos, valor, numero
+from presentacio import text, text_portada, abast, desglos, valor
 from servei import una, AULES_DISPONIBLES, AULES_RESERVA
 from textos import PROBLEMES
 from errors import mostra_error
@@ -87,15 +87,7 @@ def resum_grau(info):
 
 
 def frase_grau(t, info):
-    """Una frase amb els recomptes validats, sense perdre el detall si en falta cap."""
-    v = (t.extra or {}).get('validat_part2')
-    if info['c'].get('validat') and isinstance(v, dict):
-        n = v.get('sessions_grau_nou_collocades', v.get('sessions_grau_nou'))
-        fora = v.get('sessions_grau_nou_fora_franja')
-        mogudes = v.get('sessions_52_mogudes')
-        if all(x is not None for x in (n, fora, mogudes)):
-            return (f"{numero(n)} sessions noves: {numero(fora)} canvien d’hora i "
-                    f"{numero(mogudes)} classes de l’horari proposat es mouen.")
+    """Reutilitza la frase calculada amb els recomptes del servei."""
     return info['frase']
 
 

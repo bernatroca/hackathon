@@ -1,5 +1,6 @@
 """Accés al contracte de troballes i a la llista de setmanes."""
 import importlib
+import hashlib
 import json
 from pathlib import Path
 import streamlit as st
@@ -54,7 +55,11 @@ def validacio_part2(apartat):
     """Només el veredicte i el recompte d'incompliments que compten; cap fila de dades."""
     carpeta = RESULTATS_PART2 / apartat
     try:
-        veredicte = json.loads((carpeta / 'informe.json').read_text(encoding='utf-8'))['veredicte']
+        informe = json.loads((carpeta / 'informe.json').read_text(encoding='utf-8'))
+        veredicte = informe['veredicte']
+        sha = hashlib.sha256((carpeta / 'proposta.csv').read_bytes()).hexdigest()
+        if informe.get('context', {}).get('proposta_sha256') != sha:
+            return None
         resum = json.loads((carpeta / 'resum.json').read_text(encoding='utf-8'))
     except (OSError, KeyError, ValueError):
         return None
@@ -62,7 +67,7 @@ def validacio_part2(apartat):
     resultat = dict(veredicte=veredicte, incompliments=incompliments,
                     valida=veredicte in VEREDICTES_VALIDS and incompliments == 0)
     # Només recomptes: resposta del 5.4 (1 hi cap, 2 no sense tocar el 5.2, 3 no trobada, 4 demostrat que no).
-    for clau in ('resposta', 'sessions_grau_nou', 'sessions_grau_nou_collocades', 'sessions_52_mogudes'):
+    for clau in ('resposta', 'sessions_grau_nou', 'sessions_grau_nou_collocades', 'sessions_grau_nou_fora_franja', 'sessions_52_mogudes'):
         if clau in resum:
             resultat[clau] = int(resum[clau])
     return resultat

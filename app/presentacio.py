@@ -192,18 +192,6 @@ def text(t, altres=None, *, setmana_triada=None):
             mogudes = v.get('sessions_52_mogudes', 0)
             n = v.get('sessions_grau_nou_collocades', v.get('sessions_grau_nou'))
             fora = v.get('sessions_grau_nou_fora_franja')
-            if fora is None:
-                # servei encara només transmet les magnituds antigues del
-                # resum; llegim únicament el recompte nou per a aquest text.
-                import json
-                from servei import RESULTATS_PART2
-                try:
-                    resum = json.loads((RESULTATS_PART2/'5.4'/'resum.json').read_text(encoding='utf-8'))
-                    if (resum.get('sessions_grau_nou_collocades') == n
-                            and resum.get('sessions_52_mogudes') == mogudes):
-                        fora = resum.get('sessions_grau_nou_fora_franja')
-                except (OSError, ValueError):
-                    pass
             resultat.update(etiqueta='Hi cap', estat='verd',
                 proposem='Incorporar-lo a l’horari proposat: ja hi cap.', frase=(
                 f"L’horari proposat hi col·loca {numero(n) + ' sessions' if n is not None else 'el grau nou'}"
@@ -216,7 +204,7 @@ def text(t, altres=None, *, setmana_triada=None):
                 'No hi cap sense tocar l’horari proposat.' if v['resposta'] == 2 else 'Hem demostrat que no hi cap.')
                 + ' Ho ha comprovat la part 2 amb el verificador oficial.')
         else:
-            resultat.update(etiqueta='Pendent de validar', estat='ambre')
+            resultat.update(etiqueta='Pendent de comprovar', estat='ambre')
     resultat.update(c=c)
     return resultat
 
