@@ -16,7 +16,7 @@ from pathlib import Path
 
 from ortools.sat.python import cp_model
 
-from nivell2.base import Proposta, carrega_model, fmt, hm
+from nivell2.base import PAQUET, Proposta, carrega_model, fmt, hm
 from horaris.model import DIES, MATI, TARDA
 from horaris.check import _alumnat_comparteix, _solapaments_de_partida
 
@@ -27,6 +27,23 @@ RESERVA = 2
 
 def _setmana(s):
     return s.data - dt.timedelta(days=s.data.weekday())
+
+
+def setmanes_avaluacio():
+    """Setmanes ISO del calendari oficial, sense dates incrustades al model."""
+    import csv
+    with (PAQUET/'calendari.csv').open(encoding='utf-8-sig', newline='') as stream:
+        dates = [dt.date.fromisoformat(row['data']) for row in csv.DictReader(stream)
+                 if row['tipus'] == 'avaluacio']
+    return {date-dt.timedelta(days=date.weekday()) for date in dates}
+
+
+def _patrons_franges(base, current):
+    patterns = defaultdict(Counter)
+    for s in base.sessions.values():
+        date, minute = current[s.id]
+        patterns[s.activitat or s.id][date.weekday()*1440+minute] += 1
+    return {a: min(c, key=lambda v: (-c[v], v)) for a,c in patterns.items()}
 
 
 def _referencia(s, referencia):
@@ -200,7 +217,7 @@ def _colls_capacitat(base, units, weeks, selected, candidates):
 
 
 def _resol_torn(base, units, weeks, edges, groups, movibles, current, referencia,
-                fixes, shift, deadline, llavor, *, reparacio=False, limits_capacitat=None, setmana_completa=False, torn_tou=False, ignora_calendari=False):
+                fixes, shift, deadline, llavor, *, reparacio=False, limits_capacitat=None, setmana_completa=False, torn_tou=False, ignora_calendari=False, patrons=None):
     """Un model compacte: només les activitats movibles tenen variables."""
     import time
     lo, hi = shift
@@ -253,6 +270,8 @@ def _resol_torn(base, units, weeks, edges, groups, movibles, current, referencia
     if any(not ds for ds in candidates.values()):
         assigna_franges.estadistiques['causa'] = 'domini_buit'
         return None, 'INFEASIBLE'
+    patrons = patrons if patrons is not None else _patrons_franges(base, current)
+    routine_costs = defaultdict(list)
     variables, durations, cost, dayscost = {}, {}, [], []
     for key, ds in candidates.items():
         variables[key] = (m.new_constant(next(iter(ds))) if key[0] == 'f' else
@@ -279,6 +298,12 @@ def _resol_torn(base, units, weeks, edges, groups, movibles, current, referencia
                 m.add(x == original).only_enforce_if(changed.Not())
                 m.add(x != original).only_enforce_if(changed)
                 cost.append(changed)
+                if reparacio:
+                    broken = m.new_bool_var('excepcio_rutina')
+                    pattern = patrons[row.activitat or row.id]
+                    m.add(x == pattern).only_enforce_if(broken.Not())
+                    m.add(x != pattern).only_enforce_if(broken)
+                    routine_costs[row.activitat or row.id, _setmana(row)].append(broken)
                 changed_day = m.new_bool_var('canvi_dia')
                 m.add(day == date.weekday()).only_enforce_if(changed_day.Not())
                 m.add(day != date.weekday()).only_enforce_if(changed_day)
@@ -385,7 +410,14 @@ def _resol_torn(base, units, weeks, edges, groups, movibles, current, referencia
     tie_bound = len(dayscost)+1
     secondary = tie_bound*(30*COST_CANVI*sum(cost)+COST_HORA_MORTA*sum(gap_minutes))+sum(dayscost)
     secondary_bound = tie_bound*(30*COST_CANVI*len(cost)+COST_HORA_MORTA*1440*len(gap_minutes))+len(dayscost)+1
-    m.minimize(secondary_bound*sum(penalties)+secondary)
+    routine = []
+    for values in routine_costs.values():
+        broken_week = m.new_bool_var('activitat_setmana_fora_rutina')
+        m.add_max_equality(broken_week, values)
+        routine.append(broken_week)
+    # Lexicographic bounds: R1, activity/week routine, then weighted changes/gaps.
+    routine_bound = secondary_bound*(len(routine)+1)
+    m.minimize(routine_bound*sum(penalties)+secondary_bound*sum(routine)+secondary)
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = max(.001, deadline-time.monotonic())
     solver.parameters.num_workers = 2
@@ -418,6 +450,7 @@ def _revisa_pista(base, referencia, pista, fixes, deadline, llavor, permet_excep
     units,weeks,edges,groups = _problema(base,referencia,fixes)
     current = {s.id:_referencia(s,pista) for s in base.sessions.values()}
     original = dict(current)
+    patrons = _patrons_franges(base, current)
     affected = sorted({_setmana(s) for s in base.sessions.values() if not s.fixada and
                        _torn_ok(s.torn,current[s.id][1],current[s.id][1]+s.durada) is False})
     stats = {**double_stats,'pista_verificada':True,'setmanes_reobertes':len(affected),'proves_torn':[]}
@@ -433,11 +466,11 @@ def _revisa_pista(base, referencia, pista, fixes, deadline, llavor, permet_excep
         hard_begin = time.monotonic()
         # Reserve time for the soft model only after a genuine hard proof.
         hard_deadline = min(deadline,hard_begin+max(.01,(deadline-hard_begin)/(len(affected)-index)*.65))
-        solution,state = _resol_torn(*args,hard_deadline,llavor,reparacio=True,setmana_completa=True)
+        solution,state = _resol_torn(*args,hard_deadline,llavor,reparacio=True,setmana_completa=True,patrons=patrons)
         proof = {'setmana':week.isoformat(),'dur':state,'dur_s':time.monotonic()-hard_begin}
-        if solution is None and state == 'INFEASIBLE' and permet_excepcions_torn and week == dt.date(2027,4,5):
+        if solution is None and state == 'INFEASIBLE' and permet_excepcions_torn and week in setmanes_avaluacio():
             soft_begin = time.monotonic()
-            solution,state = _resol_torn(*args,deadline,llavor,reparacio=True,setmana_completa=True,torn_tou=True)
+            solution,state = _resol_torn(*args,deadline,llavor,reparacio=True,setmana_completa=True,torn_tou=True,patrons=patrons)
             proof.update(tou=state,tou_s=time.monotonic()-soft_begin)
             if solution is not None:
                 proof['sessions'] = [s.id for s in sub.sessions.values() if not s.fixada and
@@ -460,7 +493,7 @@ def _revisa_pista(base, referencia, pista, fixes, deadline, llavor, permet_excep
 def assigna_franges(base, *, referencia, fixes=None, temps_s=300, llavor=0, limits_capacitat=None, permet_excepcions_torn=False, pista=None):
     """Primera passada per activitat/torn; reparació local de calendari després.
 
-    `permet_excepcions_torn` autoritza exclusivament W14/2027, després d'un
+    `permet_excepcions_torn` autoritza exclusivament les setmanes d’avaluació, després d'un
     INFEASIBLE conjunt de tota la setmana: l'única alternativa fora de torn
     és la franja original. `limits_capacitat` és llindar d'alumnes -> màxim
     simultànies (-1: total). Les proves i el mínim trobat es registren.
@@ -566,7 +599,7 @@ def assigna_franges(base, *, referencia, fixes=None, temps_s=300, llavor=0, limi
                         [(u,v) for u,v in edges if u in us and v in us], groups, us,
                         solution,referencia,fixes,shift,min(deadline,time.monotonic()+max(1,temps_s*.03)),llavor,reparacio=True,
                         limits_capacitat=limits_capacitat)
-                    if repaired is None and state == 'INFEASIBLE' and permet_excepcions_torn and week == dt.date(2027,4,5):
+                    if repaired is None and state == 'INFEASIBLE' and permet_excepcions_torn and week in setmanes_avaluacio():
                         hard_begin = time.monotonic()
                         repaired,hard_state = _resol_torn(sub,{u:units[u] for u in us}, {week:weeks[week]},
                             [(u,v) for u,v in edges if u in us and v in us], groups, us,
@@ -608,6 +641,10 @@ def assigna_franges(base, *, referencia, fixes=None, temps_s=300, llavor=0, limi
     stats['excepcions_festiu'] = len(notes)
     # These local models do not prove global optimality with frozen activities.
     return current, 'FEASIBLE', notes
+
+
+# També disponible quan les proves criden directament _resol_torn.
+assigna_franges.estadistiques = {}
 
 
 def _hores_mortes(m, base, units, starts, weeks, *, nomes_variables=False):
