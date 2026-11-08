@@ -22,6 +22,8 @@ export REPTE_DIR="$PWD/repte/repte-horaris-escola"
 streamlit run app/app.py          # obre http://localhost:8501
 ```
 
+La primera vegada, la portada pot trigar un minut a sortir mentre es carreguen les dades; si queda en blanc, espereu i recarregueu la pàgina.
+
 Per comprovar-ho tot:
 
 ```bash
