@@ -127,20 +127,27 @@ def compara(proposta: Proposta, base: Base | None = None, *,
                            relaxacions=relaxacions, nomes_aules=nomes_aules)
     a, ta = calcula(inicial, avui, abans, relax_abans)
     d, td = calcula(proposta, base, despres, relaxacions)
+    # Les claus sense sufix sempre es comparen amb avui, també si hi ha referència.
     for values, candidate in ((a, inicial), (d, proposta)):
-        hora = aula = torn = 0
-        for sid, old in inicial.files.items():
-            new = candidate.files.get(sid)
-            if new is None:
-                continue
-            moved = (old.dia, old.h_ini, old.data) != (new.dia, new.h_ini, new.data)
-            hora += moved
-            aula += not moved and old.aula != new.aula
-            from nivell2.base import hm
-            torn += (hm(old.h_ini) >= 870) != (hm(new.h_ini) >= 870)
-        values['sessions_canvien_hora'] = hora
-        values['sessions_nomes_canvien_aula'] = aula
-        values['canvis_torn'] = torn
+        origens = [(Proposta.de_base(avui if values is a else base), '')]
+        if referencia:
+            origens.append((inicial, '_vs_referencia'))
+        for origin, suffix in origens:
+            hora = aula = torn = 0
+            for sid, old in origin.files.items():
+                new = candidate.files.get(sid)
+                if new is None:
+                    continue
+                moved = (old.dia, old.h_ini, old.data) != (new.dia, new.h_ini, new.data)
+                hora += moved
+                aula += not moved and old.aula != new.aula
+                from nivell2.base import hm
+                torn += (hm(old.h_ini) >= 870) != (hm(new.h_ini) >= 870)
+            values['sessions_canvien_hora' + suffix] = hora
+            values['sessions_nomes_canvien_aula' + suffix] = aula
+            # calcula() compta també les sessions noves respecte de la seva partida.
+            if suffix:
+                values['canvis_torn' + suffix] = torn
     claus = dict.fromkeys([*a, *d])
     files = [{'xifra': k, 'abans': a.get(k, 0), 'despres': d.get(k, 0)} for k in claus]
     titulacions = []

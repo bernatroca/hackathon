@@ -1,5 +1,5 @@
 """Millora 5.1 amb aula base; conserva cada millora vàlida en disc."""
-from nivell2.readmes import actualitza
+from nivell2.readmes import actualitza, conserva_seccions, arrodoneix_text
 import argparse
 import csv
 from collections import defaultdict
@@ -176,7 +176,9 @@ def main():
                'anterior_51': previous, 'GCIS_1r_61_aules_setmana': gcis, 'despres': {k: metrics[k][1] for k in selected}}
     (out/'comparacio.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2)+'\n')
     table = '| Indicador | Avui | Proposta |\n|---|---:|---:|\n' + ''.join(f'| {k} | {metrics[k][0]} | {metrics[k][1]} |\n' for k in selected)
-    (out/'README.md').write_text(f'''# 5.1 Aules amb aula base
+    anterior_readme = out/'README.md'
+    anterior_text = anterior_readme.read_text(encoding='utf-8') if anterior_readme.exists() else ''
+    (out/'README.md').write_text(arrodoneix_text(conserva_seccions(f'''# 5.1 Aules amb aula base
 
 Generar des del worktree (la proposta existent és la pista i el llindar de millora):
 ```sh
@@ -213,7 +215,7 @@ els defectes fixats inalterats es mantenen només si són heretats.
 Els recomptes grup/setmana inclouen PLAB i fan servir `nivell2.xifres`.
 GCIS 1r 61: mitjana {gcis['mitjana']:.3f}, màxim {gcis['maxim']} aules/setmana.
 
-''')
+''', anterior_text)))
     actualitza(out, '5.1')
     print('Comparació 5.1:', json.dumps({k: metrics[k] for k in selected}, ensure_ascii=False), flush=True)
     print(report.veredicte, status, f'{elapsed:.3f} s', flush=True)

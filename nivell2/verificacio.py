@@ -34,21 +34,24 @@ def opcions_pregunta(pregunta, arrel=RESULTATS):
 
 def ordre_oficial(pregunta, arrel=RESULTATS):
     opcions = opcions_pregunta(pregunta, arrel)
-    out = Path('../../resultats/nivell2') / pregunta
+    out = Path('$REPOSITORI/resultats/nivell2') / pregunta
     for key in ('referencia', 'relaxacions'):
         if key in opcions:
-            opcions[key] = Path('../../resultats/nivell2') / opcions[key].relative_to(arrel)
+            opcions[key] = Path('$REPOSITORI/resultats/nivell2') / opcions[key].relative_to(arrel)
     if 'escenari' in opcions:
         opcions['escenari'] = opcions['escenari'].relative_to(REPTE)
     cmd = ordre_verificador(out / 'proposta.csv', **opcions, python='python', relatiu_a_repte=False,
                            json_path=out / 'informe.json', violacions_path=out / 'violacions.csv')
-    return 'cd repte/repte-horaris-escola\n' + shlex.join(cmd)
+    command = ' '.join('"' + arg + '"' if arg.startswith('$REPOSITORI/') else shlex.quote(arg) for arg in cmd)
+    return ('REPOSITORI="$PWD"\ncd "${REPTE_DIR:-repte/repte-horaris-escola}"\n' +
+            command + '\ncd "$REPOSITORI"')
 
 
-def verifica_pregunta(pregunta, arrel=RESULTATS):
+def verifica_pregunta(pregunta, arrel=RESULTATS, *, desa=True):
     out = arrel / pregunta
+    destins = dict(json_path=out / 'informe.json', violacions_path=out / 'violacions.csv') if desa else {}
     return verifica(out / 'proposta.csv', **opcions_pregunta(pregunta, arrel),
-                    json_path=out / 'informe.json', violacions_path=out / 'violacions.csv')
+                    **destins)
 
 
 def main(argv=None):

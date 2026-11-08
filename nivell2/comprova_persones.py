@@ -221,8 +221,8 @@ def comprova(detall: Path | None = None, *, resultats=None) -> bool:
                         'docents': [list(k) for k in professorat],
                         'docents_nous': [list(k) for k in sorted(docents_nous)], **d}
 
-    print('\nVEREDICTE: ' + ('CORRECTE. Cap proposta posa ningú a dues classes alhora ni separa o duplica '
-                             'classes dels dobles.' if correcte else
+    print('\nVEREDICTE: ' + ('CORRECTE. Cap proposta afegeix persones ni professorat amb dues classes alhora '
+                             '(els conflictes que ja hi ha avui es mantenen) ni separa o duplica classes dels dobles.' if correcte else
                              'NO CORRECTE. Alguna proposta té problemes nous (vegeu els recomptes de dalt).'))
     if detall:
         detall.parent.mkdir(parents=True, exist_ok=True)

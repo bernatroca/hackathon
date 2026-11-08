@@ -1,6 +1,6 @@
 """5.3: quatre contingències simultànies sobre el 5.2 congelat."""
 from __future__ import annotations
-from nivell2.readmes import normalitza
+from nivell2.readmes import normalitza, conserva_seccions
 
 import argparse
 import json
@@ -187,7 +187,9 @@ def _genera(args, out, start):
         '--semestre', '2', '--escenari', str(CONTINGENCIES), '--referencia', str(refpath.resolve()),
         '--relaxacions', str((final/'relaxacions.csv').resolve()), '--json', str((final/'informe.json').resolve()),
         '--violacions', str((final/'violacions.csv').resolve())])
-    (out/'README.md').write_text(f'''# 5.3 Imprevistos
+    anterior_readme = RESULTATS/'5.3'/'README.md'
+    anterior_text = anterior_readme.read_text(encoding='utf-8') if anterior_readme.exists() else ''
+    (out/'README.md').write_text(conserva_seccions(f'''# 5.3 Imprevistos
 
 Veredicte oficial: **{report.veredicte}**. Incompliments no declarats: {summary['incompliments_no_declarats']}.
 Reserva mínima operativa comprovada independentment: **{minimum} aules**.
@@ -228,7 +230,7 @@ Una comprovació independent de la proposta final impedeix publicar si no es com
 La publicació exigeix OPTIMAL. També es rebutja
 una proposta amb més canvis oficials totals (franja + aula) si l'anterior publicada
 té una reserva mínima operativa igual o millor.
-''', encoding='utf-8')
+''', anterior_text), encoding='utf-8')
     readme = out/'README.md'
     readme.write_text(normalitza(readme.read_text(encoding='utf-8'), '5.3', RESULTATS), encoding='utf-8')
     print(report.veredicte)
