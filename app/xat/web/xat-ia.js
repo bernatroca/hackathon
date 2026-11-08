@@ -418,7 +418,9 @@
   }
 
   function botoMenu(selector) {
-    return Array.from(document.querySelectorAll(selector)).find((boto) => !boto.disabled && menuVisible(boto));
+    // Streamlit oculta el control fins al hover; .click() també funciona ocult.
+    // La visibilitat que determina l'estat és la del menú, no la del botó.
+    return Array.from(document.querySelectorAll(selector)).find((boto) => !boto.disabled);
   }
 
   function deixaObservarMenu() {
