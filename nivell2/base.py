@@ -147,10 +147,12 @@ class Informe:
 
 def ordre_verificador(proposta, *, escenari=None, referencia=None, relaxacions=None,
                       nomes_aules=False, json_path=None, violacions_path=None,
-                      python=PYTHON, absolut=True):
+                      python=PYTHON, relatiu_a_repte=True):
     """Arguments oficials compartits per execució i documentació."""
     def ruta(path):
-        return str(Path(path).resolve() if absolut else path)
+        if not relatiu_a_repte:
+            return str(path)
+        return os.path.relpath(Path(path).resolve(), REPTE)
     cmd = [str(python), '-m', 'horaris', 'check', ruta(proposta), '--semestre', str(SEMESTRE),
            '--json', ruta(json_path)]
     if escenari:

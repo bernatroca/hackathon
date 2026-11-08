@@ -1,5 +1,6 @@
 """Contracte i errors de lliurament amb fitxers inventats."""
 import csv
+import hashlib
 import json
 import shlex
 from pathlib import Path
@@ -23,6 +24,22 @@ def prepara(root):
         (out/'xifres.csv').write_text('xifra,abans,despres\nsessions,1,1\n')
         (out/'README.md').write_text(f'python -m nivell2.s{q.replace(".", "")} --temps 10 --llavor 0\n{verificacio.ordre(q)}\n{verificacio.ordre_oficial(q, root)}\n')
 
+    junta = root/'junta'/'5.2'
+    junta.mkdir(parents=True)
+    from nivell2.test_junta import petita, colloca
+    from nivell2.junta import calcula, documents
+    from nivell2.base import Proposta
+    base = petita()
+    proposta = Proposta.de_base(base)
+    metadata = calcula(proposta, base, base, colloca(base, proposta))
+    metadata['empremtes'] = {
+        'proposta': hashlib.sha256((root/'5.2'/'proposta.csv').read_bytes()).hexdigest(),
+        'relaxacions': None}
+    md, html = documents(metadata)
+    (junta/'junta.html').write_bytes(html.encode('utf-8'))
+    (junta/'junta.md').write_bytes(md.encode('utf-8'))
+    (junta/'junta.json').write_text(json.dumps(metadata))
+
 
 def test_opcions_compartides(tmp_path):
     prepara(tmp_path)
@@ -42,6 +59,8 @@ def test_opcions_compartides(tmp_path):
 def test_empaquetat(tmp_path, sense_zip):
     root, output = tmp_path/'font', tmp_path/'sortida'
     prepara(root)
+    for name in empaqueta.OPCIONALS[1:]:
+        (root/'5.2'/name).write_text('inventat\n')
     (output/'graelles').mkdir(parents=True)
     (output/'graelles/index.html').write_text('<a href="aula-000.html">A</a>')
     (output/'graelles/aula-000.html').write_text('<!doctype html><title>A</title>')
@@ -57,7 +76,9 @@ def test_empaquetat(tmp_path, sense_zip):
     assert archive.exists() != sense_zip
     if not sense_zip:
         with zipfile.ZipFile(archive) as z:
-            assert len(z.namelist()) == 22
+            assert len(z.namelist()) == 22 + len(empaqueta.OPCIONALS[1:]) + len(empaqueta.JUNTA)
+            assert all(f'nivell2/5.2/{name}' in z.namelist() for name in empaqueta.OPCIONALS[1:])
+            assert all(f'junta/5.2/{name}' in z.namelist() for name in empaqueta.JUNTA)
             assert 'graelles/index.html' in z.namelist()
             assert 'graelles/aula-000.html' in z.namelist()
 
@@ -140,13 +161,18 @@ def test_ordre_readme_es_la_que_executa_verificacio(tmp_path, q, relaxacions):
     (root/q/'proposta.csv').write_text('id_sessio,dia,h_ini,aula\n')
     def official(cmd, **kwargs):
         import hashlib
-        Path(cmd[cmd.index('--json')+1]).write_text(json.dumps({
+        (base.REPTE / cmd[cmd.index('--json')+1]).write_text(json.dumps({
             'veredicte': 'VALIDA', 'restriccions': {}, 'objectius': {},
             'context': {'proposta_sha256': hashlib.sha256((root/q/'proposta.csv').read_bytes()).hexdigest()}}))
         return SimpleNamespace(returncode=0, stdout='', stderr='')
     with patch.object(base.subprocess, 'run', side_effect=official) as run:
         verificacio.verifica_pregunta(q, root)
-    assert run.call_args.args[0][1:] == documented[1:]
+    executed = run.call_args.args[0][:]
+    for i, token in enumerate(executed):
+        if i == 4 or (i and executed[i-1] in path_flags):
+            assert not Path(token).is_absolute()
+            executed[i] = str((base.REPTE/token).resolve())
+    assert executed[1:] == documented[1:]
     assert run.call_args.kwargs['cwd'] == base.REPTE
 
 
@@ -184,7 +210,7 @@ def test_empremta_i_codi(tmp_path, digest, verdict, code, ok):
     proposal.write_text('id_sessio,dia,h_ini,aula\n')
     def run(cmd, **kwargs):
         value = hashlib.sha256(proposal.read_bytes()).hexdigest() if digest == 'correcte' else digest
-        Path(cmd[cmd.index('--json')+1]).write_text(json.dumps({
+        (base.REPTE / cmd[cmd.index('--json')+1]).write_text(json.dumps({
             'veredicte': verdict, 'context': {'proposta_sha256': value}}))
         return SimpleNamespace(returncode=code, stdout='')
     with patch.object(base.subprocess, 'run', side_effect=run):
@@ -345,3 +371,100 @@ def test_comptatge_independent_i_readme(q):
     text = (RESULTATS/q/'README.md').read_text()
     assert '## Com compta el verificador' in text
     assert explica_comptatge(text, x, q).split('## Com compta el verificador')[1].strip() == text.split('## Com compta el verificador')[1].split('\n## ')[0].strip()
+
+
+def test_conserva_xifres_propies_i_migra_resum(tmp_path):
+    from nivell2 import xifres_lliurament as delivery
+    out = tmp_path/'5.3'
+    out.mkdir()
+    (out/'README.md').write_text('Introducció')
+    (out/'resum.json').write_text(json.dumps({'total': 1, 'comparacio_anterior': {'abans': 69}}))
+    (out/'execucio.json').write_text(json.dumps({'intents': []}))
+    (out/'xifres.csv').write_text('xifra,abans,despres\ngeneral,0,9\nsessions_52_mogudes,0,2\nsessions_52_mogudes,0,2\nsessions_grau_nou_fora_franja,0,0\n')
+    comparison = SimpleNamespace(files=[{'xifra': 'general', 'abans': 0, 'despres': 1}])
+    with patch.object(delivery.Proposta, 'llegeix'), patch.object(delivery, 'compara', return_value=comparison), patch.object(delivery, 'comptatge_verificador'), patch.object(delivery, 'explica_comptatge', side_effect=lambda text, *args: text):
+        delivery.genera('5.3', tmp_path)
+        first = (out/'xifres.csv').read_bytes()
+        delivery.genera('5.3', tmp_path)
+    assert first == (out/'xifres.csv').read_bytes()
+    with (out/'xifres.csv').open() as f:
+        rows = list(csv.DictReader(f))
+    assert len(rows) == 1
+    assert rows[0]['despres'] == '1'
+    assert json.loads((out/'resum.json').read_text()) == {'total': 1}
+    assert json.loads((out/'execucio.json').read_text()) == {'intents': [], 'comparacio_anterior': {'abans': 69}}
+
+
+def test_elimina_cd_verificacio():
+    text = normalitza('```sh\ncd /Users/inventat/repte\npython -m horaris check proposta.csv\n```', '5.3')
+    assert 'cd .\n' not in text
+    assert normalitza(text, '5.3') == text
+
+
+@pytest.mark.parametrize('failure', ['junta.html', 'junta.md', 'junta.json', 'empremta', 'json_invalid'])
+def test_contracte_exigeix_junta_actualitzada(tmp_path, failure):
+    prepara(tmp_path)
+    out = tmp_path/'5.2'
+    assert empaqueta.contracte(out, '5.2')
+    junta = tmp_path/'junta'/'5.2'
+    if failure in empaqueta.JUNTA:
+        (junta/failure).unlink()
+    elif failure == 'empremta':
+        (out/'proposta.csv').write_text('proposta inventada canviada')
+    else:
+        (junta/'junta.json').write_text('{')
+    assert not empaqueta.contracte(out, '5.2')
+
+
+@pytest.mark.parametrize('q', ['5.3', '5.4'])
+def test_xifres_nomes_admet_complements_54_del_resum(tmp_path, q):
+    from nivell2 import xifres_lliurament as delivery
+    out = tmp_path/q
+    out.mkdir()
+    (out/'README.md').write_text('Introducció')
+    (out/'resum.json').write_text(json.dumps({'sessions_52_mogudes': 2,
+        'sessions_grau_nou_fora_franja': 3, 'declarats:R9-INVENTADA': 7}))
+    (out/'xifres.csv').write_text('xifra,abans,despres\ndeclarats:R9-INVENTADA,0,9\nsessions_52_mogudes,0,99\nsessions_52_mogudes,0,99\n')
+    comparison = SimpleNamespace(files=[{'xifra': 'general', 'abans': 0, 'despres': 1}])
+    with patch.object(delivery.Proposta, 'llegeix'), patch.object(delivery, 'compara', return_value=comparison), patch.object(delivery, 'comptatge_verificador'), patch.object(delivery, 'explica_comptatge', side_effect=lambda text, *args: text):
+        delivery.genera(q, tmp_path)
+        first = (out/'xifres.csv').read_bytes()
+        delivery.genera(q, tmp_path)
+    assert first == (out/'xifres.csv').read_bytes()
+    with (out/'xifres.csv').open() as f:
+        rows = list(csv.DictReader(f))
+    expected = [{'xifra': 'general', 'abans': '0', 'despres': '1'}]
+    if q == '5.4':
+        expected += [{'xifra': 'sessions_grau_nou_fora_franja', 'abans': '0', 'despres': '3'},
+                     {'xifra': 'sessions_52_mogudes', 'abans': '0', 'despres': '2'}]
+    assert rows == expected
+
+
+@pytest.mark.parametrize('name', ['junta.md', 'junta.html'])
+def test_contracte_rebutja_documents_junta_antics(tmp_path, capsys, name):
+    prepara(tmp_path)
+    out = tmp_path/'5.2'
+    assert empaqueta.contracte(out, '5.2')
+    path = tmp_path/'junta'/'5.2'/name
+    # Fins i tot una diferència de bytes sense canvi semàntic es rebutja.
+    path.write_bytes(path.read_bytes() + b'\n')
+    assert not empaqueta.contracte(out, '5.2')
+    assert "resum de la Junta desactualitzat; regenera'l" in capsys.readouterr().out
+
+
+def test_contracte_rebutja_relaxacions_canviades(tmp_path, capsys):
+    prepara(tmp_path)
+    out = tmp_path/'5.2'
+    old_command = verificacio.ordre_oficial('5.2', tmp_path)
+    relax = out/'relaxacions.csv'
+    relax.write_text('restriccio,sessions,justificacio\n')
+    metadata_path = tmp_path/'junta'/'5.2'/'junta.json'
+    metadata = json.loads(metadata_path.read_text())
+    metadata['empremtes']['relaxacions'] = hashlib.sha256(relax.read_bytes()).hexdigest()
+    metadata_path.write_text(json.dumps(metadata))
+    readme = out/'README.md'
+    readme.write_text(readme.read_text().replace(old_command, verificacio.ordre_oficial('5.2', tmp_path)))
+    assert empaqueta.contracte(out, '5.2')
+    relax.write_text('restriccio,sessions,justificacio\nR9-INVENTADA,S90001,Inventada\n')
+    assert not empaqueta.contracte(out, '5.2')
+    assert "resum de la Junta desactualitzat; regenera'l" in capsys.readouterr().out
