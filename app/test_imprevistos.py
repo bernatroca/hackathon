@@ -56,8 +56,7 @@ def test_pagina_resum_quatre_targetes_i_taula_llegible():
     assert list(taula.columns) == ['Assignatura', 'Grup', 'Data', 'Hora', 'Aula', 'Dia/hora nous', 'Motiu']
     assert len(taula) == 6
     assert any('Subgrup' in g for g in taula['Grup'])
-    assert app.expander[0].label == 'Detall tècnic'
-    assert not app.expander[0].proto.expanded
+    assert not next(e for e in app.expander if e.label == 'Detall tècnic').proto.expanded
     assert app.code[0].value == 'python -m nivell2.s53 --temps 120 --llavor 0'
 
 
@@ -195,7 +194,7 @@ def test_filtres_sense_canvis_diuen_cap():
     dades = dades_inventades()
     dades['files'] = []
     app = obre(dades)
-    assert all(b.label.endswith('(cap)') for b in app.button)
+    assert all(b.label.endswith('(cap)') for b in app.button if b.key.startswith('imp-boto-'))
 
 
 def test_temps_un_segon_en_singular():
@@ -249,7 +248,7 @@ def test_motius_tecnics_nomes_dins_del_detall():
         assert original not in exterior
         assert not re.search(r"\b(?:R\d+|CSV|TE|PAUL|SEM|PLAB)\b|diagnostic\.md", exterior)
         assert "'" not in re.sub(r'<[^>]+>', '', exterior)
-        assert app.expander[0].dataframe[0].value.iloc[0]['Motiu'] == motiu_planer(original)
+        assert next(e for e in app.expander if e.label == 'Detall tècnic').dataframe[0].value.iloc[0]['Motiu'] == motiu_planer(original)
 
 
 def test_nota_recompte_concorda_i_es_dinamica():
@@ -398,3 +397,38 @@ def test_opcions_nomes_a_pagines_davui_i_dates_llegibles(tmp_path):
             assert not app.sidebar.selectbox
             assert not app.sidebar.expander
             assert any(c.value == 'La proposta és del 2n semestre' for c in app.sidebar.caption)
+
+
+def test_exemple_aula_prioritza_mateix_dia_i_hora():
+    app = obre()
+    assert not next(e for e in app.expander if e.label == 'Més opcions').proto.expanded
+    app.button(key='imp-exemple').click().run(timeout=30)
+    assert not app.exception and not app.error
+    assert app.session_state['imp-filtre'] == 'aula_reservada'
+    assert len(app.dataframe[0].value) == 1
+    assert 'Dia/hora nous' not in app.dataframe[0].value
+    assert app.get('page_link')[0].proto.label == 'Pas següent: el resum per a la Junta →'
+
+
+def test_exemple_sense_aula_tancada_no_inventa_cap_cas():
+    d = dades_inventades()
+    for t in d['imprevistos']:
+        if t['clau'] in ('aula_reservada', 'aula_avariada'):
+            t['sessions_afectades'] = 0
+    assert imprevistos.exemple_aula(d) is None
+    assert not any(b.key == 'imp-exemple' for b in obre(d).button)
+
+
+def test_pas_seguent_utilitza_la_pagina_registrada():
+    with patch.object(imprevistos, 'carrega', return_value=dades_inventades()):
+        app = AppTest.from_string('''
+import streamlit as st
+from pagines import imprevistos, junta
+p = st.navigation([
+    st.Page(imprevistos.mostra, title='Imprevistos', default=True),
+    st.Page(junta.mostra, title='Resum per a la Junta', url_path='junta'),
+])
+p.run()
+''').run(timeout=30)
+    assert not app.exception and not app.error
+    assert app.get('page_link')[0].proto.label == 'Pas següent: el resum per a la Junta →'

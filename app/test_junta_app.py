@@ -508,3 +508,28 @@ def test_canvi_referencia_invalida_resum(tmp_path):
         ref.write_text('referencia modificada')
         junta.carrega('5.4')
         gen.assert_called_once_with('5.4')
+
+
+def test_demo_52_mostra_pics_i_grau_nou_sense_canviar_proposta():
+    d = dades()
+    d['pics']['tarda']['pitjor'] = dict(d['pics']['tarda']['pitjor'], classes=18)
+    with patch.object(junta, 'grau_nou_preparat', return_value={
+        'hi_cap': True, 'sessions_collocades': 235, 'sessions_52_mogudes': 0}):
+        app = obre(d, ['Avui', '5.2', '5.4'])
+    assert app.selectbox[0].value == '5.2'
+    assert not next(e for e in app.expander if e.label == 'Més opcions').proto.expanded
+    html = ''.join(m.value for m in app.markdown)
+    assert '15 <small>de 19 aules' in html
+    assert '18 <small>de 19 aules' in html
+    assert '235 classes col·locades' in app.success[0].value
+    assert any('Pas següent: pregunta-ho' in m.value for m in app.markdown)
+
+
+def test_grau_nou_preparat_rebutja_resum_antic():
+    d = dict(dades(), grau_nou={'hi_cap': True},
+             empremtes={'proposta': 'nova'}, empremtes_referencia={'proposta': 'ref'})
+    with patch.object(junta, 'llegeix', return_value=d), \
+         patch.object(junta, 'empremtes', side_effect=lambda n: {'proposta': 'nova' if n == '5.4' else 'ref'}):
+        assert junta.grau_nou_preparat() == {'hi_cap': True}
+        d['empremtes_referencia'] = {'proposta': 'antiga'}
+        assert junta.grau_nou_preparat() is None

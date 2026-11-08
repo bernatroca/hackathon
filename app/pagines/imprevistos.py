@@ -200,6 +200,27 @@ def _selecciona(clau):
     st.session_state['imp-filtre'] = clau
 
 
+def exemple_aula(dades):
+    """Prioritza conservar dia i hora, i després moure poques classes."""
+    candidats = [t for t in dades['imprevistos']
+                 if t['clau'] in ('aula_reservada', 'aula_avariada')
+                 and t['sessions_afectades'] > 0]
+    return min(candidats, key=lambda t: (t['canvis_franja'], t['sessions_afectades'],
+                                        t['canvis_aula'], t['clau']), default=None)
+
+
+def pas_seguent():
+    from pagines import junta
+    from streamlit.errors import StreamlitAPIException
+    text = 'Pas següent: el resum per a la Junta →'
+    try:
+        st.page_link(st.Page(junta.mostra, title='Resum per a la Junta', url_path='junta'),
+                     label=text)
+    except (StreamlitAPIException, KeyError):
+        # La prova autònoma no registra la navegació de l'app.
+        st.markdown(f'[{text}](junta)')
+
+
 def mostra_filtres(dades):
     opcions = [('totes', 'Totes les classes')]
     opcions.extend((t['clau'], t['titol']) for t in dades['imprevistos'])
@@ -226,6 +247,7 @@ def mostra(dades=None):
     """La navegació posa el títol; la prova autònoma també el posa abans."""
     with st.container(key='imp-pagina'):
         st.markdown(CSS, unsafe_allow_html=True)
+        st.write('Aquí veuràs com recol·loquem les classes quan hi ha un imprevist. Prem «Mira l’exemple» i mira a quina aula van.')
         try:
             if dades is None:
                 dades = carrega()
@@ -245,7 +267,16 @@ def mostra(dades=None):
             st.caption('Una fila per classe datada, ordenada pel dia i l’hora d’abans. '
                        'Una classe pot estar afectada per més d’un imprevist.')
             st.caption('Per provar un imprevist nou, demana-ho a l’Assistent')
-            clau = mostra_filtres(dades)
+            exemple = exemple_aula(dades)
+            if exemple:
+                st.button('Mira l’exemple', on_click=_selecciona, args=(exemple['clau'],),
+                          key='imp-exemple', type='primary')
+            with st.expander('Més opcions', expanded=False):
+                clau = mostra_filtres(dades)
+            if clau != 'totes':
+                titol = next((t['titol'] for t in dades['imprevistos'] if t['clau'] == clau),
+                             'Altres classes mogudes')
+                st.write(f'Exemple triat: {titol}.')
             files = filtra(dades['files'], clau)
             if files:
                 titols = {t['clau']: t['titol'] for t in dades['imprevistos']}
@@ -279,9 +310,7 @@ def mostra(dades=None):
                 st.write('Excepcions declarades per motiu, incloses les que ja tenia l’horari proposat:')
                 relaxacions = resum.get('relaxacions_per_motiu', [])
                 if relaxacions:
-                    regles = resum.get('regles_per_motiu', {})
-                    st.dataframe(pd.DataFrame([{'Regla': ', '.join(regles.get(r['motiu'], [])),
-                                               'Motiu': motiu_planer(r['motiu'], r['sessions']),
+                    st.dataframe(pd.DataFrame([{'Motiu': motiu_planer(r['motiu'], r['sessions']),
                                                'Classes': r['sessions']}
                                                for r in relaxacions]), hide_index=True, width='stretch')
                 else:
@@ -293,6 +322,8 @@ def mostra(dades=None):
             st.error('No hem pogut carregar la proposta d’imprevistos. Si continua passant, avisa l’equip.')
             with st.expander('Detall tècnic', expanded=False):
                 st.code(ORDRE, language='bash')
+        finally:
+            pas_seguent()
 
 
 if __name__ == '__main__':
