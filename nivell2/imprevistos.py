@@ -18,7 +18,9 @@ IMPREVISTOS = (
     ('aula_avariada', 'Aula avariada un dia'),
     ('recuperacio', 'Classe cancel·lada que es recupera'),
 )
-ORDRE = 'python -m nivell2.s53 --temps 40 --llavor 0'
+# Marge de rellotge per completar l'òptim amb el pressupost determinista íntegre.
+TEMPS_REPARACIO = 120
+ORDRE = f'python -m nivell2.s53 --temps {TEMPS_REPARACIO} --llavor 0'
 
 
 def nom_grup(grup, tipus):

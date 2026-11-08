@@ -58,7 +58,7 @@ def test_pagina_resum_quatre_targetes_i_taula_llegible():
     assert any('Subgrup' in g for g in taula['Grup'])
     assert app.expander[0].label == 'Detall tècnic'
     assert not app.expander[0].proto.expanded
-    assert app.code[0].value == 'python -m nivell2.s53 --temps 40 --llavor 0'
+    assert app.code[0].value == 'python -m nivell2.s53 --temps 120 --llavor 0'
 
 
 def test_filtres_natius_per_imprevist_i_classes_de_suport():
