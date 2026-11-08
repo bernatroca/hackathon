@@ -9,8 +9,8 @@ from components.graella import LINIES_JS
 PASSOS = (
     ('.st-key-p2-controls', 'Què vols veure?',
      '«Proposta i avui» mostra la proposta i marca els canvis respecte dels fitxers originals. '
-     'Amb els imprevistos, es compara amb Torns nous (5.2). '
-     '«Només avui» mostra l’horari original. Tria també la proposta i la setmana.'),
+     'Amb els imprevistos, es compara amb Horari complet (5.2). '
+     '«Només avui» mostra l’horari original. Tria la proposta; a «Més opcions» pots canviar la setmana.'),
     ('.st-key-p2-seleccio-alumnat', 'De quin grup?',
      'Tria estudis, curs i grup. Incloem la teoria i els seus subgrups de problemes i seminaris. '
      'Dos subgrups simultanis no impliquen que cada estudiant assisteixi a tots dos.'),
@@ -19,12 +19,12 @@ PASSOS = (
      'Si faltava l’aula original, assignar-ne una es marca en verd. No és un veredicte de validació.'),
     ('.st-key-p2-clau-colors', 'Filtra per color',
      'Blau: sense canvis. Verd: aula assignada. Taronja: canvia. Ambre: fora del patró. Vermell: excepció demostrada. '
-     'Tria una pastilla per apagar la resta de classes; «Totes» les torna a mostrar.'),
+     'A «Més opcions», tria un color per apagar la resta de classes; «Totes» les torna a mostrar.'),
     ('.st-key-p2-graelles .p2-horari', 'Llegeix la setmana',
      'Cada bloc és una classe. Les compartides apareixen juntes. Passa-hi el ratolí o obre el bloc '
      'amb clic o teclat per llegir què hi havia abans. Al mòbil, llisca la graella cap al costat per veure la resta de dies.'),
     ('.st-key-p2-vista-aula', 'Consulta i comparteix una aula',
-     'Mostra totes les classes de l’aula, amb la mateixa setmana i proposta. '
+     'A «Més opcions», mostra totes les classes de l’aula, amb la mateixa setmana i proposta. '
      'Descarrega l’HTML per compartir-lo o imprimir-lo sense connexió.'),
 )
 

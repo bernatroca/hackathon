@@ -15,7 +15,7 @@ from nivell2.base import carrega_oficial, Proposta, PAQUET, GRAU_NOU
 from nivell2 import junta
 from nivell2.s52 import MOTIU_FIXADES
 from components.graella import (grups, setmana_tipica, dilluns, celles_grup,
-    celles_aula, taula_html, exporta_aula_html, resum_grup, canvis_grup, ESTATS, CSS as CSS_GRAELLA, CSS_FILTRES, recomptes_estat, nom_grup)
+    celles, celles_aula, taula_html, exporta_aula_html, resum_grup, canvis_grup, ESTATS, CSS as CSS_GRAELLA, CSS_FILTRES, recomptes_estat, nom_grup)
 
 from nivell2.base import RESULTATS_PRINCIPAL; RESULTATS = RESULTATS_PRINCIPAL
 
@@ -213,24 +213,68 @@ def resum_html(base, proposta, actuals, noves, comparar, *, referencia=None, nom
         + f'<p>{escape(frase)}</p></div><div class="p2-xifres">{xifres}</div></section>')
 
 
+def tria_exemple(base, proposta):
+    """Cas estable: canvi d'hora i aula, prioritzant setmanes llegibles."""
+    setmana = setmana_tipica(base)
+    classes = celles(base, proposta, setmana)
+    candidats = []
+    for tit, cursos in grups(base).items():
+        for curs, grups_curs in cursos.items():
+            for grup, linia in grups_curs.items():
+                visibles = [c for c in classes
+                    if f'{tit}:{curs}' in base.sessions[c.id_sessio].cohorts
+                    and base.sessions[c.id_sessio].linia == linia
+                    and base.sessions[c.id_sessio].tipus in ('TE', 'PAUL', 'SEM')]
+                canvien = [c for c in visibles if c.canvi_franja and c.canvi_aula
+                    and c.ini != base.sessions[c.id_sessio].ini]
+                if not canvien:
+                    continue
+                coincidencies = sum(a.dia == b.dia and a.ini < b.fi and b.ini < a.fi
+                    for i, a in enumerate(visibles) for b in visibles[i + 1:])
+                candidats.append((coincidencies, len(visibles), tit, curs, grup,
+                    min(c.id_sessio for c in canvien)))
+    return min(candidats)[2:] if candidats else None
+
+
+def aplica_exemple(cas):
+    tit, curs, grup, _ = cas
+    st.session_state.update({'p2-proposta': '5.2', 'p2-vista': 'Proposta i avui',
+        'p2-setmana': None, 'p2-titulacio': tit, 'p2-curs': curs, 'p2-grup': grup,
+        'p2-context-grup': (tit, curs), 'p2-filtre': 'totes'})
+
+
 def _mostra():
     estil_pagina()
-    st.markdown('<p class="p2-intro">Consulta la setmana del grup i descobreix què canvia amb la proposta.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="p2-intro">Tria un grup i mira com queda la seva setmana. Els colors diuen què canvia respecte d’avui.</p>', unsafe_allow_html=True)
     mostra_guia()
     opcions = [n for n in ('5.1', '5.2', '5.3', '5.4') if (RESULTATS / n / 'proposta.csv').is_file()]
     try:
+        if '5.2' in opcions:
+            path_exemple = RESULTATS / '5.2' / 'proposta.csv'
+            versio_exemple = path_exemple.stat().st_mtime_ns
+            if st.session_state.get('p2-exemple-versio') != (str(path_exemple), versio_exemple):
+                base_exemple, _, _ = carrega_dades()
+                st.session_state['p2-exemple'] = tria_exemple(base_exemple,
+                    carrega_proposta(str(path_exemple), versio_exemple))
+                st.session_state['p2-exemple-versio'] = (str(path_exemple), versio_exemple)
+            cas = st.session_state.get('p2-exemple')
+            if cas:
+                if 'p2-proposta' not in st.session_state:
+                    aplica_exemple(cas)
+                st.button('Mira l’exemple', on_click=aplica_exemple, args=(cas,))
         with st.container(key='p2-controls'):
-            a, b, c = st.columns([2, 2, 2])
-            with a, st.container(key='p2-seleccio-proposta'):
+            opcions_extra = st.expander('Més opcions',
+                expanded=st.session_state.get('p2-guia-pas') in (3, 5))
+            with opcions_extra, st.container(key='p2-seleccio-proposta'):
                 vista = st.segmented_control('Què vols veure', ['Proposta i avui', 'Només avui'],
                     default='Proposta i avui' if opcions else 'Només avui', key='p2-vista',
                     selection_mode='single', required=True, disabled=not opcions)
                 comparar = bool(opcions) and vista == 'Proposta i avui'
-            with b:
+            with st.container():
                 preferida = proposta_per_defecte(opcions)
                 triada = st.selectbox('Proposta', opcions or ['Avui'], key='p2-proposta',
                     index=opcions.index(preferida) if preferida in opcions else 0,
-                    format_func=lambda n: NOMS_PROPOSTES.get(n, 'Avui'), disabled=not comparar)
+                    format_func=lambda n: 'Horari complet (5.2)' if n == '5.2' else NOMS_PROPOSTES.get(n, 'Avui'), disabled=not comparar)
             if not comparar:
                 triada = 'Avui'
             base, noms, titulacions = carrega_dades(triada == '5.4')
@@ -241,7 +285,7 @@ def _mostra():
                 avui = carrega_proposta(str(referencia_path), referencia_path.stat().st_mtime_ns)
                 nom_referencia = NOMS_PROPOSTES['5.2']
             elif triada == '5.3':
-                st.info('No hi ha Torns nous (5.2) per comparar. Es compara amb l’horari original.')
+                st.info('No hi ha Horari complet (5.2) per comparar. Es compara amb l’horari original.')
             relaxacions = {}
             proposta = avui
             if comparar:
@@ -258,7 +302,7 @@ def _mostra():
                     relaxacions.setdefault('S11527', []).append('Recuperació de la classe cancel·lada')
             tipica = setmana_tipica(base)
             setmanes = sorted({dilluns(s.data) for s in base.sessions.values()} | {date(2027, 3, 8), date(2027, 3, 15)})
-            setmana = c.selectbox('Setmana', [None] + setmanes,
+            setmana = opcions_extra.selectbox('Setmana', [None] + setmanes,
                 format_func=lambda d: (f'Típica · {tipica:%d/%m}' if d is None else f'{d:%d/%m} – {d + timedelta(days=4):%d/%m}')
                     + (' · imprevistos' if triada == '5.3' and (d or tipica) in (date(2027, 3, 8), date(2027, 3, 15)) else ''), key='p2-setmana') or tipica
             arbre = grups(base)
@@ -285,11 +329,19 @@ def _mostra():
             st.session_state['p2-context-filtre'] = context_filtre
         actuals = celles_grup(base, avui, setmana, tit, curs, grup, noms=noms, referencia=avui)
         noves = celles_grup(base, proposta, setmana, tit, curs, grup, noms=noms, relaxacions=relaxacions, referencia=avui)
+        cas = st.session_state.get('p2-exemple')
+        if cas and triada == '5.2' and (tit, curs, grup) == cas[:3] and setmana == tipica:
+            classe_exemple = next((c for c in noves if c.id_sessio == cas[3]), None)
+            if classe_exemple:
+                st.caption(f'Exemple · {classe_exemple.assignatura} · '
+                    f'{classe_exemple.abans} → {classe_exemple.dia} '
+                    f'{classe_exemple.ini//60:02}:{classe_exemple.ini%60:02} · {classe_exemple.aula}. '
+                    'Obre aquesta classe per veure’n el detall.')
         with st.container(key='p2-context-dades'):
             st.markdown(resum_html(base, proposta, actuals, noves, comparar, referencia=avui, nom_referencia=nom_referencia), unsafe_allow_html=True)
         with st.container(key='p2-graelles'):
             st.subheader('La setmana del grup')
-            with st.container(key='p2-clau-colors'):
+            with opcions_extra, st.container(key='p2-clau-colors'):
                 filtre = mostra_filtres(noves)
             titol = f'{"Proposta" if comparar else "Avui"} · Grup {grup} · {setmana:%d/%m} – {setmana + timedelta(days=4):%d/%m}'
             if comparar and nom_referencia != 'avui':
@@ -311,7 +363,7 @@ def _mostra():
                 'aula': c.aula, 'Motiu': ' '.join(c.relaxacions)} for c in noves]))
         aules = sorted(set(base.aules) | {a.aula for a in proposta.files.values() if a.aula})
         if aules:
-            with st.container(key='p2-vista-aula'):
+            with opcions_extra, st.container(key='p2-vista-aula'):
                 st.subheader('Consulta una aula')
                 aula = tria_si_cal('Aula', aules, key='p2-aula', format_func=lambda a:
                     f'{a} · {base.aules[a].capacitat} places' if a in base.aules else a)
@@ -321,6 +373,11 @@ def _mostra():
                         referencia=avui, nom_proposta=NOMS_PROPOSTES.get(triada, 'Horari d’avui')),
                     file_name=f'horari-{aula.replace("/", "-")}-{triada}-{setmana}.html', mime='text/html')
                 st.markdown(taula_html(dades, 'Aula ' + aula, originals=not comparar, estils=False), unsafe_allow_html=True)
+        try:
+            st.page_link('pagines/imprevistos.py', label='Pas següent: un imprevist →')
+        except (KeyError, st.errors.StreamlitAPIException):
+            # La pàgina també es pot renderitzar sola, sense st.navigation (proves).
+            st.markdown('[Pas següent: un imprevist →](imprevistos)')
         enfoca_pas()
     except Exception:
         mostra_error()
