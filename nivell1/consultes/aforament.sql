@@ -6,6 +6,7 @@ WITH grups AS (
            sum(s.alumnes) AS alumnes, a.capacitat,
            bool_and(coalesce(s.fixada, '') <> '') AS heretada,
            list_sort(list(s.id_sessio)) AS exemples,
+           list_distinct(list(s.codi || '/' || s.grup)) AS grups,
            count(*) FILTER (WHERE s.alumnes_origen = 'sense_dada') AS sense_dada
     FROM sessions s JOIN aules a ON a.aula = s.aula_partida
     WHERE s.sem = $semestre AND ($setmana IS NULL OR s.setmana = $setmana)

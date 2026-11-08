@@ -1,6 +1,11 @@
 -- Ocupacions físiques: les compartides compten un cop per aula i bloc.
-WITH triades AS (
-    SELECT * FROM sessions WHERE sem = $semestre AND ($setmana IS NULL OR setmana = $setmana)
+WITH recomptes AS (
+    SELECT setmana, count(*) AS classes FROM sessions WHERE sem=$semestre GROUP BY setmana
+), lectives AS (
+    SELECT setmana FROM recomptes WHERE classes >= (SELECT max(classes)*0.5 FROM recomptes)
+), triades AS (
+    SELECT * FROM sessions WHERE sem = $semestre AND setmana IN (SELECT setmana FROM lectives)
+    AND ($setmana IS NULL OR setmana = $setmana)
 ), espais AS (
     SELECT s.*, unnest(list_distinct(list_filter(
         list_prepend(aula_partida, string_split(coalesce(aules_addicionals_partida, ''), '|')),

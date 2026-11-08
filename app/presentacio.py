@@ -1,5 +1,6 @@
 """Adapta dades ja calculades a textos i representacions senzilles."""
 import re
+from datetime import date, timedelta
 import pandas as pd
 from servei import AULES_DISPONIBLES, PLACES_GRAU_NOU
 from textos import TEXTOS, TEXTOS_PORTADA
@@ -27,6 +28,38 @@ def proporcio(n, total):
     return f'el {percent} % de les classes'
 
 
+def dilluns_setmana(setmana):
+    """Accepta el codi ISO i el registre del selector sense mostrar codis interns."""
+    if isinstance(setmana, (tuple, list)):
+        setmana = setmana[0] if setmana else None
+    if setmana is None:
+        return None
+    match = re.fullmatch(r'(\d{4})-W(\d{2})', str(setmana))
+    if not match:
+        return None
+    try:
+        return date.fromisocalendar(int(match[1]), int(match[2]), 1)
+    except ValueError:
+        return None
+
+
+def dates_setmana(setmana):
+    dilluns = dilluns_setmana(setmana)
+    if dilluns is None:
+        return 'sense dades'
+    divendres = dilluns + timedelta(days=4)
+    return f'{dilluns.day}/{dilluns.month} – {divendres.day}/{divendres.month}'
+
+
+def etiqueta_setmana(setmana, criteri='pic', seleccionada=False):
+    dilluns = dilluns_setmana(setmana)
+    data = dilluns.strftime('%d/%m') if dilluns else 'sense dades'
+    if seleccionada:
+        return f'a la setmana seleccionada ({dates_setmana(setmana)})'
+    nom = 'amb més demanda de matí' if criteri == 'demanda_mati' else 'amb més classes alhora'
+    return f'a la setmana {nom} ({data})'
+
+
 def taula_extra(dades):
     if isinstance(dades, dict) and dades and all(pd.api.types.is_scalar(v) for v in dades.values()):
         return pd.DataFrame([dades])
@@ -52,8 +85,8 @@ def coll_ampolla(extra):
         pct = primer(r, 'ocupacio_pct', 'percentatge', 'percent')
         ocupacio = f' ({numero(round(float(pct)))} % ocupat)' if pct is not None and not pd.isna(pct) else ''
         nom = 'el matí' if torn == 'al matí' else 'la tarda' if torn == 'a la tarda' else torn
-        return f'El més ajustat: {nom} en conjunt, la setmana {setmana}{ocupacio}.'
-    return f'El més ajustat: les aules de més de {numero(mida)} places, {torn}, la setmana {setmana}.'
+        return f'El més ajustat: {nom} en conjunt, la setmana del {dates_setmana(setmana)}{ocupacio}.'
+    return f'El més ajustat: les aules de més de {numero(mida)} places, {torn}, la setmana del {dates_setmana(setmana)}.'
 
 
 def falta_mida(extra):
@@ -79,7 +112,7 @@ def falta_mida(extra):
             setmana = r.get('setmana', extra.get('setmana', 'no indicada'))
             mida = r.get('llindar', 0)
             lloc = f'Per a grups de més de {numero(mida)} alumnes' if mida and mida > 0 else 'Per al torn en conjunt'
-            return f'{lloc}, {torn}, la setmana {setmana}, calen {numero(demanda)} h d’aula i se n’ofereixen {numero(oferta)}: en falten {numero(demanda-oferta)} h.'
+            return f'{lloc}, {torn}, la setmana del {dates_setmana(setmana)}, calen {numero(demanda)} h d’aula i se n’ofereixen {numero(oferta)}: en falten {numero(demanda-oferta)} h.'
     return coll_ampolla(extra) or 'El balanç per mida indica un dèficit; el resultat encara no concreta les hores que falten.'
 
 
@@ -100,7 +133,7 @@ def context(t, altres=None):
     altres = altres or {}
     extra = t.extra or {}
     c = dict(xifra=t.xifra, places=numero(PLACES_GRAU_NOU), disponibles=numero(AULES_DISPONIBLES),
-             hores_noves='—', hores_lliures='—', marge_semestre='—', etiqueta_setmana='a la setmana més plena', proporcio='una part de les', sense_aula='—',
+             hores_noves='—', hores_lliures='—', marge_semestre='—', etiqueta_setmana=etiqueta_setmana(extra.get('setmana'), extra.get('criteri_setmana', 'pic')), proporcio='una part de les', sense_aula='—',
              dia='dia no indicat', pic='—', ocupacio='—')
     c['percent'] = None
     if t.id == 'hi-cap-mati':
@@ -159,16 +192,22 @@ def context(t, altres=None):
         if necessitat is not None and lliures is not None:
             c['percent'] = float(necessitat)/float(lliures)*100 if lliures > 0 else None
         c['falla'] = not extra.get('cap_per_mida', False)
+    if t.id == 'aforament':
+        c.update(aforament_total=numero(extra.get('sessions_total', valor(t.xifra))),
+                 aforament_heretades=numero(extra.get('sessions_heretades', 0)),
+                 grups_afectats=numero(extra.get('grups_afectats', 0)))
     return c
 
 
 def text(t, altres=None, *, setmana_triada=None):
     c = context(t, altres)
     if setmana_triada is not None:
-        c['etiqueta_setmana'] = f'a la setmana seleccionada ({setmana_triada})'
+        c['etiqueta_setmana'] = etiqueta_setmana(setmana_triada, seleccionada=True)
     plantilla = TEXTOS.get(t.id, dict(estat='ambre', etiqueta='Vigilar', titol=t.titol,
         frase='Resultat disponible: {xifra}.', proposem='Revisar el resultat amb Gestió Acadèmica.'))
     resultat = {k: v.format_map(c) for k, v in plantilla.items()}
+    if t.id == 'hores-aula' and c['percent'] is not None and c['percent'] < 5:
+        resultat.update(estat='ambre', etiqueta='Vigilar')
     if c.get('falla'):
         resultat.update(estat='vermell', etiqueta='Cal actuar')
         if t.id == 'marge-grau-nou':
@@ -182,6 +221,7 @@ def text(t, altres=None, *, setmana_triada=None):
             c['validat'] = True
             c['resposta'] = 'Sí, hi cap'
             resultat.update(etiqueta='Hi cap', estat='verd',
+                proposem='Aplicar l’horari proposat (Torns nous).',
                 frase=c['torns'].split('.')[0] + '. Confirmat amb l’horari proposat i el verificador oficial: '
                       'només queden fora de torn les classes que no es poden moure.')
     if t.id == 'marge-grau-nou':
@@ -192,26 +232,38 @@ def text(t, altres=None, *, setmana_triada=None):
             mogudes = v.get('sessions_52_mogudes', 0)
             n = v.get('sessions_grau_nou_collocades', v.get('sessions_grau_nou'))
             fora = v.get('sessions_grau_nou_fora_franja')
+            resta = ('sense moure cap classe de la resta de l’horari' if mogudes == 0 else
+                     f'movent {numero(mogudes)} classes de la resta de l’horari')
+            noves = f'les {numero(n)} classes del grau nou' if n is not None else 'el grau nou'
+            canvi = (f'; {numero(fora)} classes noves queden en una hora diferent de la que demanaven per reduir esperes'
+                     if fora is not None and fora > 0 else
+                     '; totes les classes noves conserven l’hora que demanaven' if fora == 0 else '')
             resultat.update(etiqueta='Hi cap', estat='verd',
-                proposem='Incorporar-lo a l’horari proposat: ja hi cap.', frase=(
-                f"L’horari proposat hi col·loca {numero(n) + ' sessions' if n is not None else 'el grau nou'}"
-                + (f': {numero(fora)} sessions noves fora de la seva franja original' if fora is not None
-                   else ': recompte de sessions noves fora de franja pendent')
-                + f' i {numero(mogudes)} classes del 5.2 mogudes'
-                + ' (verificador oficial).'))
+                proposem='Incorporar-lo a l’horari proposat: ja hi cap.',
+                frase=f'L’horari proposat col·loca {noves} {resta}{canvi}. Ho confirma el verificador oficial.')
         elif v.get('resposta') in (2, 4):
             resultat.update(etiqueta='Cal actuar', estat='vermell', frase=(
                 'No hi cap sense tocar l’horari proposat.' if v['resposta'] == 2 else 'Hem demostrat que no hi cap.')
                 + ' Ho ha comprovat la part 2 amb el verificador oficial.')
         else:
             resultat.update(etiqueta='Pendent de comprovar', estat='ambre')
+    if t.id in ('hores-mortes', 'canvis-aula', 'dobles-mati') and 'setmanes_lectives' in t.extra:
+        resultat['metode_planer'] += f" En aquest semestre comptem {numero(t.extra['setmanes_lectives'])} setmanes lectives."
+    if c.get('validat'):
+        metode = resultat.get('metode_planer', '')
+        # La validació ja existeix: substituïm l'advertiment provisional final.
+        if t.id == 'hi-cap-mati':
+            metode = metode.split('; això encara')[0].rstrip('.')
+        elif t.id == 'marge-grau-nou':
+            metode = metode.rsplit('. ', 1)[0]
+        resultat['metode_planer'] = metode + '. El balanç és una condició necessària; l’horari proposat ho confirma amb el verificador oficial.'
     resultat.update(c=c)
     return resultat
 
 
 def abast(t):
     setmana = (t.extra or {}).get('setmana')
-    return f'Detall de la setmana {setmana}' if setmana else 'Setmana no indicada'
+    return f'Detall de la setmana del {dates_setmana(setmana)}' if setmana else 'Setmana no indicada'
 
 
 def text_portada(t, info):
@@ -224,7 +276,7 @@ def text_portada(t, info):
             resum['frase'] = 'L’horari proposat ho confirma amb el verificador oficial.'
     elif t.id == 'marge-grau-nou':
         if info['c'].get('validat'):
-            resum['frase'] = 'Hores setmanals necessàries, amb encaix confirmat pel verificador oficial.'
+            resum['frase'] = 'Hores setmanals que necessita el grau; el verificador oficial confirma que hi cap.'
         elif info['estat'] == 'vermell':
             resum['frase'] = 'Hores setmanals necessàries; cal revisar si el grau hi cap.'
     return dict(info, **resum)

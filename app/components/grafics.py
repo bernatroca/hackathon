@@ -9,6 +9,10 @@ from presentacio import DIES, context, valor
 from textos import PROBLEMES
 from components.taules import dades_troballa, resum_docents
 
+SINGULAR = {' classes':' classe', ' alumnes de més':' alumne de més',
+            ' canvis':' canvi', ' docents':' docent', ' aules':' aula',
+            ' dies':' dia', ' casos':' cas'}
+
 
 def quadrets(t):
     c = context(t)
@@ -40,7 +44,7 @@ def barres(labels, values, clau, unitat=''):
         st.info('No hi ha casos per mostrar en aquesta setmana.')
         return
     fig = go.Figure(go.Bar(x=df.valor,y=df.nom,orientation='h',width=.6,marker=dict(color='#2a78d6',cornerradius=4),
-        text=[f'{numero(v)}' + (' cas' if v == 1 else ' casos') if unitat == ' casos' else f'{numero(v)}{unitat}' for v in df.valor],textposition='outside',cliponaxis=False,
+        text=[f'{numero(v)}{SINGULAR.get(unitat, unitat) if v == 1 else unitat}' for v in df.valor],textposition='outside',cliponaxis=False,
         texttemplate='\u2009\u2009\u2009%{text}', hovertemplate='%{y}: %{text}<extra></extra>'))
     fig.update_layout(height=60+36*len(df))
     fig.update_xaxes(visible=False)
@@ -101,8 +105,13 @@ def _grafics(t, clau='detall', altres=None):
         cobertura = (altres or {}).get('hores-aula')
         if cobertura is not None:
             c = context(cobertura)
-            st.info(f"Moltes aules semblen buides perquè hi ha sense aula aproximadament {c['proporcio']}. Cal assignar-les abans de donar l’espai per lliure.")
+            if c['percent'] is not None and c['percent'] >= 5:
+                st.info(f"Les aules poden semblar buides perquè {c['proporcio']} no tenen aula assignada.")
         return
+    if t.id == 'fora-torn':
+        cohorts = pd.DataFrame((t.extra or {}).get('per_cohort', df))
+        df = cohorts[cohorts.abast == 'semestre'] if 'abast' in cohorts else cohorts
+        st.caption('Classes fora de torn de tot el semestre, per titulació i curs. Una classe compartida pot comptar en més d’un grup.')
     if df.empty:
         st.info('No hi ha casos per mostrar en aquesta setmana.')
         return
@@ -111,13 +120,23 @@ def _grafics(t, clau='detall', altres=None):
         barres(['Hores que necessita el grau nou','Hores lliures al matí'],[c.get('hores_noves_n'),c.get('marge_n')],clau,' h')
         return
     if t.id == 'hores-aula' and {'dia','demanda'}.issubset(df.columns):
-        dies = df.groupby('dia',sort=False).demanda.max()
-        barres([DIES.get(d,d) for d in dies.index],dies.values,clau,' aules')
-        st.caption('Demanda màxima d’aules de cada dia de la setmana seleccionada.')
+        dies = df.groupby('dia',sort=False).demanda.max().reindex(list(DIES),fill_value=0)
+        fig = go.Figure(go.Bar(x=[DIES[d] for d in dies.index], y=dies.values,
+            marker_color='#2a78d6', text=[numero(v) for v in dies.values],
+            textposition='outside', cliponaxis=False, hovertemplate='%{x}: %{y} aules<extra></extra>'))
+        fig.add_hline(y=AULES_DISPONIBLES,line_dash='dash',line_color='#d03b3b',
+            annotation_text=f'{numero(AULES_DISPONIBLES)} aules disponibles')
+        fig.update_yaxes(visible=False,range=[0,max(AULES_DISPONIBLES,float(dies.max()))*1.25])
+        figura(fig,clau)
+        st.caption('Aules que calen al moment més ple de cada dia amb l’horari d’avui (tots els cursos). La línia marca les 19 aules disponibles; l’horari proposat ho redueix.')
         return
     if t.id == 'docents-cavall':
         resum = resum_docents(df)
         if 'dies_mati_tarda' in resum:
+            resum = resum[resum.dies_mati_tarda > 0]
+            if resum.empty:
+                st.info('Aquesta setmana cap docent té matí i tarda el mateix dia.')
+                return
             noms = resum.dies_mati_tarda.map(lambda n: f'{numero(n)} dia' if n == 1 else f'{numero(n)} dies')
         else:
             noms = ['Total de docents']
@@ -140,7 +159,7 @@ def _grafics(t, clau='detall', altres=None):
         labels = labels.map(lambda nom: PROBLEMES.get(nom, nom))
     values = df[col].map(valor) if col == 'xifra' else pd.to_numeric(df[col],errors='coerce')
     if t.id == 'canvis-aula':
-        labels = labels + ' · grup ' + df.subgrup.astype(str)
+        labels = labels + df.subgrup.astype(str).map(lambda s: ' · tot el grup' if s == '*' else ' · grup ' + s)
     if t.id == 'aforament':
         labels = labels + ' · ' + df.dia.map(lambda d:DIES.get(d,d)) + ' ' + df.h_ini.astype(str)
     barres(labels,values,clau,unitat)

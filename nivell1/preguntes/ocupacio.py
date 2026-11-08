@@ -18,7 +18,7 @@ def calcula(semestre: int, setmana: str | None = None) -> Troballa:
     percent = f'{primera.percent_ocupacio:.1f}'.replace('.', ',')
     return Troballa(
         id=ID, titol='Ocupació per aula, dia i bloc', xifra=f'{percent} %',
-        frase=f"{percent} % dels blocs del semestre estan ocupats a {primera.aula}, l’aula amb més ocupació.",
-        metode='Comptem classes físiques per aula i bloc de mitja hora, inclosos laboratoris i aules addicionals, amb les compartides un cop i les dobles sense espai excloses de les aules. La xifra és el percentatge de blocs ocupats del semestre sobre 125 per setmana amb sessions; la fila «sense aula» mostra totes les sessions sense aula, compartides un cop.',
+        frase=f"{percent} % dels blocs de les setmanes lectives estan ocupats a {primera.aula}, l’aula amb més ocupació.",
+        metode='Comptem classes físiques per aula i bloc de mitja hora, inclosos laboratoris i aules addicionals, amb les compartides un cop i les dobles sense espai excloses de les aules. La xifra és el percentatge de blocs ocupats del semestre sobre 125 per setmana lectiva (almenys la meitat de classes de la setmana més plena); tant el numerador com el denominador es limiten a aquestes setmanes; la fila «sense aula» mostra totes les sessions sense aula, compartides un cop.',
         sql=sql_resum + '\n-- Detall setmanal\n' + sql, taula=taula, exemples=exemples, grafic='heatmap',
         extra={'setmana': setmana, 'ranking_aules': ranking.to_dict('records')})

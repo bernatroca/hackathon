@@ -16,10 +16,10 @@ def calcula(semestre=2, setmana=None):
     mitjana = len(resum) / max(int(setmanes.setmanes.iloc[0]), 1)
     xifra = f'{mitjana:.1f}'.replace('.', ',')
     return Troballa(ID, 'Dobles al matí: mitjana setmanal', xifra,
-        f'{xifra} sessions dobles de cursos superiors al matí per setmana de mitjana; {len(resum)} sessions al semestre.',
-        'La xifra és la mitjana setmanal del semestre, incloses setmanes sense incidències; el detall és setmanal; comptem les dobles sense espai propi, de cursos superiors, amb R1-TORN al matí; no hi ha cap clau que acrediti que assisteixin amb 1r o 2n (248 al semestre, excloses 27 dobles fixades de GEI:2n). El cost hipotètic de separar-les és la durada sense PLAB, amb compartides un sol cop; no acredita una aula disponible ni la mida necessària.',
+        f'{xifra} sessions dobles de cursos superiors al matí per setmana lectiva de mitjana; {len(resum)} sessions al semestre.',
+        'La xifra és la mitjana setmanal del semestre, repartint el total del semestre entre les setmanes lectives; el detall és setmanal; comptem les dobles sense espai propi, de cursos superiors, amb R1-TORN al matí; no hi ha cap clau que acrediti que assisteixin amb 1r o 2n (248 al semestre, excloses 27 dobles fixades de GEI:2n). El cost hipotètic de separar-les és la durada sense PLAB, amb compartides un sol cop; no acredita una aula disponible ni la mida necessària.',
         sql_setmanes + '\n-- Resum del semestre\n' + sql_resum + '\n-- Detall setmanal\n' + sql, taula, df.id_sessio.head(5).tolist(), 'barres',
-        extra={'setmana': setmana, 'sessions_semestre': len(consulta('dobles_mati', semestre=semestre, setmana=None)[0])})
+        extra={'setmanes_lectives': int(setmanes.setmanes.iloc[0]), 'setmana': setmana, 'sessions_semestre': len(consulta('dobles_mati', semestre=semestre, setmana=None)[0])})
 
 
 def comprova():

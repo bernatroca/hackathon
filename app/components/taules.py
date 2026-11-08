@@ -8,7 +8,7 @@ NOMS = {
     'ordre':'Ordre del dia', 'etiqueta':'Hora', 'valor':'Classes alhora', 'exemples':'Identificadors de sessions',
     'percent_ocupacio':'Ocupació (%)', 'classes':'Classes alhora', 'aules':'Aules disponibles',
     'aules_amb_seminaris':'Aules amb seminaris', 'torn':'Torn', 'setmana':'Setmana',
-    'setmana_pitjor':'Setmana més plena', 'ocupacio_pct':'Ocupació (%)',
+    'setmana_pitjor':'Setmana amb més ocupació', 'ocupacio_pct':'Ocupació (%)',
     'demanda_h':'Hores d’aula necessàries (h)', 'oferta_h':'Hores d’aula disponibles (h)',
     'oferta_h_amb_seminaris':'Hores amb seminaris (h)', 'llindar':'Grups amb més d’aquestes places',
     'falla':'Falten hores per aquesta mida', 'falla_amb_seminaris':'Falten hores amb seminaris',
@@ -38,7 +38,7 @@ NOMS = {
 COLUMNES_OMESES = frozenset({
     'docent', 'docents', 'id_docent', 'docent_id', 'codi', 'codi_assignatura',
     'assignatura', 'nom_assignatura', 'id_sessio', 'id_compartida', 'activitat_id',
-    'unitat', 'exemples',
+    'unitat', 'exemples', 'grups',
 })
 
 
@@ -50,15 +50,29 @@ def resum_docents(df):
     """Una fila per docent al contracte; no s'infereix cap titulació absent."""
     if 'dies_mati_tarda' not in df:
         return pd.DataFrame({'docents_recompte':[len(df)]})
+    df = df[df.dies_mati_tarda > 0]
     return df.groupby('dies_mati_tarda',dropna=False).size().reset_index(name='docents_recompte')
 
 
 def taula_presentacio(t):
+    if t.id == 'fora-torn' and 'per_cohort' in (t.extra or {}):
+        df = pd.DataFrame(t.extra['per_cohort'])
+        if 'abast' in df:
+            df = df[df.abast == 'semestre']
+        return filtra_columnes(df)
     return resum_docents(t.taula) if t.id == 'docents-cavall' else filtra_columnes(t.taula)
 
 
 def mostra_taula(df):
     df = filtra_columnes(df)
+    df = df.copy()
+    for camp in ('torn', 'franja'):
+        if camp in df:
+            df[camp] = df[camp].replace({'mati': 'Matí', 'tarda': 'Tarda'})
+    from presentacio import dates_setmana
+    for camp in ('setmana', 'setmana_pitjor'):
+        if camp in df:
+            df[camp] = df[camp].map(dates_setmana)
     dades = df.rename(columns={c:NOMS.get(c,str(c).replace('_',' ').capitalize()) for c in df.columns}).copy()
     numeriques = list(dades.select_dtypes(include='number').columns)
     estil = dades.style.format({c:numero for c in numeriques}, na_rep='—')
@@ -71,13 +85,14 @@ def mostra_taula(df):
 
 def dades_troballa(t):
     with st.expander('Veure les dades', expanded=False):
-        st.caption('Totes les files de la setmana indicada. Les unitats figuren als noms de columna; pots desplaçar-te per la taula.')
+        st.caption(('Desglossament de tot el semestre per titulació i curs.' if t.id == 'fora-torn' else 'Totes les files de la setmana indicada.')
+                   + ' Les unitats figuren als noms de columna; pots desplaçar-te per la taula.')
         mostra_taula(taula_presentacio(t))
         if t.id == 'docents-cavall':
-            st.caption('Recompte per nombre de dies amb matí i tarda; el resultat no inclou titulació i curs.')
+            st.caption('Només docents amb almenys un dia de matí i tarda; el resultat no inclou titulació i curs.')
         if t.id == 'hi-cap-mati':
             extra = t.extra or {}
-            for camp,nom in [('torns','Balanç a la setmana més plena de cada torn'),
+            for camp,nom in [('torns','Balanç a la setmana amb més ocupació de cada torn'),
                              ('per_mida_setmanes','Comparació per mida: totes les setmanes i variants')]:
                 if camp in extra:
                     st.write(nom)

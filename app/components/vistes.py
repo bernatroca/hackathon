@@ -2,9 +2,10 @@ from html import escape
 import streamlit as st
 from components.grafics import grafics
 from mostra import exemples
-from presentacio import text, text_portada, abast, desglos, valor
+from presentacio import text, text_portada, abast, desglos, valor, dates_setmana
 from servei import una, AULES_DISPONIBLES, AULES_RESERVA
 from textos import PROBLEMES
+from components.taules import mostra_taula
 from errors import mostra_error
 
 
@@ -16,10 +17,12 @@ def carrega(id_):
         return una(id_, st.session_state.semestre, st.session_state.setmana, st.session_state.versio)
     except KeyError as exc:
         if exc.args != (id_,):
+            st.session_state.setdefault('resultats', {})[id_] = None
             mostra_error()
             return None
         return exemples().get(id_)
-    except Exception as exc:
+    except Exception:
+        st.session_state.setdefault('resultats', {})[id_] = None
         mostra_error()
         return None
 
@@ -83,7 +86,7 @@ def resum_grau(info):
     c = info['c']
     return (f'<div class="resum-grau"><p><span class="xifra-targeta">{escape(c["hores_noves"])} h</span> a la setmana que necessita</p>'
         f'<p><strong>{escape(c["hores_lliures"])} h</strong> lliures {escape(c["etiqueta_setmana"])}</p>'
-        f'<p class="marge-semestral"><strong>{escape(c["marge_semestre"])} h</strong> de marge en tot el semestre</p></div>')
+        '</div>')
 
 
 def frase_grau(t, info):
@@ -94,8 +97,6 @@ def frase_grau(t, info):
 def targeta(t, posicio=0):
     complet = contingut(t)
     info = text_portada(t, complet)
-    if t.id == 'marge-grau-nou' and complet['c'].get('validat'):
-        info['frase'] = frase_grau(t, complet)
     with st.container(border=True, key='targeta-'+t.id):
         mostra_avis(t)
         st.markdown(f'<article class="targeta-cor"><h2>{escape(info["titol"])}</h2>'
@@ -116,23 +117,33 @@ def detall(t):
     st.header(info['titol'])
     resposta = info['c'].get('resposta',info['c']['xifra'])
     st.markdown(resum_grau(info) if t.id == 'marge-grau-nou' else f'<div class="xifra-targeta resposta-gran">{escape(resposta)}</div>',unsafe_allow_html=True)
-    st.caption(abast(t) + ' · La xifra principal resumeix el semestre; la comparació mostra la setmana seleccionada.'
-               if t.id != 'marge-grau-nou' else abast(t) + ' · Comparació setmanal i marge del semestre, indicats per separat.')
+    st.caption(('Semestre complet · Desglossament per titulació i curs.' if t.id == 'fora-torn' else
+                abast(t) + ' · La xifra principal resumeix el semestre; la comparació mostra la setmana seleccionada.')
+               if t.id != 'marge-grau-nou' else abast(t) + ' · Comparació de les hores necessàries i lliures de la mateixa setmana.')
     grafics(t,clau='detall-'+t.id,altres=st.session_state.get('resultats',{}))
     st.subheader('Què vol dir')
     st.write(info['frase'])
     if t.id == 'hi-cap-mati':
         if info['c'].get('coll_ampolla'):
             st.write(info['c']['coll_ampolla'])
-        parts = [('Setmana més plena per al pic: ' if st.session_state.get('setmana') is None else 'Setmana seleccionada: ')
-            + str((t.extra or {}).get('setmana', 'no indicada'))]
+        parts = [('Setmana amb més classes alhora: ' if st.session_state.get('setmana') is None else 'Setmana seleccionada: ')
+            + dates_setmana((t.extra or {}).get('setmana'))]
         torns = (t.extra or {}).get('torns')
         if torns is not None and 'setmana_pitjor' in torns:
-            parts.append('més plena de cada torn: ' + ', '.join(f'{r.torn} {r.setmana_pitjor}' for r in torns.itertuples()))
+            parts.append('setmana amb més ocupació de cada torn: ' + ', '.join(f"{'matí' if r.torn == 'mati' else r.torn} {dates_setmana(r.setmana_pitjor)}" for r in torns.itertuples()))
         st.caption(' · '.join(parts) + (' · Horari validat amb el verificador oficial.' if info['c'].get('validat')
             else ' · Cal validar que les classes es poden repartir en un horari.'))
-    if t.id == 'hores-aula' and desglos(t.extra):
-        st.write(desglos(t.extra))
+    if t.id == 'hores-aula':
+        if desglos(t.extra):
+            st.write(desglos(t.extra))
+        hores = t.extra.get('hores_per_torn')
+        if hores is not None:
+            st.subheader('Hores d’aula per torn')
+            mostra_taula(hores.rename(columns={'franja': 'torn'}))
+            st.caption('Setmana indicada, amb tots els cursos: hores d’aula necessàries i oferta de les 19 aules. L’oferta és nominal, abans de descomptar festius i aturades.')
+        elif 'hores_demanda' in t.extra and 'hores_disponibles' in t.extra:
+            from components.format import numero
+            st.write(f"Setmana indicada: {numero(t.extra['hores_demanda'])} h d’aula necessàries / {numero(t.extra['hores_disponibles'])} h disponibles.")
     st.subheader('Proposem')
     st.write(info['proposem'])
     if t.id == 'problemes-millores' and {'problema','proposta'}.issubset(t.taula.columns):
@@ -156,7 +167,7 @@ def detall_obert():
     id_ = st.query_params.get('resposta') or st.session_state.get('detall_id')
     if not id_:
         return False
-    if st.button('← Torna a les respostes',key='torna'):
+    if st.button('← Torna',key='torna'):
         st.session_state.detall_id = None
         st.query_params.pop('resposta', None)
         st.rerun()
@@ -167,8 +178,12 @@ def detall_obert():
 def franja_context(semestre, setmana, tipica=None):
     nom = '2n' if semestre == 2 else '1r'
     etiqueta = 'setmana típica' if setmana is None else 'setmana'
-    valor = setmana or tipica or 'pendent de carregar'
-    return f'<div class="franja-context"><strong>{nom} semestre</strong> · <strong>{etiqueta}</strong> {escape(str(valor))}</div>'
+    referencia = setmana or tipica
+    valor = dates_setmana(referencia)
+    if isinstance(referencia, (tuple, list)) and len(referencia) >= 3:
+        from components.format import numero
+        valor += f' · {numero(referencia[2])} classes'
+    return f'<div class="franja-context"><strong>{nom} semestre</strong> · <strong>{etiqueta}</strong> {escape(valor)}</div>'
 
 
 def estil_respostes():
@@ -195,10 +210,7 @@ def estil_respostes():
 }
 .st-key-respostes .xifra-compacta {font-size:28px;font-weight:700;line-height:1.2;overflow-wrap:anywhere;}
 .st-key-respostes .frase-compacta {
- margin:0;font-size:16px;line-height:1.5;color:#52514e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-}
-.st-key-respostes .resposta-compacta[data-resposta="marge-grau-nou"] .frase-compacta {
- white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;
+ margin:0;font-size:16px;line-height:1.5;color:#52514e;white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;
 }
 .st-key-respostes [data-testid="stLayoutWrapper"]:has(> [class*="st-key-enllac-resposta-"]),
 .st-key-respostes [class*="st-key-enllac-resposta-"] {margin-top:auto;flex:0 0 auto;}
@@ -232,8 +244,7 @@ def targeta_compacta(t, info=None):
     info = contingut(t) if info is None else info
     if t.id == 'marge-grau-nou':
         info = dict(info, frase=(f"{info['c']['hores_noves']} h a la setmana; "
-            f"{info['c']['hores_lliures']} h lliures {info['c']['etiqueta_setmana']}; "
-            f"{info['c']['marge_semestre']} h de marge en tot el semestre."))
+            f"{info['c']['hores_lliures']} h lliures {info['c']['etiqueta_setmana']}."))
     with st.container(border=True,height='stretch',key='resposta-compacta-'+t.id):
         mostra_avis(t)
         st.markdown(f'<article class="resposta-compacta" data-resposta="{escape(t.id)}">'
