@@ -2,6 +2,7 @@
 import importlib
 import hashlib
 import json
+from contextlib import closing
 from pathlib import Path
 import streamlit as st
 from nivell1 import troballes
@@ -82,7 +83,8 @@ def validacio_part2(apartat):
 @st.cache_data(ttl=None, show_spinner=False)
 def setmanes(semestre):
     """Setmana ISO, dilluns i recompte; exclou les setmanes residuals."""
-    return connexio().execute("""
+    with closing(connexio().cursor()) as cur:
+        return cur.execute("""
         SELECT setmana, CAST(date_trunc('week', min(data)) AS DATE), count(*)
         FROM sessions WHERE sem = $semestre
         GROUP BY setmana HAVING count(*) >= 200 ORDER BY setmana
@@ -97,4 +99,5 @@ PLACES_GRAU_NOU = 40
 @st.cache_data(ttl=None, show_spinner=False)
 def inventari():
     """Única lectura d'inventari autoritzada; no calcula ocupació."""
-    return connexio().execute('SELECT aula, edifici, tipus, capacitat FROM aules').df()
+    with closing(connexio().cursor()) as cur:
+        return cur.execute('SELECT aula, edifici, tipus, capacitat FROM aules').df()

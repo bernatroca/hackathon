@@ -27,6 +27,7 @@ WITH base AS (
  WHERE starts_with(aula_partida,'J/') AND NOT sense_espai
  UNION ALL SELECT 'Sessions fora de l’inventari',unitat,id_sessio FROM base
  WHERE aula_partida IS NOT NULL AND tipus_aula IS NULL AND NOT sense_espai
+ AND aula_partida NOT IN ('B3/0021','QC/1082')
  UNION ALL SELECT 'Sessions sense dada d’alumnes',unitat,id_sessio FROM base
  WHERE alumnes=0 AND NOT sense_espai
  UNION ALL SELECT 'Més alumnes que places',b.unitat,b.id_sessio FROM base b
@@ -47,10 +48,11 @@ WITH base AS (
  ('PAUL en laboratoris de Q6','Classes físiques PAUL en laboratoris docents Q6; exclou dobles sense espai propi.','Traslladar-les a aules docents o seminaris compatibles.'),
  ('Sessions fora de la finestra','Classes físiques que no caben senceres a 8.30–14.30 o 14.30–21.00, incloses les que travessen les 14.30.','Reprogramar cada sessió dins una única finestra completa.'),
  ('Sessions a aules J','Classes físiques amb aula J; exclou dobles sense espai propi.','Portar-les a l’aulari de l’Escola amb mida i equipament compatibles.'),
- ('Sessions fora de l’inventari','Classes físiques amb aula principal absent de l’inventari; inclou J i exclou dobles.','Revisar les J per traslladar-les; conservar B3/0021 i QC/1082 només per a les sessions actuals.'),
+ ('Sessions fora de l’inventari','Classes físiques amb aula principal absent de l’inventari; inclou J i exclou dobles i les aules permeses B3/0021 i QC/1082.','Revisar els espais no registrats i traslladar les classes a aules compatibles.'),
  ('Sessions sense dada d’alumnes','Classes físiques amb alumnes = 0, excloses les dobles sense espai propi.','Completar la matrícula o l’estimació abans de comprovar l’aforament.')
 )
 SELECT d.problema,count(DISTINCT i.unitat) AS xifra,d.com_es_calcula,d.proposta,
  coalesce(list(DISTINCT i.id_sessio ORDER BY i.id_sessio) FILTER (WHERE i.id_sessio IS NOT NULL), []) AS exemples
 FROM definicions d LEFT JOIN incidencies i USING(problema)
-GROUP BY d.problema,d.com_es_calcula,d.proposta ORDER BY xifra DESC,problema
+GROUP BY d.problema,d.com_es_calcula,d.proposta
+HAVING count(DISTINCT i.unitat)>0 ORDER BY xifra DESC,problema
