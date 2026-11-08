@@ -76,9 +76,12 @@ def test_preguntes_i_junta():
     assert '5.4' in widget.pantalla_actual('Resum per a la Junta', {'junta-proposta': '5.4'})['text']
 
 
-def test_sense_estils_consultes_i_correccio_footer():
+def test_estils_consultes_i_correccio_footer():
     css = (widget.WEB / 'xat-ia.css').read_text()
-    assert '.xatia-consult' not in css
+    assert '.xatia-consultes summary' in css
+    assert '.xatia-consulta pre' in css
+    assert 'overflow-wrap: anywhere' in css
+    assert 'focus-visible' in css
     assert 'white-space: pre-wrap' in css
     assert '.xatia footer.xatia-peu { display: block !important; }' in css
 
@@ -105,7 +108,7 @@ const sandbox = {
   },
 };
 const source = fs.readFileSync(process.argv[1], 'utf8').replace('  window.XatIA = {', `
-  window.prova = { markdown, htmlMissatge, llegeixFlux, perAlServidor, desa, llegeixMemoria, estat,
+  window.prova = { htmlConsultes, copiaIds, descriuArgument, markdown, htmlMissatge, llegeixFlux, perAlServidor, desa, llegeixMemoria, estat,
     sincronitzaPlafó, acabaTransicio, teclaPlafó, clicFons,
     preparaInteraccio() {
       el = {fons: {}, lupa: {hidden:true},
@@ -256,13 +259,86 @@ async function flux(fi) {
   const nomesText = '<div class="xatia-missatge xatia-missatge--ia"><p>Resposta inventada</p></div>';
   assert.equal(html, nomesText); // Sense bloc, SQL, arguments, sessions ni errors de consultes.
   assert.equal(p.htmlMissatge({role:'assistant', content:r.text}), nomesText);
-  p.estat.missatges = [missatge];
+  const bones = [{eina:'aules_lliures', ok:true,
+    args:{dia:'J', hora_ini:'10:00', durada_min:60, places_min:60, proposta:'avui'},
+    id_sessio:Array.from({length:12}, (_, i) => 'S900' + i), total_id:23,
+    consulta:'SELECT * FROM inventat WHERE x < 4; ' + mal},
+    {eina:'ocupacio_aula', ok:true, args:{aula:'Q9/0001'}, id_sessio:[], consulta:'cap resultat'},
+    ...consultes];
+  const ambConsultes = {...missatge, consultes:bones};
+  const comprovacio = p.htmlMissatge(ambConsultes);
+  assert.ok(comprovacio.includes('<details class="xatia-consultes"><summary>Comprova-ho</summary>'));
+  assert.ok(!comprovacio.includes('<details open'));
+  assert.equal((comprovacio.match(/class="xatia-consulta"/g) || []).length, 2);
+  for (const text of ['Aules lliures', 'dia: dijous', 'hora: 10:00', 'durada: 60 min',
+    '60 places o més', 'horari d’avui', '+13 més', 'Copia', 'cap resultat',
+    'Ocupació de l’aula', 'Q9/0001', 'x &lt; 4', '&lt;img']) assert.ok(comprovacio.includes(text), text);
+  assert.ok(!comprovacio.includes('<img'));
+  assert.ok(!comprovacio.includes('S90010'));
+  assert.ok(!comprovacio.includes('S90011'));
+  assert.ok(!p.htmlMissatge({role:'user', content:'Hola', consultes:bones}).includes('Comprova-ho'));
+  assert.equal(p.htmlConsultes([]), '');
+  assert.equal(p.htmlConsultes(null), '');
+  assert.equal(p.htmlConsultes([{ok:false}]), '');
+  for (const eina of ['horari_grup','xifra','resultat_proposta','consulta_sql','prova_canvi']) {
+    const h = p.htmlConsultes([{ok:true,eina,args:{apartat:'5.2',canvi:{tipus:'moure',id_sessio:'S90001'}}}]);
+    assert.ok(h.includes('horari proposat: 5.2'));
+    assert.ok(h.includes('canvi: tipus: moure una classe · sessió: S90001'));
+    assert.ok(!h.includes(eina));
+  }
+  assert.equal(p.descriuArgument('proposta', '5.2'), 'horari proposat: 5.2');
+  const status = {textContent:''};
+  const codeIds = {};
+  const boto = {dataset:{ids:'S90001,S90002'}, parentElement:{querySelector:(selector) => selector === 'code' ? codeIds : status}};
+  let copiat;
+  sandbox.navigator = {clipboard:{writeText:async (text) => {copiat = text;}}};
+  await p.copiaIds(boto);
+  assert.equal(copiat, 'S90001,S90002');
+  assert.equal(status.textContent, 'Copiat');
+  let temporal, eliminats = 0, seleccionats = 0, focusRestaurat = 0;
+  sandbox.document.activeElement = {focus:() => {focusRestaurat++;}};
+  sandbox.document.createElement = (tag) => {
+    assert.equal(tag, 'textarea');
+    temporal = {style:{}, setAttribute:(k,v) => {assert.equal(k,'readonly');},
+      select:() => {seleccionats++;}, remove:() => {eliminats++;}};
+    return temporal;
+  };
+  sandbox.document.body = {appendChild:(element) => {assert.equal(element,temporal);}};
+  sandbox.document.execCommand = (command) => {
+    assert.equal(command, 'copy');
+    assert.equal(temporal.value, 'S90001,S90002');
+    return true;
+  };
+  sandbox.navigator.clipboard.writeText = async () => {throw new Error('denegat');};
+  await p.copiaIds(boto);
+  assert.equal(status.textContent, 'Copiat');
+  delete sandbox.navigator.clipboard;
+  await p.copiaIds(boto);
+  assert.equal(status.textContent, 'Copiat');
+  assert.equal(eliminats, 2);
+  assert.equal(seleccionats, 2);
+  assert.equal(focusRestaurat, 2);
+  let contingut, rangAfegit, netejat = false;
+  const rang = {selectNodeContents:(node) => {contingut = node;}};
+  sandbox.document.createRange = () => rang;
+  sandbox.window.getSelection = () => ({removeAllRanges:() => {netejat = true;},
+    addRange:(r) => {rangAfegit = r;}});
+  for (const falla of [() => false, () => {throw new Error('bloquejat');}]) {
+    sandbox.document.execCommand = falla;
+    await p.copiaIds(boto);
+    assert.equal(status.textContent, 'Seleccionat: prem Cmd+C o Ctrl+C per copiar-ho');
+    assert.equal(contingut, codeIds);
+    assert.equal(rangAfegit, rang);
+    assert.ok(netejat);
+  }
+  assert.equal(eliminats, 4);
+  p.estat.missatges = [ambConsultes];
   p.desa();
   p.estat.missatges = [];
   p.llegeixMemoria();
   assert.equal(p.estat.missatges[0].consultes[0].total_id, 23);
-  assert.deepEqual(JSON.parse(JSON.stringify(p.estat.missatges[0].consultes)), consultes);
-  assert.equal(p.htmlMissatge(p.estat.missatges[0]), nomesText); // Tampoc en converses desades.
+  assert.deepEqual(JSON.parse(JSON.stringify(p.estat.missatges[0].consultes)), bones);
+  assert.equal(p.htmlMissatge(p.estat.missatges[0]), comprovacio); // També en converses desades.
   const enviat = JSON.parse(JSON.stringify(p.perAlServidor()));
   assert.deepEqual(enviat, [{role:'assistant', content:'Resposta inventada'}]);
 })().catch((error) => { console.error(error); process.exitCode = 1; });

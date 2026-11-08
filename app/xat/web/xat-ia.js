@@ -540,6 +540,7 @@
         else if (accio === 'nova') conversaNova();
         else if (accio === 'captura') el.fitxer.click();
         else if (accio === 'envia') envia(el.caixa.value, true);
+        else if (accio === 'copia-ids') copiaIds(fa);
         else if (accio === 'treu') {
           estat.preparades = estat.preparades.filter((_, i) => i !== Number(fa.dataset.i));
           pinta();
@@ -621,6 +622,98 @@
 
   /* ---------- pintar ---------- */
 
+  const NOMS_EINES = {
+    horari_grup: 'Horari del grup', aules_lliures: 'Aules lliures',
+    ocupacio_aula: 'Ocupació de l’aula', xifra: 'Xifra de l’horari',
+    resultat_proposta: 'Resultat de la proposta', consulta_sql: 'Consulta de l’horari',
+    prova_canvi: 'Prova d’un canvi',
+  };
+  const ETIQUETES_ARGS = {
+    titulacio: 'titulació', curs: 'curs', grup: 'grup', dia: 'dia', data: 'data',
+    hora_ini: 'hora', h_ini: 'hora', h_fi: 'hora final', durada_min: 'durada',
+    places_min: 'places', tipus: 'tipus', setmana: 'setmana', aula: 'aula',
+    id: 'xifra', apartat: 'horari proposat', proposta: 'horari', sql: 'consulta',
+    canvi: 'canvi', id_sessio: 'sessió', activitat_id: 'activitat',
+    aules_tancades: 'aules tancades', grups_creixen: 'grups que creixen',
+    sessions_cancel_lades: 'sessions cancel·lades', data_ini: 'data inicial',
+    data_fi: 'data final', alumnes: 'alumnes', codi: 'codi d’assignatura',
+    recuperar_fins: 'recuperar fins al',
+  };
+
+  function descriuArgument(clau, valor) {
+    const etiqueta = ETIQUETES_ARGS[clau] || clau.replace(/_/g, ' ');
+    if (Array.isArray(valor)) return `${etiqueta}: ${valor.map(descriuValor).join('; ')}`;
+    if (valor && typeof valor === 'object') return `${etiqueta}: ${descriuValor(valor)}`;
+    if (clau === 'proposta') return ['avui', 'partida'].includes(valor)
+      ? 'horari d’avui' : `horari proposat: ${valor}`;
+    if (clau === 'dia') valor = ({L: 'dilluns', M: 'dimarts', X: 'dimecres', J: 'dijous', V: 'divendres'})[valor] || valor;
+    if (clau === 'durada_min') valor = `${valor} min`;
+    if (clau === 'places_min') valor = `${valor} places o més`;
+    if (clau === 'tipus') valor = ({moure: 'moure una classe', imprevist: 'imprevist'})[valor] || valor;
+    return `${etiqueta}: ${valor}`;
+  }
+
+  function descriuValor(valor) {
+    if (valor && typeof valor === 'object') return Object.entries(valor)
+      .filter(([, v]) => v !== null && v !== undefined)
+      .map(([k, v]) => descriuArgument(k, v)).join(' · ');
+    return String(valor);
+  }
+
+  function htmlConsultes(consultes) {
+    const correctes = Array.isArray(consultes)
+      ? consultes.filter((c) => c && c.ok === true && !c.error) : [];
+    if (!correctes.length) return '';
+    return '<details class="xatia-consultes"><summary>Comprova-ho</summary>' + correctes.map((c) => {
+      const args = c.args && typeof c.args === 'object' ? c.args : {};
+      const descripcio = [NOMS_EINES[c.eina] || String(c.eina || 'Consulta'),
+        ...Object.entries(args).filter(([, v]) => v !== null && v !== undefined)
+          .map(([k, v]) => descriuArgument(k, v))].join(' · ');
+      const ids = Array.isArray(c.id_sessio) ? c.id_sessio.filter((id) => typeof id === 'string' && id).slice(0, 10) : [];
+      const mes = Math.max(0, (Number(c.total_id) || 0) - ids.length);
+      const sessions = ids.length ? `<div class="xatia-consulta-ids"><span>id_sessio: <code>${escapa(ids.join(', '))}</code>${mes ? ` · +${mes} més` : ''}</span><button type="button" data-fa="copia-ids" data-ids="${escapa(ids.join(','))}" aria-label="Copia els identificadors de sessió">Copia</button><span role="status" class="xatia-consulta-estat"></span></div>` : '';
+      const consulta = c.consulta ? `<pre><code>${escapa(String(c.consulta))}</code></pre>` : '';
+      return `<section class="xatia-consulta"><p>${escapa(descripcio)}</p>${sessions}${consulta}</section>`;
+    }).join('') + '</details>';
+  }
+
+  async function copiaIds(boto) {
+    const estatCopia = boto.parentElement.querySelector('[role="status"]');
+    try {
+      await navigator.clipboard.writeText(boto.dataset.ids);
+      estatCopia.textContent = 'Copiat';
+      return;
+    } catch (e) {
+      /* Alguns navegadors bloquegen el porta-retalls modern. */
+    }
+    const focusAnterior = document.activeElement;
+    const temporal = document.createElement('textarea');
+    temporal.value = boto.dataset.ids;
+    temporal.setAttribute('readonly', '');
+    temporal.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;';
+    let copiat = false;
+    try {
+      document.body.appendChild(temporal);
+      temporal.select();
+      copiat = document.execCommand('copy');
+    } catch (e) {
+      /* Encara es pot copiar manualment la selecció visible. */
+    } finally {
+      temporal.remove();
+      if (focusAnterior && focusAnterior.focus) focusAnterior.focus();
+    }
+    if (copiat) {
+      estatCopia.textContent = 'Copiat';
+      return;
+    }
+    const rang = document.createRange();
+    rang.selectNodeContents(boto.parentElement.querySelector('code'));
+    const seleccio = window.getSelection();
+    seleccio.removeAllRanges();
+    seleccio.addRange(rang);
+    estatCopia.textContent = 'Seleccionat: prem Cmd+C o Ctrl+C per copiar-ho';
+  }
+
   function htmlMissatge(m) {
     if (m.role === 'user') {
       const captures = m.imatges && m.imatges.length
@@ -628,7 +721,7 @@
         : m.fotos ? `<span class="xatia-nota">${m.fotos === 1 ? 'amb una captura' : `amb ${m.fotos} captures`}</span>` : '';
       return `<div class="xatia-missatge xatia-missatge--jo">${captures}${escapa(m.content)}</div>`;
     }
-    return `<div class="xatia-missatge xatia-missatge--ia">${markdown(m.content)}</div>`;
+    return `<div class="xatia-missatge xatia-missatge--ia">${markdown(m.content)}${htmlConsultes(m.consultes)}</div>`;
   }
 
   function pintaConversa() {
