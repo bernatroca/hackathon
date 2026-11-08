@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Com funciona l'app</title>
+<style>
+  :root { --blau: #2b78e4; --paper: #f4f2ee; }
+  html, body { margin: 0; height: 100%; background: #0e0f12; }
+  body { display: grid; place-items: center; font-family: -apple-system, "SF Pro Display", "Helvetica Neue", Arial, sans-serif; }
+  #escenari { position: relative; width: 1440px; height: 900px; overflow: hidden; background: var(--paper); transform-origin: 0 0; }
+  .capa { position: absolute; inset: 0; overflow: hidden; }
+  .camera { position: absolute; left: 0; top: 0; width: 1440px; height: 900px; transform-origin: 0 0; }
+  .camera img { position: absolute; inset: 0; width: 1440px; height: 900px; display: block; }
+  .marc { position: absolute; border: 3px solid var(--blau); border-radius: 10px; box-shadow: 0 0 0 6px rgba(43,120,228,.18), 0 0 24px rgba(43,120,228,.35); opacity: 0; }
+  .carta { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; color: #fff; opacity: 0; }
+  .carta .fons { position: absolute; inset: -40px; background: center/cover no-repeat; filter: blur(16px) brightness(.32) saturate(.7); }
+  .carta .text { position: relative; max-width: 1150px; }
+  .carta .kicker { font-size: 24px; letter-spacing: .14em; text-transform: uppercase; color: #9cc3ff; font-weight: 600; }
+  .carta h1 { font-size: 96px; line-height: 1.02; margin: 20px 0 22px; font-weight: 800; letter-spacing: -.02em; }
+  .carta p { font-size: 32px; line-height: 1.35; margin: 0; color: #e6e9ef; font-weight: 500; }
+  .rotol { position: absolute; left: 40px; bottom: 40px; max-width: 900px; padding: 22px 28px 24px; border-radius: 18px; background: rgba(20,22,28,.9); color: #fff; box-shadow: 0 18px 50px rgba(0,0,0,.28); opacity: 0; }
+  .rotol .acte { display: inline-flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #9cc3ff; }
+  .rotol .acte i { width: 10px; height: 10px; border-radius: 50%; background: currentColor; display: inline-block; }
+  .rotol.problema .acte { color: #ff9c92; }
+  .rotol.solucio .acte { color: #8fe0a6; }
+  .rotol.dificil .acte { color: #f5c26b; }
+  .rotol .gran { font-size: 42px; font-weight: 800; line-height: 1.1; margin-top: 8px; letter-spacing: -.01em; }
+  .rotol .petit { font-size: 22px; line-height: 1.38; margin-top: 10px; color: #d6dae2; font-weight: 500; }
+  .rotol.dreta { left: auto; right: 40px; }
+  .capitol { position: absolute; top: 22px; right: 26px; padding: 9px 16px 9px 14px; border-radius: 999px; background: rgba(20,22,28,.86); color: #fff; font-size: 16px; font-weight: 700; letter-spacing: .06em; display: flex; gap: 10px; align-items: center; opacity: 0; }
+  .capitol b { color: #9cc3ff; font-weight: 800; }
+  .cursor { position: absolute; width: 30px; height: 30px; opacity: 0; filter: drop-shadow(0 2px 3px rgba(0,0,0,.35)); }
+  .ona { position: absolute; width: 20px; height: 20px; margin: -10px 0 0 -10px; border-radius: 50%; border: 3px solid var(--blau); opacity: 0; }
+  .barra { position: absolute; left: 0; bottom: 0; height: 5px; background: var(--blau); opacity: .9; }
+  #controls { position: fixed; left: 16px; bottom: 16px; display: flex; gap: 10px; align-items: center; color: #cfd3da; font: 14px -apple-system, sans-serif; }
+  #controls button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid #3a3f4a; background: #1d2027; color: #fff; cursor: pointer; }
+  body.render #controls { display: none; }
+  body.render { display: block; }
+</style>
+</head>
+<body>
+<div id="escenari">
+  <div class="capa" id="capaA"><div class="camera"><img alt=""><div class="marc"></div><div class="marc"></div><div class="marc"></div></div></div>
+  <div class="capa" id="capaB"><div class="camera"><img alt=""><div class="marc"></div><div class="marc"></div><div class="marc"></div></div></div>
+  <div class="carta" id="cartaA"><div class="fons"></div><div class="text"><div class="kicker"></div><h1></h1><p></p></div></div>
+  <div class="carta" id="cartaB"><div class="fons"></div><div class="text"><div class="kicker"></div><h1></h1><p></p></div></div>
+  <svg class="cursor" id="cursor" viewBox="0 0 24 24"><path d="M3 2l7.5 19 2.6-7.9L21 10.5z" fill="#111" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>
+  <div class="ona" id="ona"></div>
+  <div class="capitol" id="capitol"></div>
+  <div class="rotol" id="rotol"><div class="acte"><i></i><span></span></div><div class="gran"></div><div class="petit"></div></div>
+  <div class="barra" id="barra"></div>
+</div>
+<div id="controls">
+  <button id="play">▶ Reprodueix</button>
+  <span id="temps"></span>
+</div>
+<audio id="veu" src="veu/veu.m4a" preload="auto"></audio>
+<script src="escenes.js"></script>
+<script>
+/* Tot el muntatge és una funció del temps: mostra(t).
+   escenes.js el genera docs/demo/eines/munta_app.py a partir de la durada real de cada frase de veu.
+   Dins de cada escena, els temps són segons des de l'inici de l'escena; un temps negatiu compta des del final. */
+const ESCENES = window.ESCENES, DURADA = window.DURADA;
+const FOSA = 0.45;
+const el = (id) => document.getElementById(id);
+const capes = [el('capaA'), el('capaB')].map((c) => ({ c, cam: c.querySelector('.camera'), img: c.querySelector('img'), marcs: [...c.querySelectorAll('.marc')] }));
+const cartes = [el('cartaA'), el('cartaB')];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const suau = (u) => { u = clamp(u, 0, 1); return u < .5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2; };
+const lin = (a, b, u) => a + (b - a) * u;
+const rel = (e, x) => (x < 0 ? e.fi - e.ini + x : x);
+
+function transformacio(r, maxS, origen) {
+  let s = Math.min(1440 / r[2], 900 / r[3], maxS || 3);
+  s = Math.max(s, 1);
+  let tx = 720 - s * (r[0] + r[2] / 2), ty = 450 - s * (r[1] + r[3] / 2);
+  if (origen === 'dreta') tx = 1440 - s * (r[0] + r[2]);
+  tx = clamp(tx, 1440 - 1440 * s, 0); ty = clamp(ty, 900 - 900 * s, 0);
+  return { s, tx, ty };
+}
+
+/* Càmera: llista de [temps, rect], amb transicions suaus entre punts. */
+function camera(e, lt) {
+  const k = (e.cam || [[0, [0, 0, 1440, 900]]]).map(([t, r]) => [rel(e, t), r]);
+  if (lt <= k[0][0]) return transformacio(k[0][1], e.maxS, e.origen);
+  for (let i = 1; i < k.length; i++) {
+    if (lt < k[i][0]) {
+      const a = transformacio(k[i - 1][1], e.maxS, e.origen), b = transformacio(k[i][1], e.maxS, e.origen);
+      const u = suau((lt - k[i - 1][0]) / (k[i][0] - k[i - 1][0]));
+      // Quan el moviment és de fosa (temps igual), salta.
+      return { s: lin(a.s, b.s, u), tx: lin(a.tx, b.tx, u), ty: lin(a.ty, b.ty, u) };
+    }
+  }
+  return transformacio(k[k.length - 1][1], e.maxS, e.origen);
+}
+
+function imatgeDe(e, lt) {
+  if (!e.frames) return e.img;
+  let src = e.frames[0][1];
+  for (const [t, f] of e.frames) if (lt >= rel(e, t)) src = f;
+  return src;
+}
+
+function pinta(capa, e, t, opacitat) {
+  const lt = t - e.ini;
+  capa.c.style.opacity = opacitat;
+  const src = 'img/' + imatgeDe(e, lt) + '.jpg';
+  if (capa.img.getAttribute('src') !== src) capa.img.setAttribute('src', src);
+  const c = camera(e, lt);
+  capa.cam.style.transform = `translate(${c.tx}px, ${c.ty}px) scale(${c.s})`;
+  capa.marcs.forEach((m, i) => {
+    const d = (e.marcs || [])[i];
+    if (!d) { m.style.opacity = 0; return; }
+    const [x, y, w, h] = d.r;
+    Object.assign(m.style, { left: x - 6 + 'px', top: y - 5 + 'px', width: w + 12 + 'px', height: h + 10 + 'px' });
+    const ini = rel(e, d.t), fi = d.fi === undefined ? 1e9 : rel(e, d.fi);
+    m.style.opacity = Math.min(clamp((lt - ini) / 0.3, 0, 1), clamp((fi - lt) / 0.3, 0, 1));
+  });
+}
+
+function pintaCarta(div, e, t, opacitat) {
+  const lt = t - e.ini;
+  div.style.opacity = opacitat;
+  div.querySelector('.fons').style.backgroundImage = `url(img/${e.fons || 'a01-portada'}.jpg)`;
+  div.querySelector('.kicker').textContent = e.carta.kicker || '';
+  div.querySelector('h1').textContent = e.carta.h1 || '';
+  div.querySelector('p').textContent = e.carta.p || '';
+  div.querySelector('.text').style.transform = `scale(${lin(1, 1.035, lt / (e.fi - e.ini))})`;
+}
+
+function pintaEscena(e, t, opacitat, slot) {
+  if (e.carta) pintaCarta(cartes[slot], e, t, opacitat);
+  else pinta(capes[slot], e, t, opacitat);
+}
+
+function escenaA(t) {
+  const i = ESCENES.findIndex((e) => t >= e.ini && t < e.fi);
+  return i < 0 ? ESCENES.length - 1 : i;
+}
+
+function rotolDe(e, lt) {
+  let r = null;
+  for (const x of e.rotols || []) if (lt >= rel(e, x.t)) r = { ...x, ini: rel(e, x.t) };
+  return r;
+}
+
+function mostra(t) {
+  t = clamp(t, 0, DURADA - 1e-6);
+  const i = escenaA(t), e = ESCENES[i], lt = t - e.ini, prev = ESCENES[i - 1];
+  capes.forEach((c) => (c.c.style.opacity = 0));
+  cartes.forEach((c) => (c.style.opacity = 0));
+  if (prev && lt < FOSA && !e.sensefosa) {
+    pintaEscena(prev, prev.fi - 0.001, 1, 0);
+    pintaEscena(e, t, suau(lt / FOSA), 1);
+  } else pintaEscena(e, t, 1, 1);
+
+  // Rètol de l'escena: entra lliscant i surt abans del final (si l'escena següent no el continua).
+  const rot = el('rotol');
+  const r = e.carta ? null : rotolDe(e, lt);
+  if (r) {
+    rot.className = 'rotol ' + (r.tipus || '') + (r.dreta ? ' dreta' : '');
+    rot.querySelector('.acte span').textContent = r.acte || '';
+    rot.querySelector('.gran').textContent = r.gran || '';
+    rot.querySelector('.petit').textContent = r.petit || '';
+    rot.querySelector('.petit').style.display = r.petit ? '' : 'none';
+    const entra = clamp((lt - r.ini) / 0.4, 0, 1);
+    const surt = clamp((e.fi - t - 0.1) / 0.3, 0, 1);
+    rot.style.opacity = Math.min(suau(entra), surt);
+    rot.style.transform = `translateY(${(1 - suau(entra)) * 24}px)`;
+  } else rot.style.opacity = 0;
+
+  // Indicador del capítol, a dalt a la dreta.
+  const cap = el('capitol');
+  if (e.capitol && !e.carta) {
+    cap.innerHTML = e.capitol;
+    const ve = !(prev && prev.capitol === e.capitol && !prev.carta);
+    cap.style.opacity = ve ? clamp((lt - 0.2) / 0.4, 0, 1) : 1;
+  } else cap.style.opacity = 0;
+
+  // Cursor: punts [temps, x, y] i clics [temps, x, y].
+  const cur = el('cursor'), ona = el('ona');
+  cur.style.opacity = 0; ona.style.opacity = 0;
+  if (e.cursor) {
+    const k = e.cursor.map(([tt, x, y]) => [rel(e, tt), x, y]);
+    const fi = k[k.length - 1][0];
+    if (lt >= k[0][0] - 0.3 && lt <= fi + 0.6) {
+      let x = k[0][1], y = k[0][2];
+      for (let j = 1; j < k.length; j++) {
+        if (lt >= k[j - 1][0]) {
+          const u = suau((lt - k[j - 1][0]) / Math.max(k[j][0] - k[j - 1][0], 0.01));
+          x = lin(k[j - 1][1], k[j][1], u); y = lin(k[j - 1][2], k[j][2], u);
+        }
+      }
+      const o = Math.min(clamp((lt - k[0][0] + 0.3) / 0.3, 0, 1), clamp((fi + 0.6 - lt) / 0.3, 0, 1));
+      Object.assign(cur.style, { left: x + 'px', top: y + 'px', opacity: o });
+    }
+    for (const [tt, x, y] of e.clics || []) {
+      const c = (lt - rel(e, tt)) / 0.4;
+      if (c > 0 && c < 1) Object.assign(ona.style, { left: x + 'px', top: y + 'px', opacity: 1 - c, transform: `scale(${1 + c * 3})` });
+    }
+  }
+  el('barra').style.width = (t / DURADA * 100) + '%';
+  el('temps').textContent = t.toFixed(1).replace('.', ',') + ' s / ' + DURADA.toFixed(1).replace('.', ',') + ' s';
+}
+
+// Precàrrega, perquè cada fotograma tingui la imatge a punt.
+const totes = [...new Set(ESCENES.flatMap((e) => e.frames ? e.frames.map((f) => f[1]) : e.img ? [e.img] : [e.fons || 'a01-portada']))];
+window.llest = Promise.all(totes.map((n) => new Promise((ok) => { const im = new Image(); im.onload = im.onerror = ok; im.src = 'img/' + n + '.jpg'; }))).then(() => document.fonts.ready);
+window.mostra = mostra;
+window.durada = DURADA;
+
+const params = new URLSearchParams(location.search);
+if (params.has('render')) document.body.classList.add('render');
+function ajusta() {
+  if (document.body.classList.contains('render')) return;
+  const s = Math.min(innerWidth / 1440, (innerHeight - 60) / 900, 1);
+  const esc = el('escenari');
+  esc.style.transform = `scale(${s})`;
+  esc.style.marginBottom = (900 * s - 900) + 'px';
+  esc.style.marginRight = (1440 * s - 1440) + 'px';
+}
+addEventListener('resize', ajusta); ajusta();
+mostra(params.has('t') ? parseFloat(params.get('t')) : 0);
+
+const veu = el('veu');
+let inici = null;
+function bucle() {
+  if (inici === null) return;
+  const t = veu.paused ? (performance.now() - inici) / 1000 : veu.currentTime;
+  mostra(t);
+  if (t < DURADA) requestAnimationFrame(bucle); else { inici = null; el('play').textContent = '▶ Reprodueix'; }
+}
+el('play').onclick = async () => {
+  await window.llest;
+  veu.currentTime = 0;
+  inici = performance.now();
+  try { await veu.play(); } catch (e) { /* sense so: el muntatge segueix amb el rellotge */ }
+  el('play').textContent = '↺ Torna a començar';
+  requestAnimationFrame(bucle);
+};
+</script>
+</body>
+</html>

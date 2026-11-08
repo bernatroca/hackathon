@@ -3,6 +3,7 @@
 **Espais de l'Escola**: horaris i aules 2027-28 de l'Escola d'Enginyeria, per al tècnic de Gestió Acadèmica que avui fa els horaris a mà.
 
 - **Vídeo:** [`demo-general.mp4`](demo-general.mp4), 1440×900, 30 fps, H.264 + AAC, **30,0 s**.
+- **Versió llarga (1 min 44 s):** [`guio-demo-app.md`](guio-demo-app.md) i [`demo-app.mp4`](demo-app.mp4). Va més a poc a poc i ensenya més els punts que pesen més a l'enunciat.
 - **Muntatge reproduïble:** [`muntatge/index.html`](muntatge/index.html). Obre'l al navegador i prem «Reprodueix». `?t=12.5` atura el muntatge en aquest segon.
 - **Captures:** [`captures/`](captures/), numerades en l'ordre del vídeo. Són de l'app real a 1440×900, arrencada des d'aquest worktree i amb la IA real.
 - **Veu en off:** veu catalana del Mac (`say -v Montse -r 185`). Si la presentació vol veu humana, cal llegir el mateix text amb els mateixos temps.
