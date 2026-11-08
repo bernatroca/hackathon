@@ -44,8 +44,8 @@ pagina = st.navigation({
     ],
     'La proposta': [
         st.Page(part2.mostra,title='Horari proposat',url_path='part2',icon=':material/calendar_month:'),
-        st.Page(junta.mostra,title='Resum per a la Junta',url_path='junta',icon=':material/description:'),
         st.Page('pagines/imprevistos.py',title='Imprevistos',url_path='imprevistos',icon=':material/event_busy:'),
+        st.Page(junta.mostra,title='Resum per a la Junta',url_path='junta',icon=':material/description:'),
     ],
 })
 st.session_state['_pagina_horari'] = st.Page(part2.mostra, title='Horari proposat', url_path='part2')
