@@ -560,6 +560,8 @@ with patch('pagines.preguntes.totes',return_value=respostes_inventades()), patch
         def targetes():
             return [m.value for m in app.markdown if '<article class="resposta-compacta"' in m.value]
         self.assertEqual(len(targetes()),11)
+        self.assertTrue(any('Prova: deixa només «Vigilar»' in c.value for c in app.caption))
+        self.assertTrue(any('Pas següent: mira l’horari proposat →' in m.value for m in app.markdown))
         self.assertEqual([b.key for b in app.button],
             ['obre-pregunta-3','obre-pregunta-6','obre-pregunta-9','obre-pregunta-2',
              'obre-pregunta-5','obre-pregunta-8','obre-pregunta-11','obre-pregunta-1',
@@ -584,6 +586,7 @@ with patch('pagines.preguntes.totes',return_value=respostes_inventades()), patch
         app.get('button_group')[0].set_value([]).run(timeout=90)
         self.comprova(app)
         self.assertEqual(len(targetes()),0)
+        self.assertTrue(any('Pas següent: mira l’horari proposat →' in m.value for m in app.markdown))
         self.assertTrue(any('Es mostren 0 de 11' in m.value for m in app.markdown))
 
     def test_canvi_semestre(self):

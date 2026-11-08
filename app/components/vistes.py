@@ -253,3 +253,13 @@ def targeta_compacta(t, info=None):
             f'<p class="frase-compacta" title="{escape(info["frase"])}">{escape(info["frase"])}</p></article>',unsafe_allow_html=True)
         with st.container(key='enllac-resposta-'+t.id):
             obre(t)
+
+
+def pas_seguent():
+    """Comparteix el destí registrat al menú; també funciona a les mostres aïllades."""
+    etiqueta = 'Pas següent: mira l’horari proposat →'
+    pagina = st.session_state.get('_pagina_horari')
+    if pagina is not None:
+        st.page_link(pagina, label=etiqueta)
+    else:
+        st.markdown(f'[{etiqueta}](/part2)')
